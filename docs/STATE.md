@@ -1,6 +1,6 @@
 # HokiePark - current state
 
-_Last updated: 2026-09-19 ~17:00 (Phases 1-5 done; Supabase live feed verified against the REAL project; permit-eligibility filter built; iPhone (Wi-Fi) check passed by user; next: deploy + rehearsal)._
+_Last updated: 2026-09-19 ~19:00 (Class-schedule occupancy Tier A built, awaiting user to run 2 SQL files; Phases 1-5 done; Supabase live feed verified against the REAL project; permit-eligibility filter built; iPhone (Wi-Fi) check passed by user; next: deploy + rehearsal)._
 Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `../HOKIEPARK_SPEC.md`, `../HokiePark - 6-Hour Build Plan.md`.
 
 ## What this is
@@ -146,11 +146,16 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 | **Team-only:** Phase 6 rehearsal x2, fallback screenshots on the demo machine, confirm ADA lot + demo numbers | 15-30 min |
 
 ## Open questions / needs from the user
-- **Class-schedule occupancy proposal (2026-09-19, analysis only):** see PROMPT_HISTORY #11. Verified VT timetable is fetchable (POST selfservice.banner.vt.edu/ssb/HZSKVTSC.P_ProcRequest) but exposes Capacity, not enrollment, and uses building abbreviations needing a hand-built map to our 102 buildings. Waiting on user go-ahead for Tier A (in-repo demand curve -> Supabase tick).
+- **Class-schedule occupancy (Tier A BUILT 2026-09-19):** run in the Supabase SQL editor, in order: `supabase/migrations/20260919120000_class_schedule_curves.sql`, then `supabase/curves.seed.sql`; then the tick (or pg_cron) steers counts toward the curves. Demo clock: `update public.sim_config set clock_override='08:50'`. See docs/SUPABASE.md. Tier B (Databricks notebook + MLflow) is only described in the spec (Section 12), not built; needs a workspace + teammate. Caveat to keep saying: simulated, capacity not enrollment, weak driver for F/S garages.
 - Supabase project is connected locally (`.env.local`, git-ignored). For the DEPLOYED site the two public values must also be added as GitHub Actions Variables.
 - Hosting choice for the HTTPS deploy (needed for iPhone install + service worker). Nothing to do until I finish QA.
 - Teammate to confirm the 5th ADA lot and demo garage numbers (spec header asks for team confirmation).
 - Optional later: LLM-backed assistant (needs API key + proxy) and Capacitor/Xcode wrapper.
 
+## Class-schedule occupancy (added)
+- `scripts/fetch-timetable.ts` (one-time, polite, POST selfservice.banner.vt.edu) -> `data/raw/timetable.json`; `data/timetable-building-codes.json` maps 71 codes to GIS `bldg_num` (99.1% of weekly seats); `src/lib/timetable.ts` (parser), `src/lib/demand.ts` (model, all assumptions in `MODEL`), `src/lib/curves-sql.ts`, `scripts/gen-curves.ts`.
+- Verified: 101 tests, typecheck, build; SQL run on real Postgres via PGlite (convergence, invariants, fallback, anon blocked). NOT verified: against the real Supabase project (user must run the SQL), behavior during a live session.
+- Weekend: replays Wednesday (`sim_config.weekend_replay_dow = 3`).
+
 ## Commands
-`npm run data` | `npm run build` | `npm run dev` (watch) | `npm test` | `npm run typecheck` | `npm run check` (all three)
+`npm run data` | `npm run build` | `npm run dev` (watch) | `npm test` | `npm run typecheck` | `npm run check` (all three) | `npm run timetable` (re-pull term) | `npm run curves` (regenerate curves SQL)

@@ -25,7 +25,7 @@ revoke all on public.garage_level_curves from anon, authenticated;
 create table if not exists public.sim_config (
   id                 boolean  primary key default true check (id),   -- forces exactly one row
   tz                 text     not null default 'America/New_York',
-  weekend_replay_dow smallint not null default 2 check (weekend_replay_dow between 1 and 5), -- Sat/Sun replay this weekday
+  weekend_replay_dow smallint not null default 3 check (weekend_replay_dow between 1 and 5), -- Sat/Sun replay this weekday (3 = Wed, the busiest)
   dow_override       smallint check (dow_override between 1 and 5),  -- pin the weekday (1 = Mon .. 5 = Fri)
   clock_override     time                                           -- pin the time of day, e.g. '08:50' (null = real clock)
 );
@@ -49,7 +49,7 @@ begin
   v_local  := now() at time zone coalesce(cfg.tz, 'America/New_York');
   v_time   := coalesce(cfg.clock_override, v_local::time);
   v_dow    := coalesce(cfg.dow_override, extract(isodow from v_local)::int);
-  if v_dow > 5 then v_dow := coalesce(cfg.weekend_replay_dow, 2); end if;
+  if v_dow > 5 then v_dow := coalesce(cfg.weekend_replay_dow, 3); end if;
   v_bucket := least(95, (extract(hour from v_time)::int * 60 + extract(minute from v_time)::int) / 15);
 
   -- 1) levels that have a curve: step toward the target, never below the ADA spaces taken, never above capacity

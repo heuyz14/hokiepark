@@ -42,6 +42,40 @@ browser  fetchOccupancy -> parseOccupancyRows (strict validation) -> applyOccupa
    `HOKIEPARK_SUPABASE_URL` and `HOKIEPARK_SUPABASE_ANON_KEY` (public values), then re-run "Deploy to Pages".
    Without them the deployed site simply shows sample data.
 
+## Class-schedule-shaped occupancy (optional, builds on the steps above)
+Instead of a random walk, `simulate_occupancy_tick()` can steer every level toward a target curve derived from VT's public
+**Timetable of Classes**. Same table, same client, same polling: only the numbers' shape changes.
+
+```
+Timetable of Classes (Banner, public)  --npm run timetable-->  data/raw/timetable.json   (5,317 meetings, 80 building codes)
+data/timetable-building-codes.json     (code -> GIS building, from VT's official P_DispBldgList; 99.1% of weekly seats placed)
+      --npm run curves-->  src/lib/demand.ts  -->  supabase/curves.seed.sql   (45 rows: level x Mon..Fri x 96 fifteen-minute buckets)
+Supabase  garage_level_curves + sim_config   <-- simulate_occupancy_tick() steps every level toward "now"'s target
+```
+**How the curve is built** (all assumptions are in `MODEL` in `src/lib/demand.ts`): for each garage, seats in session in buildings
+within 900 m (weighted by squared distance falloff, cars arriving 15 min before and leaving 15 min after) give a class-activity
+index. Commuter levels follow it (90%), faculty/staff levels mostly follow a typical staff workday (75%), and levels of one
+kind fill bottom-up.
+
+**Say this plainly when presenting:** the numbers are *simulated*. The timetable gives seat **capacity**, not enrollment or
+headcount; the blend weights are assumptions; Perry Level 1 is the only commuter level, and both garages are mostly
+faculty/staff, so class density is a weak driver of garage fill. There is no sensor ground truth to validate against.
+
+**Setup (2 minutes, needs you):** in the SQL editor run, in order, (1) `supabase/migrations/20260919120000_class_schedule_curves.sql`,
+(2) `supabase/curves.seed.sql`. Then `select public.simulate_occupancy_tick();` (or the pg_cron job) moves counts toward the curve,
+at most ~8% of a level's capacity per call, so a full day's swing takes ~15 calls. Verified against a real Postgres (PGlite):
+convergence to targets, no constraint violations, fallback random walk for levels without curves, `anon` blocked from the
+curves, config and function.
+
+**Demo controls** (`public.sim_config`, one row, not readable by the browser):
+```sql
+update public.sim_config set clock_override = '08:50';        -- pretend it is 8:50 am (set null for the real clock)
+update public.sim_config set dow_override = 3;                 -- pin the weekday: 1 = Mon .. 5 = Fri
+update public.sim_config set weekend_replay_dow = 3;           -- Sat/Sun replay this weekday (default 3 = Wed, the busiest)
+```
+On a weekend (VTHacks demo day is Sunday) the real timetable has no classes, so the simulator replays a typical weekday
+against the real clock. Re-pull the term with `npm run timetable`, then `npm run curves` (`npm test` fails if the SQL is stale).
+
 ## Testing (no real project needed)
 - Unit: `tests/occupancy-remote.test.ts`, `live-config.test.ts`, `seed.test.ts` (validation, all-or-nothing apply,
   key guard, seed in sync with `garages.ts`, migration stays read-only).

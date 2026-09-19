@@ -1,0 +1,357 @@
+{
+ "AA": {
+  "num": "0368",
+  "official": "Architecture Annex",
+  "how": "name-match"
+ },
+ "AGNEW": {
+  "num": "0109",
+  "official": "Agnew Hall",
+  "how": "name-match"
+ },
+ "BFH": {
+  "num": "0173",
+  "official": "Bishop-Favrao Hall",
+  "how": "name-match"
+ },
+ "BROOK": {
+  "num": "0238",
+  "official": "Wood Engineering Lab",
+  "how": "name-match"
+ },
+ "BUR": {
+  "num": "0176",
+  "official": "Burruss Hall",
+  "how": "name-match"
+ },
+ "BURCH": {
+  "num": "0171",
+  "official": "Burchard Hall",
+  "how": "name-match"
+ },
+ "CFA": {
+  "num": "0188",
+  "official": "Center for the Arts",
+  "how": "name-match"
+ },
+ "CID": {
+  "num": "0056",
+  "official": "Creativity & Innov. Dist LLC",
+  "how": "manual: Creativity & Innovation District LLC"
+ },
+ "CLMS": {
+  "num": "0196",
+  "official": "Corps Ldrship & Military Sci",
+  "how": "manual: Corps Leadership & Military Science Building"
+ },
+ "CO": {
+  "num": "0172",
+  "official": "Cowgill Hall",
+  "how": "name-match"
+ },
+ "DAV": {
+  "num": "0156",
+  "official": "Davidson Hall",
+  "how": "name-match"
+ },
+ "DDS": {
+  "num": "0137",
+  "official": "Data and Decision Sciences",
+  "how": "name-match"
+ },
+ "DER": {
+  "num": "0155",
+  "official": "Derring Hall",
+  "how": "name-match"
+ },
+ "DURHM": {
+  "num": "0126",
+  "official": "Durham Hall",
+  "how": "name-match"
+ },
+ "ENGEL": {
+  "num": "0110",
+  "official": "Engel Hall",
+  "how": "name-match"
+ },
+ "ETGENC": {
+  "num": "0556A",
+  "official": "Etgen Learning Center",
+  "how": "manual: Etgen Learning Center Classroom"
+ },
+ "FRALN": {
+  "num": "0111",
+  "official": "Fralin Biotechnology Center",
+  "how": "name-match"
+ },
+ "FST": {
+  "num": "0123",
+  "official": "Food Science & Technology Lab",
+  "how": "manual: Food Science and Technology Laboratory"
+ },
+ "GBJ": {
+  "num": "0193",
+  "official": "G. Burke Johnston Student Ctr",
+  "how": "manual: G. Burke Johnston Student Center = GIS \"Johnston Student Center\""
+ },
+ "GH": {
+  "num": "0124",
+  "official": "Greenhouse",
+  "how": "name-match"
+ },
+ "GLCDB": {
+  "num": "0251",
+  "official": "Graduate Life Ctr Dnldsn Brown",
+  "how": "manual: Graduate Life Center at Donaldson Brown"
+ },
+ "GOODW": {
+  "num": "0136",
+  "official": "Goodwin Hall",
+  "how": "name-match"
+ },
+ "GRNDP": {
+  "num": "2240",
+  "official": "Old Grand Piano Building",
+  "how": "name-match"
+ },
+ "GYM": {
+  "num": "0182",
+  "official": "War Memorial Gymnasium",
+  "how": "name-match"
+ },
+ "HAHN": {
+  "num": "0157",
+  "official": "T. Marshall Hahn, Jr. Hall",
+  "how": "manual: Hahn Hall has two GIS wings; South Wing used"
+ },
+ "HAN": {
+  "num": "0133C",
+  "official": "John W. Hancock Jr. Hall",
+  "how": "manual: Hancock Hall"
+ },
+ "HEND": {
+  "num": "0179",
+  "official": "Henderson Hall",
+  "how": "name-match"
+ },
+ "HILL": {
+  "num": "0054",
+  "official": "Hillcrest",
+  "how": "manual: Hillcrest Hall"
+ },
+ "HITT": {
+  "num": "0168",
+  "official": "Hitt Hall",
+  "how": "name-match"
+ },
+ "HOLD": {
+  "num": "0130",
+  "official": "Holden Hall",
+  "how": "name-match"
+ },
+ "HORSE": {
+  "num": "0480B",
+  "official": "Horse Barn",
+  "how": "name-match"
+ },
+ "HUTCH": {
+  "num": "0103",
+  "official": "Hutcheson Hall",
+  "how": "name-match"
+ },
+ "ILSB": {
+  "num": "0640",
+  "official": "Integrated Life Sciences Bldg",
+  "how": "manual: Integrated Life Sciences Building"
+ },
+ "JCH": {
+  "num": "0112",
+  "official": "Julian Cheatham Hall",
+  "how": "manual: Julian Cheatham Hall = GIS \"Cheatham Hall\""
+ },
+ "KELLY": {
+  "num": "0129",
+  "official": "Kelly Hall",
+  "how": "name-match"
+ },
+ "LANE": {
+  "num": "0001",
+  "official": "Lane Hall",
+  "how": "name-match"
+ },
+ "LARNA": {
+  "num": "0554",
+  "official": "Alphin-Stuart Arena",
+  "how": "name-match"
+ },
+ "LIBR": {
+  "num": "0177",
+  "official": "Carol M. Newman Library",
+  "how": "manual: Carol M. Newman Library = GIS \"Newman Library\""
+ },
+ "LITRV": {
+  "num": "0118",
+  "official": "Litton-Reaves Hall",
+  "how": "name-match"
+ },
+ "MAJWM": {
+  "num": "0007",
+  "official": "Major Williams Hall",
+  "how": "name-match"
+ },
+ "MCB": {
+  "num": "0151",
+  "official": "McBryde Hall",
+  "how": "name-match"
+ },
+ "MCCOM": {
+  "num": "0191",
+  "official": "McComas Hall",
+  "how": "manual: McComas Hall"
+ },
+ "MEDIA": {
+  "num": "0370",
+  "official": "Media Building",
+  "how": "name-match"
+ },
+ "NCB": {
+  "num": "0159",
+  "official": "Classroom Building",
+  "how": "name-match"
+ },
+ "NOR": {
+  "num": "0132",
+  "official": "Norris Hall",
+  "how": "name-match"
+ },
+ "OSHA": {
+  "num": "0029",
+  "official": "O'Shaughnessy",
+  "how": "manual: O'Shaughnessy Hall"
+ },
+ "PAM": {
+  "num": "0153",
+  "official": "Pamplin Hall",
+  "how": "name-match"
+ },
+ "PAT": {
+  "num": "0127",
+  "official": "Patton Hall",
+  "how": "name-match"
+ },
+ "PAYNE": {
+  "num": "0039",
+  "official": "Payne",
+  "how": "manual: Payne Hall"
+ },
+ "PHALLE": {
+  "num": "0002",
+  "official": "Pearson Hall East",
+  "how": "name-match"
+ },
+ "PHALLW": {
+  "num": "0003",
+  "official": "Pearson Hall West",
+  "how": "name-match"
+ },
+ "PRICE": {
+  "num": "0102",
+  "official": "Price Hall",
+  "how": "name-match"
+ },
+ "PRT": {
+  "num": "0031",
+  "official": "Pritchard",
+  "how": "manual: Pritchard Hall"
+ },
+ "ROB": {
+  "num": "0154",
+  "official": "Robeson Hall",
+  "how": "name-match"
+ },
+ "SANDY": {
+  "num": "0101",
+  "official": "Sandy Hall",
+  "how": "name-match"
+ },
+ "SAUND": {
+  "num": "0106",
+  "official": "Saunders Hall",
+  "how": "name-match"
+ },
+ "SEITZ": {
+  "num": "0108",
+  "official": "Seitz Hall",
+  "how": "name-match"
+ },
+ "SHANK": {
+  "num": "0006",
+  "official": "Shanks Hall",
+  "how": "name-match"
+ },
+ "SMYTH": {
+  "num": "0105",
+  "official": "Smyth Hall",
+  "how": "name-match"
+ },
+ "SOL": {
+  "num": "0275",
+  "official": "Solitude",
+  "how": "name-match"
+ },
+ "SQUIR": {
+  "num": "0180",
+  "official": "Squires Student Center",
+  "how": "name-match"
+ },
+ "SURGE": {
+  "num": "0170",
+  "official": "Surge Space Building",
+  "how": "name-match"
+ },
+ "T101": {
+  "num": "0169",
+  "official": "Theatre 101",
+  "how": "manual: Theatre 101 = GIS \"Theater 101\""
+ },
+ "TORG": {
+  "num": "0174",
+  "official": "Torgersen Hall",
+  "how": "name-match"
+ },
+ "TVFLM": {
+  "num": "0369",
+  "official": "Media Annex",
+  "how": "name-match"
+ },
+ "USLB": {
+  "num": "0138",
+  "official": "Undergraduate Science Lab Bldg",
+  "how": "manual: Undergraduate Science Laboratory Building"
+ },
+ "VMIA": {
+  "num": "0150A",
+  "official": "Vet Med Instructional Addition",
+  "how": "name-match"
+ },
+ "WAL": {
+  "num": "0115",
+  "official": "Wallace Hall",
+  "how": "name-match"
+ },
+ "WHIT": {
+  "num": "0134",
+  "official": "Whittemore Hall",
+  "how": "name-match"
+ },
+ "WLH": {
+  "num": "0200",
+  "official": "Lavery Hall",
+  "how": "name-match"
+ },
+ "WMS": {
+  "num": "0152",
+  "official": "Williams Hall",
+  "how": "name-match"
+ }
+}

@@ -62,6 +62,13 @@ export function staffShape(minute: number): number {
   return up * (1 - 0.85 * down);
 }
 
+/** Nearest-rank percentile (q in 0..1) of a non-empty list; 0 for an empty one. */
+export function percentile(values: readonly number[], q: number): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))]!;
+}
+
 export interface GarageIn {
   id: string;
   lat: number;
@@ -112,7 +119,9 @@ export function buildLevelCurves(placed: readonly Placed[], garages: readonly Ga
   const curves: LevelCurve[] = [];
   for (const g of garages) {
     const raw = rawActivity(placed, g);
-    const peak = Math.max(1, ...DOWS.flatMap((d) => raw[d]!)); // one peak across the week so days stay comparable
+    // One scale across the week so days stay comparable: the 95th percentile of non-empty buckets, so a normal busy
+    // period reads as "full" instead of being dwarfed by the single busiest quarter-hour (activity is clamped to 1 below).
+    const peak = Math.max(1, percentile(DOWS.flatMap((d) => raw[d]!).filter((v) => v > 0), 0.95));
     // group levels by kind, keeping level order (index 0 = lowest)
     const groups = new Map<string, number[]>();
     g.levels.forEach((lv, i) => {
@@ -127,7 +136,7 @@ export function buildLevelCurves(placed: readonly Placed[], garages: readonly Ga
         const totalCap = idxs.reduce((s, i) => s + g.levels[i]!.capacity, 0);
         const occ = idxs.map(() => new Array<number>(BUCKETS).fill(0));
         for (let b = 0; b < BUCKETS; b++) {
-          const activity = raw[d]![b]! / peak;
+          const activity = Math.min(1, raw[d]![b]! / peak);
           const staff = staffShape(b * 15 + 7) * staffScale;
           const frac = MODEL.floorFrac + (MODEL.peakFrac - MODEL.floorFrac) * (cw * activity + (1 - cw) * staff);
           let remaining = Math.min(1, frac) * totalCap;

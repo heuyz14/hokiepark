@@ -82,3 +82,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > no resolve our merge conflicts and keep theirs if it works, if it doesnt work or match then fix and repush
 
 **Outcome:** A teammate's commit (af7a12d) added a VT-sourced permits module overlapping my permit filter in 9 files. Merged origin/main, took THEIR side for every conflict, restored their template, dropped my permit implementation, and rewrote the smoke permit scenarios for their picker. Verified: 82 unit tests, typecheck, and 6 browser runs (3 sizes x feed off/mock-live) all pass. Pushed.
+
+## 12. 2026-09-19 - go-ahead for Tier A
+
+> yes
+
+**Outcome:** Built Tier A of the class-schedule occupancy: timetable parser + one-time fetch (`npm run timetable`), official building-code map (`data/timetable-building-codes.json`), demand model (`src/lib/demand.ts`), generated `supabase/curves.seed.sql` (`npm run curves`), migration `20260919120000_class_schedule_curves.sql` (private curves + `sim_config` demo clock, new `simulate_occupancy_tick()` that steers toward the curve), 101 tests passing, SQL verified on real Postgres (PGlite, scratchpad only). Added spec section + SUPABASE.md docs. Needs from the user: run the migration and `curves.seed.sql` in the Supabase SQL editor.

@@ -7,3 +7,8 @@ select cron.schedule('hokiepark-simulate', '* * * * *', $$select public.simulate
 --   select public.simulate_occupancy_tick();
 -- Or set an exact scenario, e.g. make Perry Street level 2 nearly full:
 --   update public.garage_levels set occupied = capacity - 3 where garage_id = 'perry-street' and level_index = 1;
+
+-- Class-timetable-shaped mode (needs migration 20260919120000 + supabase/curves.seed.sql): the same tick now steers toward the
+-- curve for the current weekday and time. To rehearse a busy moment without waiting for it:
+--   update public.sim_config set clock_override = '10:30';    -- then run the tick ~15 times, or wait for cron
+--   update public.sim_config set clock_override = null;       -- back to the real clock
