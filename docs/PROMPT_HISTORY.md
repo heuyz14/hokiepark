@@ -88,3 +88,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > yes
 
 **Outcome:** Built Tier A of the class-schedule occupancy: timetable parser + one-time fetch (`npm run timetable`), official building-code map (`data/timetable-building-codes.json`), demand model (`src/lib/demand.ts`), generated `supabase/curves.seed.sql` (`npm run curves`), migration `20260919120000_class_schedule_curves.sql` (private curves + `sim_config` demo clock, new `simulate_occupancy_tick()` that steers toward the curve), 101 tests passing, SQL verified on real Postgres (PGlite, scratchpad only). Added spec section + SUPABASE.md docs. Needs from the user: run the migration and `curves.seed.sql` in the Supabase SQL editor.
+
+## 13. 2026-09-19 - check migrations, then "it worked continue, reset and reanalyze what needs to be implemented next"
+
+> check all my mirgations  /  it worked continue, also reset and reanalyze what needs to be implemented next, pull if necessary
+
+**Outcome:** Verified both migrations against the real project as far as the anon key allows (tables exist and are private; the tick moved counts at 19:12 UTC). Re-analysis found: site NOT deployed (Pages 404, no workflow runs, no Actions Variables); a sawtooth flaw in my curves (fixed by smoothing, regression test mutation-checked); wrote `docs/DEMO_RUNBOOK.md`. Coordinated file ownership with the parallel session (projectport-e7, works in its own worktree). Remaining priorities: deploy (user), pg_cron (user), rehearsal, Databricks Tier B scaffold, polish.
