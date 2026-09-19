@@ -5,7 +5,8 @@ import { createSheet } from "./ui/sheet.ts";
 import { createList } from "./ui/list.ts";
 import { renderLegend } from "./ui/legend.ts";
 import { createAssistant } from "./ui/assistant.ts";
-import { localAnswerer } from "./lib/assistant.ts";
+import { createPermitPicker, loadSaved } from "./ui/permits.ts";
+import { makeLocalAnswerer } from "./lib/assistant.ts";
 import { LIVE_CONFIG } from "./config.ts";
 import { startLive } from "./live.ts";
 import { createSyncChip } from "./ui/sync.ts";
@@ -13,7 +14,8 @@ import { createSyncChip } from "./ui/sync.ts";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 function boot() {
-  const store = createStore({ view: "map", selection: null, source: null, query: "" });
+  const saved = loadSaved();
+  const store = createStore({ view: "map", selection: null, source: null, query: "", permits: saved.permits, ada: saved.ada });
   const select = (selection: Selection, source: NonNullable<State["source"]>, view?: View) =>
     store.set({ selection, source, ...(view ? { view } : {}) });
 
@@ -27,12 +29,18 @@ function boot() {
     onQuery: (query) => store.set({ query }),
   });
   renderLegend($("legend"));
+  const picker = createPermitPicker($("permit-picker"), (permits, ada) => store.set({ permits, ada }));
+  // Apply whatever was remembered from last visit before the first paint.
+  picker.set(saved.permits, saved.ada);
+  map.setPermits(saved.permits, saved.ada);
+  list.setPermits(saved.permits, saved.ada);
+  sheet.setPermits(saved.permits, saved.ada);
 
   const views: Record<View, HTMLElement> = { map: $("view-map"), list: $("view-list"), ask: $("view-ask") };
   const tabs = [...document.querySelectorAll<HTMLButtonElement>(".tabbar button")];
 
-  // Swap `localAnswerer` for an LLM-backed Answerer here if a backend proxy is ever added.
-  createAssistant($("view-ask"), { answer: localAnswerer, onSelect: (sel) => select(sel, "assistant", "map") });
+  // Swap this for an LLM-backed Answerer here if a backend proxy is ever added (it should receive the same context).
+  createAssistant($("view-ask"), { answer: makeLocalAnswerer(() => ({ permits: store.get().permits, ada: store.get().ada })), onSelect: (sel) => select(sel, "assistant", "map") });
 
   store.subscribe((s, prev) => {
     if (s.view !== prev.view) {
@@ -45,6 +53,12 @@ function boot() {
       if (s.view === "map") map.setSelection(s.selection, { fly: s.source !== "map" && s.source !== null && selChanged });
     }
     if (selChanged) list.setSelected(s.selection);
+    if (s.permits !== prev.permits || s.ada !== prev.ada) {
+      map.setPermits(s.permits, s.ada);
+      list.setPermits(s.permits, s.ada);
+      sheet.setPermits(s.permits, s.ada);
+      sheet.render(s.view === "map" ? s.selection : null);
+    }
     if (selChanged && s.selection && s.source !== "map" && s.view === "map") {
       document.getElementById("sheet-title")?.focus({ preventScroll: true });
     }

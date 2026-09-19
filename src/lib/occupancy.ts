@@ -1,4 +1,5 @@
 import type { Garage, GarageLevel, Lot } from "../types.ts";
+import { classSummary } from "./permits.ts";
 
 /**
  * Occupancy rules. Everything the UI or the AI assistant prints about open spaces must go
@@ -47,5 +48,7 @@ export function garageSummary(g: Garage): string {
 }
 
 export function lotSummary(l: Lot): string {
-  return `Lot &middot; ${openSpaces(l)} of ${l.capacity} open &middot; ${l.permit}`;
+  const who = classSummary(l.classes) || "Permit type unknown - check sign";
+  const availability = `${openSpaces(l)} of ${l.capacity} open`;
+  return l.hasADA ? `${availability} &middot; ${who} &middot; ADA parking available` : `${availability} &middot; ${who}`;
 }

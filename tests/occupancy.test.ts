@@ -8,7 +8,7 @@ const info = { source: "test", permitDetail: "", overnightParking: "", payment: 
 const g = (levels: Garage["levels"]): Garage => ({ id: "t", name: "T", lat: 0, lon: 0, footprint: [], levels, info });
 const lot = (capacity: number, occupied: number): Lot => ({
   id: "t", name: "T", number: 1, status: "Active", lat: 0, lon: 0, footprint: [], areaSqFt: 0,
-  permit: "Commuter", hasADA: false, adaSpaces: 0, capacity, occupied,
+  classes: ["cg"], needsConfirm: false, hasADA: false, adaSpaces: 0, capacity, occupied,
 });
 
 test("open spaces never go negative", () => {
@@ -27,15 +27,15 @@ test("availability thresholds: full at 0, limited under 10%, else open", () => {
 test("garageTotals sums levels", () => {
   const t = garageTotals(
     g([
-      { label: "1", capacity: 100, occupied: 100, adaCapacity: 5, adaOccupied: 5 },
-      { label: "2", capacity: 50, occupied: 20, adaCapacity: 3, adaOccupied: 1 },
+      { label: "1", classes: [], capacity: 100, occupied: 100, adaCapacity: 5, adaOccupied: 5 },
+      { label: "2", classes: [], capacity: 50, occupied: 20, adaCapacity: 3, adaOccupied: 1 },
     ]),
   );
   assert.deepEqual(t, { capacity: 150, occupied: 120, open: 30, adaCapacity: 8, adaOpen: 2 });
 });
 
 test("a garage at zero open spaces is full and reads '0 of N open'", () => {
-  const full = g([{ label: "1", capacity: 10, occupied: 10, adaCapacity: 1, adaOccupied: 1 }]);
+  const full = g([{ label: "1", classes: [], capacity: 10, occupied: 10, adaCapacity: 1, adaOccupied: 1 }]);
   assert.equal(garageStatus(full), "full");
   assert.equal(levelStatus(full.levels[0]!), "full");
   assert.equal(garageSummary(full), "0 of 10 open, 0 accessible open");
@@ -68,8 +68,8 @@ test("lotStatus uses the same open/capacity thresholds as garages", () => {
   assert.equal(lotStatus(lot(100, 50)), "open");
 });
 
-test("lotSummary reports spots open of capacity and the permit type", () => {
-  assert.equal(lotSummary(lot(180, 168)), "Lot &middot; 12 of 180 open &middot; Commuter");
+test("lotSummary reports spots open of capacity and the signed parking class", () => {
+  assert.equal(lotSummary(lot(180, 168)), "12 of 180 open &middot; Commuter/Graduate");
 });
 
 test("demo data invariants: every lot has a capacity, occupied never exceeds it, and ADA spaces fit within capacity", () => {
@@ -102,9 +102,11 @@ test("occupancy is deterministic (stable across runs), not random", () => {
   assert.equal(a, b);
 });
 
-test("lots with no real permit signal default to Mixed; originally-curated lots keep their specific type", () => {
-  assert.equal(LOTS.find((l) => l.id === "lot-owens")!.permit, "Resident", "curated lots keep their assigned type");
-  assert.equal(LOTS.find((l) => l.id === "lot-duck-pond-dr")!.permit, "Mixed", "newly-added lots default to Mixed - no real signal to assign a specific audience");
+test("lots with no verified signage remain unknown; mapped lots keep their official class", () => {
+  assert.deepEqual(LOTS.find((l) => l.id === "lot-owens")!.classes, ["fs-24"]);
+  const unknown = LOTS.find((l) => l.id === "lot-duck-pond-dr")!;
+  assert.deepEqual(unknown.classes, []);
+  assert.equal(unknown.needsConfirm, true);
 });
 
 test("garage capacities match VT's officially published totals (parking.vt.edu), not a guess", () => {
@@ -136,9 +138,11 @@ test("lots the VT dataset actually covers (Stadium, Bookstore, Coliseum West) ca
   }
 });
 
-test("Stadium and Bookstore permit types corrected to match VT's real eligibility rules", () => {
-  assert.equal(LOTS.find((l) => l.id === "lot-stadium")!.permit, "Resident", "Stadium is resident + event parking, not commuter");
-  assert.equal(LOTS.find((l) => l.id === "lot-bookstore")!.permit, "Mixed", "Bookstore is paid hourly parking open to anyone, not visitor-only");
+test("Stadium and Bookstore carry the merged official-map classification", () => {
+  assert.deepEqual(LOTS.find((l) => l.id === "lot-stadium")!.classes, ["any-permit"]);
+  const bookstore = LOTS.find((l) => l.id === "lot-bookstore")!;
+  assert.deepEqual(bookstore.classes, ["fsv"]);
+  assert.equal(bookstore.needsConfirm, true);
 });
 
 test("all of VT's real Main Campus lots are included (85, incl. Duck Pond Dr.), five flagged ADA", () => {

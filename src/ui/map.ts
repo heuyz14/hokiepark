@@ -4,6 +4,7 @@ import { DRILLFIELD_CENTER } from "../data/drillfield.ts";
 import type { Building, Footprint, Garage, Lot, Selection } from "../types.ts";
 import { footprintBounds, footprintToGeoJSON } from "../lib/geojson.ts";
 import { garageStatus, garageTotals } from "../lib/occupancy.ts";
+import { classSummary, garageAccess, lotAccess, type PermitId } from "../lib/permits.ts";
 import { esc } from "./format.ts";
 
 export interface MapController {
@@ -13,6 +14,8 @@ export interface MapController {
   reset(): void;
   /** Re-read garage counts (after a live update) and update the markers in place. */
   refreshGarages(): void;
+  /** Dim locations the driver's selected permits do not cover. */
+  setPermits(permits: PermitId[], ada: boolean): void;
 }
 
 /** Free, no-API-key vector basemap (OpenFreeMap, openfreemap.org) rendered by MapLibre GL JS -
@@ -75,7 +78,7 @@ function lotMarkerHtml(l: Lot): string {
 
 /** No-op controller returned when the map can't be created at all (e.g. no WebGL2 support), so a
  * broken map never crashes the rest of the app - main.ts keeps working with the list and assistant. */
-const NOOP_CONTROLLER: MapController = { setSelection() {}, zoom() {}, reset() {}, refreshGarages() {} };
+const NOOP_CONTROLLER: MapController = { setSelection() {}, zoom() {}, reset() {}, refreshGarages() {}, setPermits() {} };
 
 function showMapProblem(el: HTMLElement, message: string) {
   el.innerHTML = `<div class="map-offline"><p>${esc(message)}</p><button type="button" data-retry>Try again</button></div>`;
@@ -111,6 +114,8 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
   (window as unknown as { __hokiepark_map?: maplibregl.Map }).__hokiepark_map = map;
 
   const markerEls = new Map<string, HTMLElement>();
+  let activePermits: PermitId[] = [];
+  let activeAda = false;
   let ready = false;
   const pending: (() => void)[] = [];
   const whenReady = (fn: () => void) => (ready ? fn() : void pending.push(fn));
@@ -200,7 +205,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     // (both are constant screen size, so real distance shrinks to a few px when zoomed way out).
     // Painting garages last keeps the two garages - fewer, and the more prominent target - on top.
     for (const l of LOTS) {
-      const label = `${l.name} lot, ${l.permit}${l.hasADA ? ", accessible parking available" : ""}`;
+      const label = `${l.name} lot, ${classSummary(l.classes) || "permit type unknown"}${l.hasADA ? ", accessible parking available" : ""}`;
       addMarker("lot", l.id, l.lon, l.lat, `marker marker-lot${l.hasADA ? " has-ada" : ""}`, lotMarkerHtml(l), label, () => onSelect({ kind: "lot", id: l.id }));
     }
     for (const g of GARAGES) {
@@ -227,6 +232,31 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
   }
 
   return {
+    setPermits(permits, ada) {
+      activePermits = permits;
+      activeAda = ada;
+      whenReady(() => {
+        const on = activePermits.length > 0 || activeAda;
+        el.classList.toggle("filtering", on);
+        const mark = (node: HTMLElement | undefined, verdict: string | null) => {
+          if (!node) return;
+          node.classList.remove("acc-yes", "acc-no", "acc-check");
+          if (verdict) node.classList.add(`acc-${verdict}`);
+        };
+        for (const l of LOTS) mark(markerEls.get(key("lot", l.id)), on ? lotAccess(l, activePermits, { ada: activeAda }).verdict : null);
+        for (const g of GARAGES) mark(markerEls.get(key("garage", g.id)), on ? garageAccess(g.levels, activePermits, { ada: activeAda }).verdict : null);
+
+        (map.getSource("lots") as maplibregl.GeoJSONSource | undefined)?.setData(toFeatureCollection(LOTS, (l) => ({
+          hasADA: l.hasADA,
+          access: on ? lotAccess(l, activePermits, { ada: activeAda }).verdict : "",
+        })));
+        (map.getSource("garages") as maplibregl.GeoJSONSource | undefined)?.setData(toFeatureCollection(GARAGES, (g) => ({
+          access: on ? garageAccess(g.levels, activePermits, { ada: activeAda }).verdict : "",
+        })));
+        map.setPaintProperty("lots-fill", "fill-opacity", on ? ["match", ["get", "access"], "no", 0.24, "check", 0.48, 0.85] : 0.85);
+        map.setPaintProperty("garages-fill", "fill-opacity", on ? ["match", ["get", "access"], "no", 0.24, "check", 0.48, 0.9] : 0.9);
+      });
+    },
     setSelection(sel, { fly }) {
       whenReady(() => {
         for (const n of markerEls.values()) n.classList.remove("is-selected");
@@ -264,7 +294,10 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
           if (!div) continue;
           const t = garageTotals(g);
           const st = garageStatus(g);
-          div.className = `marker marker-garage st-${st}${div.classList.contains("is-selected") ? " is-selected" : ""}`;
+          const selected = div.classList.contains("is-selected") ? " is-selected" : "";
+          const filtering = activePermits.length > 0 || activeAda;
+          const access = filtering ? ` acc-${garageAccess(g.levels, activePermits, { ada: activeAda }).verdict}` : "";
+          div.className = `marker marker-garage st-${st}${selected}${access}`;
           div.setAttribute("aria-label", garageLabel(g));
           div.innerHTML = garageMarkerHtml(g);
         }

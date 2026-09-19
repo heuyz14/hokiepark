@@ -8,7 +8,7 @@ import type { Garage } from "../src/types.ts";
 
 const row = (o: Partial<OccupancyRow> = {}): OccupancyRow => ({ garage_id: "perry-street", level_index: 0, label: "L1", capacity: 100, occupied: 40, ada_capacity: 5, ada_occupied: 2, updated_at: "2026-09-19T18:00:00Z", ...o });
 const info = { source: "test", permitDetail: "", overnightParking: "", payment: "", enforcement: "", location: "" };
-const garage = (): Garage => ({ id: "perry-street", name: "P", lat: 0, lon: 0, footprint: [], levels: [{ label: "old", capacity: 10, occupied: 1, adaCapacity: 1, adaOccupied: 0 }], info });
+const garage = (): Garage => ({ id: "perry-street", name: "P", lat: 0, lon: 0, footprint: [], levels: [{ label: "old", classes: [], capacity: 10, occupied: 1, adaCapacity: 1, adaOccupied: 0 }], info });
 
 /** Rows equivalent to the bundled seed, as the database would return them. */
 const seedRows = (): OccupancyRow[] =>
@@ -44,7 +44,8 @@ test("apply replaces levels, sorts by level_index, and reports change", () => {
   const g = garage();
   const changed = applyOccupancy([g], [row({ level_index: 1, label: "L2", occupied: 10 }), row({ level_index: 0 })]);
   assert.equal(changed, true);
-  assert.deepEqual(g.levels.map((l) => l.label), ["L1", "L2"]);
+  assert.deepEqual(g.levels.map((l) => l.label), ["Level 1 - Commuter & graduate", "Level 2 - Faculty & staff"]);
+  assert.deepEqual(g.levels.map((l) => l.classes), [["perry-cg"], ["perry-fs"]]);
   assert.equal(g.levels[0]!.adaOccupied, 2);
 });
 

@@ -11,7 +11,7 @@ test("supabase/seed.sql is in sync with src/data/garages.ts (run `npm run seed` 
 });
 
 test("seed SQL escapes quotes and covers every level", () => {
-  const sql = renderSeedSql({ g: [{ label: "Faculty's level", capacity: 10, occupied: 1, adaCapacity: 1, adaOccupied: 0 }] });
+  const sql = renderSeedSql({ g: [{ label: "Faculty's level", classes: [], capacity: 10, occupied: 1, adaCapacity: 1, adaOccupied: 0 }] });
   assert.match(sql, /'Faculty''s level'/);
   const total = Object.values(SEED_LEVELS).reduce((n, ls) => n + ls.length, 0);
   assert.equal((read("supabase/seed.sql").match(/^\s+\('/gm) ?? []).length, total);

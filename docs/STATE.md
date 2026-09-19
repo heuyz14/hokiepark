@@ -1,6 +1,6 @@
 # HokiePark - current state
 
-_Last updated: 2026-09-19 ~15:40 (Phases 1-5 done; Supabase live feed verified against the REAL project; next: deploy + iPhone test + rehearsal)._
+_Last updated: 2026-09-19 ~19:00 (Class-schedule occupancy Tier A built, awaiting user to run 2 SQL files; Phases 1-5 done; Supabase live feed verified against the REAL project; permit-eligibility filter built; iPhone (Wi-Fi) check passed by user; next: deploy + rehearsal)._
 Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `../HOKIEPARK_SPEC.md`, `../HokiePark - 6-Hour Build Plan.md`.
 
 ## What this is
@@ -28,7 +28,8 @@ No backend required: by default it uses bundled sample counts. **Optional Supaba
 - Remote: `origin` = https://github.com/heuyz14/terraceb.git, branch `main`, upstream already set.
 - Commit + push periodically (after each meaningful chunk). End commit messages with the Co-Authored-By line.
 - **Identity:** every repo under `~/ProjectPort` commits as `heuyz14 <heuyz14@yahoo.com>` (the identity `laelaps` and `nqmate` already used). It comes from a folder rule in `~/.gitconfig` (`includeIf "gitdir:/Users/bubba/ProjectPort/"` -> `~/.gitconfig-projectport`); the global default `hle142025S <heuyz48@gmail.com>` still applies outside the folder, and a backup is at `~/.gitconfig.bak-before-projectport`. Pushes authenticate as heuyz14 via the macOS Keychain (HTTPS). Commits before 2026-09-19 ~16:00 are authored as `hle142025S` and were not rewritten (that needs a force-push on a shared branch); a few commits after that used the equivalent no-reply address `204778464+heuyz14@users.noreply.github.com`, which GitHub also credits to heuyz14.
-- Merge (not rebase) `origin/main` before pushing; on conflicts **keep the user's local code**.
+- Merge (not rebase) `origin/main` before pushing. On conflicts, **keep the teammate's/other side's version if it works** (user instruction 2026-09-19, superseding the earlier "keep local" rule); fix and re-push whatever breaks. Re-verify (`npm run check`, `npm run smoke`, `smoke:live`) before every push.
+- **Concurrent sessions:** on 2026-09-19 a second Claude session was committing in this same folder (commits `10ad62c`, `9464f5c`), and a `git add -A` in another session swept its uncommitted timetable/demand-curve files into merge `51e62d4`. Stage explicit paths (`git add <files>`), never `git add -A`, and run `git status` first. Prefer separate `git worktree`s per session.
 - If push fails with HTTP 400 / "remote end hung up": `git -c http.postBuffer=524288000 push` (large raw GIS JSON exceeds the default 1 MB buffer).
 - `dist/` and `node_modules/` are git-ignored. Never commit `.env` files.
 - **Teammate prototype:** commit `1bb0f36` (Jnhim) added a separate Leaflet-based prototype at the repo root (`index.html`, `parking.js`, `data.js`, `distance.js`, `parking.css`, tests). Different approach (Leaflet tiles from unpkg, permit filter, demo scenarios, 5 approximate lots). Does NOT overlap this build's files (`src/`, `dist/`). **Update:** the teammate deleted those files upstream in `f35285e` (7 "Delete ..." commits); merged cleanly. Their permit-eligibility filter idea remains a good candidate feature.
@@ -59,14 +60,17 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | 2 Garages/lots/sheet/list | DONE + browser-verified (marker tap, sheet, list search/empty state, list<->map selection sync, keyboard Enter/Escape). |
 | 3 ADA + branding | DONE (single `adaBadge` in 5 places; VT maroon/orange; ADA blue distinct from residential blue). Daylight contrast still to check in Phase 5. |
 | 4 Assistant | DONE rule-based; 3 acceptance questions verified in unit tests AND in the browser; "Show on map" hand-off works. |
+| Permit eligibility (teammate `anaberdzenadze`, commit af7a12d) | **Adopted as the project's permit system.** `lib/permits.ts` encodes VT Parking Services' 2026-27 permit rules and the official lot-map classes (real permit types: C/G, C/G + Perry, F/S, Resident, Visitor, Evening, F/S Remote, Student Remote); verdicts are yes / no / check-the-sign, never a confident guess (`needsConfirm` lots). UI: multi-select chip on the map (`ui/permits.ts`) + ADA credential toggle, map/list/sheet show verdicts, choice persisted in localStorage (validated). Also adds building search in the List (keyboard/screen-reader path to building sheets). **Not yet permit-aware:** the Ask assistant (it only prints lot classes). |
+| ~~My earlier permit filter~~ | Dropped in the merge in favor of the above (mine used invented demo permit values; theirs is sourced from VT's official guide). Lesson: coordinate before building overlapping features. |
 | Supabase live feed (added) | Built + tested: migration (RLS read-only, constraints, simulator), generated seed, poller with backoff/pause, header chip, in-place refresh of map/list/sheet, key guard, `check:supabase`. Verified against a MOCK (`smoke:live`: update, open-sheet update + scroll kept, outage, bad payload, recovery, audit). **Verified against the real project (2026-09-19):** `check:supabase` passes (9 valid rows, both garages, anon key cannot write -> HTTP 401); headless render shows chip `Live` and marker numbers equal the DB rows. Not yet seen: a live change during a session (needs the simulator run from the SQL editor). |
 | PWA (added) | DONE + verified over http: manifest, service worker, precache, loads OFFLINE. Manifest link is injected only over http(s) so file:// stays console-clean. Not yet tested on a real iPhone (needs HTTPS host). |
 | 5 QA pass | DONE for what can be automated: smoke at 3 viewports, cross-view number audit (marker = list = sheet = level sum = assistant, both garages), WCAG AA contrast tests (11 pairs), edge cases (full level, 0 ADA, no-match search). Remaining: a human pass on a real phone. |
 | 6 Rehearsal | Not started (needs team + real machine) |
 
 ## Verified so far
-- `npm run check`: `tsc --noEmit` clean, **64/64 tests pass** (incl. contrast, remote validation, key guard, seed sync)
-- `npm run smoke:live` ALL PASS at 430x900, 375x667, 1280x800 (mock Supabase; fake key)., build OK (`dist/index.html` ~322 KB).
+- `npm run check`: `tsc --noEmit` clean, **82/82 tests pass** (incl. contrast, remote validation, key guard, seed sync, permit rules)
+- `npm run smoke` (feed OFF, hermetic) and `npm run smoke:live` (mock Supabase, fake key): ALL PASS at 430x900, 375x667, 1280x800. 82 unit tests pass.
+- Smoke harness fix: it could attach to a stale Chrome from a crashed run (now OS-assigned debug port + guaranteed cleanup). Note for layout changes: an open bottom sheet must not cover the map zoom/reset buttons on a 375x667 phone (it did when an extra header strip was added; fine in the current layout, and the 375x667 smoke run guards it)., build OK (`dist/index.html` ~322 KB).
 - `npm run build && npm run smoke -- <w> <h>` (CDP end-to-end, system Chrome, no deps): ALL PASS at 430x900, 375x667 and 1280x800; zero console errors; no horizontal overflow. (Note: in zsh pass width/height as literal args, not via a `$var` loop.)
 - Bug found by the 375x667 run and fixed: the bottom-sheet header scrolled away, hiding the close button on small screens; header is now sticky.
 - Not verified: real iOS Safari, contrast in sunlight.
@@ -83,12 +87,43 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 2. Actions tab -> "Deploy to Pages" -> Run workflow. URL will be `https://<user>.github.io/terraceb/`.
 3. On the iPhone: open the URL in Safari -> Share -> Add to Home Screen.
 
+## Permit filter (2026-09-19, this session)
+Source: VT Parking Services' **2026-27 Parking Quick Guide** PDF (rules) + its official campus parking map (lot
+colours). Replaces the invented `Lot.permit` field, which was wrong in ways that would have caused citations
+(Owens/Dietrick were labelled "Resident" but are F/S 24-hour; Stadium was "Commuter" but is Any University Permit).
+- `lib/permits.ts` - `LotClass` (map legend categories) x `PermitId` (what you bought) -> `yes | no | check`, every
+  rule citing the Guide line it came from. 18 unit tests in `tests/permits.test.ts`.
+- **`check` is a first-class verdict**: graduate-only spaces, visitor access to Perry, and the 4 lots whose names
+  aren't printed on VT's map (Bookstore, Torgersen, Durham, Pamplin - `needsConfirm: true`) never return a confident
+  "yes". A wrong yes is a $35-$300 ticket, so uncertainty is shown, not guessed.
+- UI: permit chooser (top-left of the map, multi-select + ADA credential toggle, persisted to localStorage);
+  verdict banner on lot/garage sheets; "Permit not valid"/"Check sign" tags in the list; ineligible lots dimmed
+  on the map and eligible ones ringed green.
+- Live data: permit classes are signage, NOT sensor data - `occupancy-remote.ts` re-attaches them from
+  `SEED_LEVELS` by level index, so a Supabase update can never change who may park somewhere.
+- **NEEDS A HUMAN CHECK:** the 4 inferred lots above, against parking.vt.edu.
+
+## Accessibility fix (2026-09-19, this session)
+- Found: the map's SVG building shapes (102 of them) were mouse/touch-only - no keyboard or screen-reader path
+  reached a building's sheet, so the spec's "tap a building -> nearest parking" journey (Section 6) was unreachable
+  without a pointer. The map's own aria-label already said "Use the List tab for a text alternative," but the List
+  only searched garages/lots.
+- Fix: `ui/list.ts` now also searches `BUILDINGS` (only once the user types a query, so the default browse list
+  stays exactly "every garage and lot" per spec Section 6) and renders a "Buildings" section; selecting one reuses
+  the existing generic `Selection` plumbing (fly-to, `.is-selected` highlight, sheet) with no other changes needed.
+  Updated `scripts/smoke.mjs` to assert this path end-to-end (search "burruss" -> select from list -> sheet with 3
+  nearest-parking rows) and to require Node 26 for native `.ts` execution (npm install/build/check/smoke all
+  re-verified: 45/45 tests, typecheck clean, 41/41 smoke checks at 430x900/375x667/1280x800).
+- Environment note: this Mac had no Node/npm installed; installed Node v26.9.0 to `~/.local/node` (no sudo) and
+  added it to `~/.zshrc` PATH with the user's OK.
+
 ## Known cosmetic items (not blocking)
 - At overview zoom the five ADA lot markers can sit on top of a nearby landmark label (e.g. "Squires Student Center", "Newman Library").
 - Some lot polygons are thin slivers (Drillfield roads) and draw as stray blue lines when ADA-flagged; this is real GIS geometry.
 - Drillfield ellipse is an estimate; 102 vs the spec's 92 buildings.
 
 ## Work log
+- 15:40-17:30 Built my own permit filter, then a teammate pushed a more rigorous, VT-sourced permits module touching the same files. Resolved the merge by ADOPTING THEIRS (user instruction: keep theirs if it works): took their side for all 9 conflicts, restored their template, dropped my permit code, rewrote the smoke permit scenarios to test their picker against their rules module (map/list/sheet verdicts, multi-select, ADA, persistence, hostile/corrupt storage, Clear all). Also kept: hermetic smoke (own feed-off/live builds), harness cleanup (no stale Chrome), click helper scrolls targets into view. 82 unit tests + 6 browser runs pass.
 - 15:10-15:40 Real Supabase project connected: first check failed with PGRST205 (migration not yet applied), user ran it, `check:supabase` passes; live build renders real rows.
 - 14:35-15:10 Supabase feed: pure client + validators + tests, migration/seed/simulator SQL, poller + chip + in-place refresh, build guard, mock-Supabase e2e (`smoke:live`), `check:supabase`, docs.
 - 14:15-14:35 Overview declutter (only garages + ADA lot markers until zoomed in), fallback screenshots in `docs/fallback/`.
@@ -112,10 +147,23 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | **Team-only:** Phase 6 rehearsal x2, fallback screenshots on the demo machine, confirm ADA lot + demo numbers | 15-30 min |
 
 ## Open questions / needs from the user
+- **Class-schedule occupancy (Tier A BUILT + LIVE 2026-09-19):** both migrations and `curves.seed.sql` were run on the real Supabase project and the tick moves the counts (rows updated 19:12 UTC, matching Wednesday-afternoon targets). After the smoothing fix (below) re-run `supabase/curves.seed.sql` (idempotent upsert) so the DB gets the smoothed curves. Demo clock: `update public.sim_config set clock_override='08:50'`. See docs/SUPABASE.md and docs/DEMO_RUNBOOK.md. Tier B (Databricks notebook + MLflow) is only described in the spec (Section 12), not built. Caveat to keep saying: simulated, capacity not enrollment, weak driver for F/S garages.
 - Supabase project is connected locally (`.env.local`, git-ignored). For the DEPLOYED site the two public values must also be added as GitHub Actions Variables.
 - Hosting choice for the HTTPS deploy (needed for iPhone install + service worker). Nothing to do until I finish QA.
 - Teammate to confirm the 5th ADA lot and demo garage numbers (spec header asks for team confirmation).
 - Optional later: LLM-backed assistant (needs API key + proxy) and Capacitor/Xcode wrapper.
 
+## Class-schedule occupancy (added)
+- `scripts/fetch-timetable.ts` (one-time, polite, POST selfservice.banner.vt.edu) -> `data/raw/timetable.json`; `data/timetable-building-codes.json` maps 71 codes to GIS `bldg_num` (99.1% of weekly seats); `src/lib/timetable.ts` (parser), `src/lib/demand.ts` (model, all assumptions in `MODEL`), `src/lib/curves-sql.ts`, `scripts/gen-curves.ts`.
+- Verified: 101 tests, typecheck, build; SQL run on real Postgres via PGlite (convergence, invariants, fallback, anon blocked). NOT verified: against the real Supabase project (user must run the SQL), behavior during a live session.
+- Weekend: replays Wednesday (`sim_config.weekend_replay_dow = 3`).
+- **Smoothing fix (2026-09-19):** the first curves saw-toothed at class changes (Perry L1 95%->59% within 15 min, garage total jumped ~23 points) because the outgoing and incoming class windows double-counted. `MODEL.smoothBuckets = 2` averages activity over +/-30 min; a test now bounds the garage-total jump (<=15 points) and the commuter-level jump (<=25) and was mutation-checked (fails with smoothing off). Side effect: midday peaks are ~95% in BOTH garages, and the two garages look alike (staff shape dominates); tune `peakFrac`/`classWeight` in `src/lib/demand.ts` if the demo needs more contrast.
+
+## Signage-is-code and the permit-aware assistant (added by session e7, 2026-09-19)
+- **Signage is code.** `applyOccupancy` (src/lib/occupancy-remote.ts) now takes a known level's label AND permit `classes` from `SEED_LEVELS` (the app), and only capacity/occupied/ADA counts from the database. Stale or edited DB labels can no longer sit next to permit verdicts computed from different signage. Levels the code doesn't know keep the DB label with empty classes, which the rules read as "check the sign". Consequence: **re-running `supabase/seed.sql` is optional/cosmetic** (it would only tidy the dashboard, and it resets counts). `npm run check:supabase` prints a WARN listing any label drift (currently 4 levels in the user's DB).
+- **Ask assistant is permit-aware.** `answerQuestion(q, {permits, ada})` / `makeLocalAnswerer(getContext)` in `src/lib/assistant.ts`; `main.ts` passes the chooser state at ask time. It calls `lotAccess`/`garageAccess` (never re-implements rules). Nothing held => answers byte-identical to before (spec questions unchanged). With a permit: only levels with a `yes` verdict count as usable, `check` verdicts say "confirm at the sign", forbidden lots are never suggested, and the signage disclaimer is appended. A permit named in the question (e.g. "for commuters") overrides the chooser; place names like "Graduate Life Center" or "Stanger St. ADA" are not read as permit/accessibility requests.
+- **Tests:** 117 unit tests; `tests/assistant-permits.test.ts` compares the assistant to the rules module for every lot/permit pair and was mutation-checked (reintroducing the multi-permit bug makes it fail). Smoke covers chooser -> Ask (baseline, one permit, two permits, override, Clear all) at 430x900 / 375x667 / 1280x800, feed off and mock-live.
+- **Coordination protocol with the other session (f5):** disjoint files, explicit `git add <paths>` (never `-A`), fetch+merge before push, own worktrees (`terraceb-wt-e7`), message on push.
+
 ## Commands
-`npm run data` | `npm run build` | `npm run dev` (watch) | `npm test` | `npm run typecheck` | `npm run check` (all three)
+`npm run data` | `npm run build` | `npm run dev` (watch) | `npm test` | `npm run typecheck` | `npm run check` (all three) | `npm run timetable` (re-pull term) | `npm run curves` (regenerate curves SQL)

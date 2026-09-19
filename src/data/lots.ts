@@ -1,12 +1,16 @@
-import type { Lot, LotGeo, PermitType, PracticalInfo } from "../types.ts";
+import type { LotClass } from "../lib/permits.ts";
+import type { Lot, LotGeo, PracticalInfo } from "../types.ts";
 import geo from "./lots.geo.json" with { type: "json" };
 
 /**
  * Lot names, positions, status and `areaSqFt` come from VT's own ParkingLots GIS layer (every
  * "Main Campus" lot, minus a handful of driveways/loading docks - see scripts/build-data.ts).
- * VT's public layer has NO permit-type, ADA, or occupancy fields, so those are still simulated
- * (spec Section 14: illustrative, not from live sensors, same treatment as garages.ts) - but
- * `capacity` is no longer a hand-typed guess for 88 different lots. It's derived from each lot's
+ * VT's public layer has NO permit-type, ADA, or occupancy fields. Occupancy is simulated
+ * (spec Section 14, same treatment as garages.ts), while permit classes below come from VT's
+ * official parking map when a lot can be matched confidently. Unmatched lots keep an empty class
+ * list and `needsConfirm: true`, so the app says to check the sign instead of inventing a rule.
+ *
+ * `capacity` is no longer a hand-typed guess for 85 different lots. It's derived from each lot's
  * REAL polygon area (`SQFT_PER_SPACE`, a standard surface-lot planning ratio), so a big lot gets
  * a big number and a small one gets a small one, grounded in something real instead of a guess.
  * `occupied` is a deterministic (stable across builds), lot-specific fraction of that capacity -
@@ -18,11 +22,7 @@ import geo from "./lots.geo.json" with { type: "json" };
  * every row) and uses different names for some of the same places. Exactly three lots can be
  * matched to it with confidence, by name and location: Stadium, Bookstore, and Coliseum West
  * (VT's "Coliseum Lot", both by Cassell Coliseum). Those three get a sourced `info` block below
- * and, where the CSV's real eligibility rules disagreed with the original guess, a corrected
- * `permit`. Every other lot's `permit` is HAND-SET DEMO DATA: the 19 lots from the original
- * curated set keep their previously-assigned category; the ~69 lots added to reach full GIS
- * coverage default to "Mixed" (VT publishes no permit signal for them at all - "Mixed" says
- * "rules vary/unconfirmed" rather than fabricating a specific audience we have no evidence for).
+ * and the official-map permit class where known. The remaining lots deliberately stay unknown.
  * The five ADA lots follow spec Section 7 (Squires, Cassell/Coliseum, Bookstore, Drillfield
  * North) plus Stanger St. ADA as the fifth, which the spec leaves unnamed - CONFIRM WITH A
  * TEAMMATE.
@@ -65,8 +65,9 @@ const OCCUPIED_FRACTION_OVERRIDES: Record<string, number> = {
 };
 
 interface LotMeta {
-  permit: PermitType;
+  classes: LotClass[];
   ada?: number;
+  confirm?: true;
   info?: PracticalInfo;
 }
 
@@ -74,9 +75,9 @@ const VT_DOT_EDU = "parking.vt.edu";
 
 /** The 19 lots from the original curated set, plus the 3 CSV-sourced corrections/info blocks. */
 const META: Record<string, LotMeta> = {
-  "lot-squires": { permit: "Mixed", ada: 8 },
+  "lot-squires": { classes: ["fsv"], ada: 8 },
   "lot-coliseum-west": {
-    permit: "Commuter",
+    classes: ["fsv", "cg"],
     ada: 12,
     info: {
       source: VT_DOT_EDU,
@@ -90,7 +91,8 @@ const META: Record<string, LotMeta> = {
   },
   // corrected from "Visitor": VT's own listing says this is paid hourly parking open to anyone, not visitor-only
   "lot-bookstore": {
-    permit: "Mixed",
+    classes: ["fsv"],
+    confirm: true,
     ada: 6,
     info: {
       source: VT_DOT_EDU,
@@ -101,15 +103,15 @@ const META: Record<string, LotMeta> = {
       location: "Kent Street, near University Bookstore",
     },
   },
-  "lot-drillfield-north": { permit: "Faculty/Staff", ada: 5 },
-  "lot-stanger-st-ada": { permit: "Mixed", ada: 9 },
-  "lot-drillfield-south": { permit: "Faculty/Staff" },
-  "lot-graduate-life-center-west": { permit: "Commuter" },
-  "lot-owens": { permit: "Resident" },
-  "lot-torgersen": { permit: "Faculty/Staff" },
+  "lot-drillfield-north": { classes: ["fsv"], ada: 5 },
+  "lot-stanger-st-ada": { classes: ["ada-service-24"], ada: 9 },
+  "lot-drillfield-south": { classes: ["fsv"] },
+  "lot-graduate-life-center-west": { classes: ["graduate"] },
+  "lot-owens": { classes: ["fs-24"] },
+  "lot-torgersen": { classes: ["fsv"], confirm: true },
   // corrected from "Commuter": VT's own listing says this is resident + event-day parking
   "lot-stadium": {
-    permit: "Resident",
+    classes: ["any-permit"],
     info: {
       source: VT_DOT_EDU,
       permitDetail: "R and event-designated areas",
@@ -120,15 +122,15 @@ const META: Record<string, LotMeta> = {
       eventNote: "Frequently affected by football/basketball/special events",
     },
   },
-  "lot-alumni-mall-north": { permit: "Faculty/Staff" },
-  "lot-alumni-mall-south": { permit: "Faculty/Staff" },
-  "lot-dietrick": { permit: "Resident" },
-  "lot-ag-quad": { permit: "Faculty/Staff" },
-  "lot-engel": { permit: "Commuter" },
-  "lot-durham": { permit: "Faculty/Staff" },
-  "lot-lower-stanger": { permit: "Commuter" },
-  "lot-upper-stanger": { permit: "Commuter" },
-  "lot-pamplin": { permit: "Faculty/Staff" },
+  "lot-alumni-mall-north": { classes: ["fsv"] },
+  "lot-alumni-mall-south": { classes: ["fsv"] },
+  "lot-dietrick": { classes: ["fs-24"] },
+  "lot-ag-quad": { classes: ["fsv"] },
+  "lot-engel": { classes: ["fsv"] },
+  "lot-durham": { classes: ["fsv"], confirm: true },
+  "lot-lower-stanger": { classes: ["fsv"] },
+  "lot-upper-stanger": { classes: ["fsv"] },
+  "lot-pamplin": { classes: ["fsv"], confirm: true },
 };
 
 export const LOTS: Lot[] = (geo as LotGeo[]).map((l) => {
@@ -137,7 +139,8 @@ export const LOTS: Lot[] = (geo as LotGeo[]).map((l) => {
   const fraction = OCCUPIED_FRACTION_OVERRIDES[l.id] ?? deriveOccupiedFraction(l.id);
   return {
     ...l,
-    permit: m?.permit ?? "Mixed",
+    classes: m?.classes ?? [],
+    needsConfirm: m?.confirm === true || !m,
     hasADA: m?.ada !== undefined,
     adaSpaces: m?.ada ?? 0,
     capacity,

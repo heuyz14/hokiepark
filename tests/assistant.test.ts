@@ -59,7 +59,8 @@ test("garage status answer lists every level with the same counts the sheet show
 });
 
 test("lot status answer includes permit and ADA flag", () => {
-  assert.match(text("is the squires lot full?"), /Squires lot: Mixed permit.*8 designated accessible spaces/);
+  // Permit wording now comes from VT's official map: Squires is signed Faculty/Staff/Visitor.
+  assert.match(text("is the squires lot full?"), /Squires lot: Faculty\/Staff\/Visitor.*8 designated accessible spaces/);
   assert.match(text("tell me about Owens lot"), /no designated accessible spaces/);
 });
 

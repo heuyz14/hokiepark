@@ -13,6 +13,8 @@
     "check": "npm run typecheck && npm test && npm run build",
     "smoke": "node scripts/smoke.mjs",
     "seed": "node scripts/gen-seed.ts",
+    "curves": "node scripts/gen-curves.ts",
+    "timetable": "node scripts/fetch-timetable.ts",
     "smoke:live": "node scripts/smoke.mjs 430 900 --live",
     "check:supabase": "node --env-file-if-exists=.env.local scripts/check-supabase.ts"
   },

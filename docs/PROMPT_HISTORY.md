@@ -63,3 +63,40 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > change the identity for the entire folder
 
 **Outcome:** Read as "every repo under ~/ProjectPort". `laelaps` and `nqmate` already used `heuyz14 <heuyz14@yahoo.com>` (GitHub credits that email to heuyz14), so standardized on it: added an `includeIf "gitdir:/Users/bubba/ProjectPort/"` rule in `~/.gitconfig` pointing at `~/.gitconfig-projectport`, removed terraceb's repo-local override, and verified all four repos plus a fresh repo inside the folder; outside the folder the global identity is unchanged. Backup: `~/.gitconfig.bak-before-projectport`.
+
+## 10. 2026-09-19 - free-only, iPhone, next steps
+
+> i want it all free  /  how do i test on iphone  /  iphone web checks out whats next  /  are these numbers stagnant  /  whats taking so long
+
+**Outcome:** Constraint recorded: everything must be free (GitHub Pages public repo, Supabase free tier, rule-based assistant; a free-tier LLM such as Gemini/Groq is only an optional later add-on, exact terms to be confirmed first; Anthropic has no free API tier). iPhone test done by the user over Wi-Fi (http://<mac-ip>:8080). Explained counts are static until `simulate_occupancy_tick()` runs. Built the permit-eligibility filter meanwhile.
+
+## 11. 2026-09-19 - class-schedule-driven occupancy + Databricks skills (pasted proposal)
+
+> consider this for my terraceb hokie park and how i can implement
+> (pasted text: install databricks ai-dev-kit skills via Databricks CLI; drive garage occupancy from VT Timetable of Classes -> building join -> 15-min demand curve -> simulator -> JSON, plus MLflow model)
+
+**Outcome:** Analysis only, no code changed. Probed the live VT timetable: POST to `https://selfservice.banner.vt.edu/ssb/HZSKVTSC.P_ProcRequest` works (apps.es.vt.edu 307-redirects there). Columns are CRN, Course, Title, Type, Modality, Cr Hrs, **Capacity** (NOT enrollment), Instructor, Days, Begin, End, Location ("GBJ 104"). Gaps vs the proposal: capacity is a seat cap; locations use building abbreviations that `buildings.json` lacks (only num/name); only 2 garages have occupancy in the app (lots are static); garages are mostly F/S permit, so student class density is a weak driver; today is a weekend so "today's timetable" is empty at demo time. Recommendation: Tier A in-repo weekday-replay demand curve feeding the Supabase tick; Tier B Databricks notebook for the track story. Awaiting go-ahead.
+
+## 11. 2026-09-19 - resolve the teammate merge
+
+> no resolve our merge conflicts and keep theirs if it works, if it doesnt work or match then fix and repush
+
+**Outcome:** A teammate's commit (af7a12d) added a VT-sourced permits module overlapping my permit filter in 9 files. Merged origin/main, took THEIR side for every conflict, restored their template, dropped my permit implementation, and rewrote the smoke permit scenarios for their picker. Verified: 82 unit tests, typecheck, and 6 browser runs (3 sizes x feed off/mock-live) all pass. Pushed.
+
+## 12. 2026-09-19 - go-ahead for Tier A
+
+> yes
+
+**Outcome:** Built Tier A of the class-schedule occupancy: timetable parser + one-time fetch (`npm run timetable`), official building-code map (`data/timetable-building-codes.json`), demand model (`src/lib/demand.ts`), generated `supabase/curves.seed.sql` (`npm run curves`), migration `20260919120000_class_schedule_curves.sql` (private curves + `sim_config` demo clock, new `simulate_occupancy_tick()` that steers toward the curve), 101 tests passing, SQL verified on real Postgres (PGlite, scratchpad only). Added spec section + SUPABASE.md docs. Needs from the user: run the migration and `curves.seed.sql` in the Supabase SQL editor.
+
+## 13. 2026-09-19 - check migrations, then "it worked continue, reset and reanalyze what needs to be implemented next"
+
+> check all my mirgations  /  it worked continue, also reset and reanalyze what needs to be implemented next, pull if necessary
+
+**Outcome:** Verified both migrations against the real project as far as the anon key allows (tables exist and are private; the tick moved counts at 19:12 UTC). Re-analysis found: site NOT deployed (Pages 404, no workflow runs, no Actions Variables); a sawtooth flaw in my curves (fixed by smoothing, regression test mutation-checked); wrote `docs/DEMO_RUNBOOK.md`. Coordinated file ownership with the parallel session (projectport-e7, works in its own worktree). Remaining priorities: deploy (user), pg_cron (user), rehearsal, Databricks Tier B scaffold, polish.
+
+## 14. 2026-09-19 - simulator works; label fix + permit-aware assistant, synced with the other agent
+
+> yes do this also sync with my other agent running so there are no problems
+
+**Outcome:** Coordinated with the other session (projectport-f5) over SendMessage before editing: agreed disjoint file lists, explicit-path staging only, fetch+merge before every push. Worked in an isolated git worktree (`terraceb-wt-e7`, branch `e7-labels-assistant`). Shipped (1) signage-is-code: level labels + permit classes always come from the app, the DB supplies only live counts, `check:supabase` warns on label drift, so re-running `seed.sql` is now optional; (2) the Ask assistant honors the permit chooser via lib/permits verdicts. Bugs found by testing my own work and fixed: multi-permit answers mislabeled a garage with 133 usable spaces as "no open spaces"; "Stanger St. ADA" was read as a generic accessible-parking request; two of my checks were vacuous and were tightened (mutation-verified).
