@@ -87,9 +87,7 @@ ws.onmessage = (m) => {
 // ---- controllable mock of the Supabase REST endpoint (only used with --live) ----
 import { SEED_LEVELS } from "../src/data/garages.ts";
 import { GARAGES, LOTS } from "../src/data/index.ts";
-import { eligibleOpen, levelAllows, lotAllows, lotDimmed } from "../src/lib/permits.ts";
-import { garageTotals } from "../src/lib/occupancy.ts";
-const garageTotalsOpen = (g) => garageTotals(g).open;
+import { garageAccess, lotAccess } from "../src/lib/permits.ts";
 const mock = {
   mode: "ok", // ok | down (HTTP 503) | bad (200 with an out-of-range row)
   requests: [],
@@ -108,7 +106,7 @@ const send = (method, params = {}) => new Promise((r) => { const i = ++id; pendi
 const ev = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails)); return r.result.result.value; };
 const shot = async (name) => { const r = await send("Page.captureScreenshot", { format: "png" }); writeFileSync(`${DIR}${OUT}-${name}.png`, Buffer.from(r.result.data, "base64")); };
 const center = (sel) => ev(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
-const click = async (sel) => { const c = await center(sel); if (!c) throw new Error("no element " + sel); for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: c.x, y: c.y, button: "left", clickCount: 1 }); await sleep(120); };
+const click = async (sel) => { await ev(`document.querySelector(${JSON.stringify(sel)})?.scrollIntoView({ block: "center", inline: "center" })`); const c = await center(sel); if (!c) throw new Error("no element " + sel); for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: c.x, y: c.y, button: "left", clickCount: 1 }); await sleep(120); };
 let failures = 0;
 const check = (label, cond, extra = "") => { if (!cond) failures++; console.log(`${cond ? "PASS" : "FAIL"}  ${label} ${extra}`); };
 
@@ -158,7 +156,17 @@ await ev(`(()=>{const i=document.getElementById('list-q');i.value='squ';i.dispat
 const rows = await ev(`document.querySelectorAll('#list-results .row').length`);
 check("search 'squ' narrows list", rows >= 1 && rows < 5, `rows=${rows}`);
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='zzzz';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
-check("no-match empty state", (await ev(`document.querySelector('#list-results .state-msg')?.textContent`))?.includes("No garages or lots match"));
+check("no-match empty state", (await ev(`document.querySelector('#list-results .state-msg')?.textContent`))?.includes("No garages, lots, or buildings match"));
+// keyboard/screen-reader path to a building: the map's SVG shapes aren't individually
+// tab-reachable (102 of them), so the list search is the only non-pointer way in.
+await ev(`(()=>{const i=document.getElementById('list-q');i.value='burruss';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+check("building search finds Burruss Hall", (await ev(`document.querySelector('#list-results .row[data-kind="building"][data-id="b0176"] strong')?.textContent`)) === "Burruss Hall");
+await shot("5b-building-search");
+await click('#list-results .row[data-kind="building"][data-id="b0176"]');
+await sleep(900);
+check("building selected from list opens its sheet with nearest parking", (await ev(`document.getElementById('sheet-title')?.textContent`)) === "Burruss Hall" && (await ev(`document.querySelectorAll('#sheet .rows li').length`)) === 3);
+await click('#sheet [data-close]');
+await click('.tabbar [data-view="list"]'); // selecting from the list switches to Map; come back
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
 const before = await ev(`document.querySelector('.map-svg').getAttribute('viewBox')`);
 await click('#list-results .row[data-id="lot-coliseum-west"]');
@@ -273,74 +281,71 @@ await click('.tabbar [data-view="map"]');
 }
 await audit("initial");
 
-// ---- permit filter (runs before any live-data changes, so expected numbers come straight from the seed) ----
+// ---- permit chooser (teammate's rules module is the oracle: the UI must show exactly what lib/permits says) ----
 {
-  const selectPermit = async (v) => { await ev(`(()=>{const s=document.getElementById('permit');s.value=${JSON.stringify(v)};s.dispatchEvent(new Event('change',{bubbles:true}))})()`); await sleep(250); };
-  const ids = (sel) => ev(`[...document.querySelectorAll(${JSON.stringify(sel)})].map(e=>e.dataset.id).sort()`);
-  const sameSet = (a, b) => JSON.stringify(a) === JSON.stringify([...b].sort());
-  const nec = GARAGES.find((g) => g.id === "north-end-center"), perry = GARAGES.find((g) => g.id === "perry-street");
+  const PKEY = "hokiepark.permits.v1";
+  const cls = (sel) => ev(`[...document.querySelectorAll(${JSON.stringify(sel)})].map(e=>e.dataset.id).sort()`);
+  const verdictOf = (v) => (o) => o.verdict === v;
   await click('.tabbar [data-view="map"]'); await click('#zoom-reset'); await sleep(700);
+  check("permit: chip starts as 'Set your permit' with no filtering", (await ev(`document.querySelector('.permit-chip span').innerText`)) === "Set your permit" && (await ev(`document.querySelector('.map-svg').classList.contains('filtering')`)) === false);
 
-  await selectPermit("commuter");
-  const expectDim = LOTS.filter((l) => lotDimmed(l, "commuter")).map((l) => l.id);
-  check(`permit: commuter dims exactly the ${expectDim.length} ineligible non-ADA lots`, sameSet(await ids("path.lot.ineligible"), expectDim), JSON.stringify(await ids("path.lot.ineligible")));
-  check("permit: accessible (ADA) lots are never dimmed", (await ev(`document.querySelectorAll('.lot-ada.ineligible, .marker.has-ada.ineligible').length`)) === 0);
-  check("permit: garages stay undimmed for commuter (both have commuter levels)", (await ids(".marker-garage.ineligible")).length === 0);
+  await click('.permit-chip'); await sleep(150);
+  check("permit: chip opens the panel", (await ev(`document.getElementById('permit-panel').hidden`)) === false);
+  await click('[data-permit="cg"]'); await sleep(200);
+  check("permit: chip shows the chosen permit", (await ev(`document.querySelector('.permit-chip span').innerText`)) === "Commuter/Graduate" && (await ev(`document.querySelector('.permit-chip').classList.contains('is-set')`)));
+  await shot("12-permit-panel");
+  await click('[data-done]'); await sleep(150);
 
-  await click('.marker-garage[data-id="north-end-center"]'); await sleep(700);
-  const note = await ev(`document.querySelector('#sheet .permit-note')?.innerText`);
-  check("permit: garage sheet shows eligible-open total", note?.includes(`${eligibleOpen(nec, "commuter")} open`) && note.includes("Commuter"), JSON.stringify(note));
-  const off = await ev(`document.querySelectorAll('#sheet .level-off').length`);
-  check("permit: levels not allowed for commuter are flagged", off === nec.levels.filter((l) => !levelAllows(l, "commuter")).length && off > 0, `flagged=${off}`);
-  check("permit: headline totals are NOT changed by the filter (still all open spaces)", (await ev(`document.querySelector('#sheet .big')?.innerText`)) === String(garageTotalsOpen(nec)));
-  await click('#sheet [data-close]');
-  await click('#zoom-reset'); await sleep(700);
-  await click('.marker-garage[data-id="perry-street"]'); await sleep(700);
-  check("permit: Perry has 0 open commuter spaces (its only commuter level is full)", (await ev(`document.querySelector('#sheet .permit-note')?.innerText`)).includes("0 open"));
-  await shot("12-permit-commuter-sheet");
-  await click('#sheet [data-close]');
+  // map: every lot and garage carries the verdict the rules module gives for a C/G permit
+  const wantLot = (v) => LOTS.filter((l) => verdictOf(v)(lotAccess(l, ["cg"], { ada: false }))).map((l) => l.id).sort();
+  const wantGar = (v) => GARAGES.filter((g) => verdictOf(v)(garageAccess(g.levels, ["cg"], { ada: false }))).map((g) => g.id).sort();
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  check("permit: map is in filtering mode", await ev(`document.querySelector('.map-svg').classList.contains('filtering')`));
+  for (const v of ["yes", "no", "check"]) {
+    const gotLots = await cls(`path.lot.acc-${v}`), gotGars = await cls(`path.garage.acc-${v}`);
+    check(`permit: map lots marked acc-${v} match the rules (${wantLot(v).length})`, same(gotLots, wantLot(v)), JSON.stringify(gotLots));
+    check(`permit: map garages marked acc-${v} match the rules (${wantGar(v).length})`, same(gotGars, wantGar(v)), JSON.stringify(gotGars));
+  }
 
-  // resident: no garage levels at all -> both garage markers dim; ADA still not dimmed
-  await selectPermit("resident");
-  check("permit: resident dims both garages (no resident levels)", (await ids(".marker-garage.ineligible")).length === 2);
-  check("permit: ADA lots still undimmed for resident", (await ev(`document.querySelectorAll('.lot-ada.ineligible').length`)) === 0);
-
-  // list: annotations + "only my permit" filter
-  await selectPermit("commuter");
+  // list: tags + row classes agree with the same rules
   await click('.tabbar [data-view="list"]');
-  const sub = await ev(`document.querySelector('#list-results .row[data-id="north-end-center"] .sub').innerText`);
-  check("permit: list garage row shows the eligible number", sub.includes(`${eligibleOpen(nec, "commuter")} for your permit`) && sub.includes("179 of 405 open"), sub);
-  const pill = await ev(`document.querySelector('#list-results .row[data-id="perry-street"] .pill').innerText`);
-  check("permit: list pill says 'Full for you' when the permit's levels are full", pill === "Full for you", pill);
-  const before = await ev(`document.querySelectorAll('#list-results .row').length`);
-  await click('#only-mine');
-  const expectRows = GARAGES.filter((g) => g.levels.some((l) => levelAllows(l, "commuter"))).length + LOTS.filter((l) => lotAllows(l, "commuter") || l.hasADA).length;
-  const after = await ev(`document.querySelectorAll('#list-results .row').length`);
-  check("permit: 'only my permit' hides ineligible options but keeps ADA lots", after === expectRows && after < before, `${before} -> ${after}`);
+  const rowNo = await cls("#list-results .row.acc-no"), rowCheck = await cls("#list-results .row.acc-check");
+  check("permit: list rows marked 'no' match the rules", same(rowNo, [...wantLot("no"), ...wantGar("no")].sort()), JSON.stringify(rowNo));
+  check("permit: list rows marked 'check' match the rules", same(rowCheck, [...wantLot("check"), ...wantGar("check")].sort()), JSON.stringify(rowCheck));
+  if (rowNo.length) check("permit: a 'no' row says 'Permit not valid'", (await ev(`document.querySelector('#list-results .row.acc-no .acc-tag')?.innerText`)) === "Permit not valid");
   await shot("13-permit-list");
-  await click('#only-mine');
 
-  // assistant honors the picked permit
-  await click('.tabbar [data-view="ask"]');
-  await ev(`document.getElementById('chat-q').value='Where is the closest open parking to Newman Library?'`);
-  await ev(`document.getElementById('chat-form').requestSubmit()`); await sleep(300);
-  const ans = await ev(`[...document.querySelectorAll('#chat-log .msg.bot')].pop().innerText`);
-  check("permit: assistant restricts to the picked permit with matching numbers", /Closest parking for a Commuter permit to Newman Library/.test(ans) && ans.includes(`${eligibleOpen(nec, "commuter")} open on levels for a Commuter permit`) && /Perry Street Garage has no open spaces for a Commuter permit/.test(ans), JSON.stringify(ans.split("\n").slice(0, 3)));
-  await shot("14-permit-assistant");
+  // sheet: a verdict banner that agrees, first thing in the body
+  const noLot = wantLot("no")[0], yesLot = wantLot("yes")[0];
+  for (const [id, v] of [[noLot, "no"], [yesLot, "yes"]].filter(([id]) => id)) {
+    await click('.tabbar [data-view="list"]');
+    await click(`#list-results .row[data-id="${id}"]`); await sleep(800);
+    check(`permit: ${id} sheet shows a verdict-${v} banner`, (await ev(`!!document.querySelector('#sheet .verdict.verdict-${v}')`)), await ev(`document.querySelector('#sheet .verdict-head')?.innerText`));
+    check(`permit: ${id} banner carries the signage disclaimer`, /signage/i.test(await ev(`document.querySelector('#sheet .verdict-fine')?.innerText ?? ''`)));
+    await click('#sheet [data-close]');
+  }
+  await shot("14-permit-sheet");
 
-  // persistence across a reload; then clear it
-  await click('.tabbar [data-view="map"]');
+  // persistence + hostile storage
   await send("Page.reload"); await sleep(1500);
-  check("permit: choice survives a reload (dropdown + dimming)", (await ev(`document.getElementById('permit').value`)) === "commuter" && sameSet(await ids("path.lot.ineligible"), expectDim));
-  await selectPermit("");
-  check("permit: 'Any permit' clears all dimming", (await ev(`document.querySelectorAll('.ineligible').length`)) === 0);
-  await ev(`localStorage.getItem('hokiepark.permit')`);
-  check("permit: cleared choice is not persisted", (await ev(`localStorage.getItem('hokiepark.permit')`)) === null);
-  // junk in storage is ignored, not trusted
-  await ev(`localStorage.setItem('hokiepark.permit','<img src=x onerror=alert(1)>')`);
+  check("permit: choice survives a reload", (await ev(`document.querySelector('.permit-chip span').innerText`)) === "Commuter/Graduate" && await ev(`document.querySelector('.map-svg').classList.contains('filtering')`));
+  await ev(`localStorage.setItem(${JSON.stringify(PKEY)}, JSON.stringify({permits:['cg','<img src=x onerror=alert(1)>','nope'],ada:'yes'}))`);
   await send("Page.reload"); await sleep(1500);
-  check("permit: junk in storage is rejected (falls back to Any permit)", (await ev(`document.getElementById('permit').value`)) === "" && (await ev(`document.querySelectorAll('.ineligible').length`)) === 0);
-  await ev(`localStorage.removeItem('hokiepark.permit')`);
+  check("permit: junk in storage is filtered to valid permits only (ada must be exactly true)", (await ev(`document.querySelector('.permit-chip span').innerText`)) === "Commuter/Graduate" && (await ev(`document.querySelector('.permit-chip').innerText.includes('Accessible')`)) === false);
+  await ev(`localStorage.setItem(${JSON.stringify(PKEY)}, '{not json')`);
+  await send("Page.reload"); await sleep(1500);
+  check("permit: corrupt storage falls back to 'Set your permit' without crashing", (await ev(`document.querySelector('.permit-chip span').innerText`)) === "Set your permit" && (await ev(`!!document.querySelector('.map-svg')`)));
+
+  // multi-select + ADA + Clear all
+  await click('.permit-chip'); await click('[data-permit="fs"]'); await click('[data-permit="visitor"]'); await click('[data-ada]'); await sleep(200);
+  check("permit: several permits + accessible read as a count in the chip", (await ev(`document.querySelector('.permit-chip span').innerText`)) === "3 permits", await ev(`document.querySelector('.permit-chip span').innerText`));
+  const multi = { permits: ["fs", "visitor"], ada: true };
+  const gotYes = await cls("path.lot.acc-yes");
+  check("permit: multi-permit verdicts follow the rules (best verdict across permits)", same(gotYes, LOTS.filter((l) => lotAccess(l, multi.permits, { ada: multi.ada }).verdict === "yes").map((l) => l.id).sort()), JSON.stringify(gotYes));
+  await click('[data-clear]'); await sleep(200);
+  check("permit: Clear all removes filtering and the saved choice", (await ev(`document.querySelector('.map-svg').classList.contains('filtering')`)) === false && (await ev(`document.querySelectorAll('.acc-no, .acc-check').length`)) === 0);
+  await click('[data-done]');
+  await ev(`localStorage.removeItem(${JSON.stringify(PKEY)})`);
 }
 
 // ---- chip + live feed ----

@@ -1,15 +1,28 @@
 import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
+import { GARAGE_NOTE } from "../data/garages.ts";
 import type { Garage, GarageLevel, Lot, Selection } from "../types.ts";
 import { availability, garageStatus, garageTotals, levelStatus, openAdaSpaces, openSpaces } from "../lib/occupancy.ts";
 import { nearest, walkMinutes } from "../lib/nearby.ts";
-import { eligibleOpen, levelAllows, lotAllows, PERMIT_LABEL, type PermitChoice } from "../lib/permits.ts";
+import { classSummary, garageAccess, lotAccess, SIGNAGE_NOTE, VERDICT_LABEL, type Eligibility, type PermitId } from "../lib/permits.ts";
 import { adaBadge } from "./badge.ts";
 import { CATEGORY_LABEL, esc, meters, statusPill } from "./format.ts";
 
 export interface SheetController {
   render(sel: Selection, opts?: { preserveScroll?: boolean }): void;
-  /** Set the permit used for eligibility notes; call render() afterwards to refresh an open sheet. */
-  setPermit(permit: PermitChoice | null): void;
+  setPermits(permits: PermitId[], ada: boolean): void;
+}
+
+/** Permits the driver holds; kept at module scope so every body function can judge without threading it. */
+let held: PermitId[] = [];
+let heldAda = false;
+
+/** The verdict banner. Nothing else in the sheet outranks it, so it renders first in the body. */
+function verdictBanner(e: Eligibility): string {
+  return `<div class="verdict verdict-${e.verdict}">
+    <p class="verdict-head">${esc(VERDICT_LABEL[e.verdict])}</p>
+    ${e.note ? `<p class="verdict-note">${esc(e.note)}</p>` : ""}
+    <p class="verdict-fine">${esc(SIGNAGE_NOTE)}</p>
+  </div>`;
 }
 
 const head = (title: string, sub: string, right = "") => `
@@ -22,16 +35,17 @@ const head = (title: string, sub: string, right = "") => `
     <button type="button" class="sheet-close" data-close aria-label="Close details">&times;</button>
   </div>${right}`;
 
-function levelRow(l: GarageLevel, permit: PermitChoice | null): string {
+function levelRow(l: GarageLevel, showAcc = true): string {
   const open = openSpaces(l);
   const st = levelStatus(l);
   const pct = l.capacity ? Math.round((l.occupied / l.capacity) * 100) : 100;
-  const off = !!permit && !levelAllows(l, permit);
-  return `<li class="level level-${st}${off ? " level-off" : ""}">
+  const acc = showAcc && (held.length || heldAda) ? lotAccess({ classes: l.classes }, held, { ada: heldAda }) : null;
+  return `<li class="level level-${st}${acc ? ` acc-${acc.verdict}` : ""}">
     <div class="level-top">
-      <span class="level-label">${esc(l.label)}${off ? ` <span class="tag">Not for ${esc(PERMIT_LABEL[permit!])}</span>` : ""}</span>
+      <span class="level-label">${esc(l.label)}</span>
       ${adaBadge({ count: openAdaSpaces(l), muted: openAdaSpaces(l) === 0 })}
     </div>
+    ${acc && acc.verdict !== "yes" ? `<p class="level-acc">${esc(acc.verdict === "no" ? "Not valid for your permit" : "Check the sign")}</p>` : ""}
     <div class="level-bar" role="img" aria-label="${pct}% full"><span style="width:${pct}%"></span></div>
     <div class="level-bottom">
       <span><strong>${open}</strong> open of ${l.capacity}</span>
@@ -40,36 +54,45 @@ function levelRow(l: GarageLevel, permit: PermitChoice | null): string {
   </li>`;
 }
 
-function garageBody(g: Garage, permit: PermitChoice | null): string {
+function garageBody(g: Garage): string {
   const t = garageTotals(g);
   const st = garageStatus(g);
+  const filtering = held.length > 0 || heldAda;
+  const acc = filtering ? garageAccess(g.levels, held, { ada: heldAda }) : null;
+  // Per-level marks only earn their space when the levels actually disagree.
+  const verdicts = new Set(g.levels.map((l) => lotAccess({ classes: l.classes }, held, { ada: heldAda }).verdict));
+  const perLevel = filtering && verdicts.size > 1;
+  // The standing garage note is redundant once the banner has said the same thing.
+  const note = GARAGE_NOTE[g.id];
+  const showNote = note && !(acc?.note && acc.note.slice(0, 40) === note.slice(0, 40)) && !(acc?.verdict === "no" && /Perry Street permit/.test(acc.note ?? ""));
   return (
     head(g.name, `Parking garage &middot; ${g.levels.length} levels`) +
     `<div class="sheet-body">
+      ${acc ? verdictBanner(acc) : ""}
+      ${showNote ? `<p class="fine permit-fine">${esc(note!)}</p>` : ""}
       <div class="summary">
         <div><span class="big">${t.open}</span><span class="of"> / ${t.capacity} open</span></div>
         ${statusPill(st)}
         ${adaBadge({ count: t.adaOpen, label: "accessible open", muted: t.adaOpen === 0 })}
       </div>
-      ${permit ? `<p class="permit-note">For your <strong>${esc(PERMIT_LABEL[permit])}</strong> permit: <strong>${eligibleOpen(g, permit)} open</strong> on eligible levels. Accessible spaces are open to placard holders regardless of permit.</p>` : ""}
       <h3>By level</h3>
-      <ul class="levels">${g.levels.map((l) => levelRow(l, permit)).join("")}</ul>
+      <ul class="levels">${g.levels.map((l) => levelRow(l, perLevel)).join("")}</ul>
       <p class="fine">Demo data &mdash; counts are simulated, not from live sensors.</p>
     </div>`
   );
 }
 
-function lotBody(l: Lot, permit: PermitChoice | null): string {
+function lotBody(l: Lot): string {
   const ada = l.hasADA
     ? `<div class="ada-note">${adaBadge({ label: "Accessible parking available" })}<p>${l.adaSpaces} designated accessible spaces (illustrative count).</p></div>`
     : `<p class="no-ada">No designated accessible spaces flagged in this lot.</p>`;
   return (
     head(l.name, `Parking lot${l.number ? ` ${l.number}` : ""}`) +
     `<div class="sheet-body">
+      ${held.length || heldAda ? verdictBanner(lotAccess(l, held, { ada: heldAda })) : ""}
       <dl class="facts">
-        <div><dt>Permit</dt><dd>${esc(l.permit)}</dd></div>
+        <div><dt>Permit</dt><dd>${esc(classSummary(l.classes))}</dd></div>
         <div><dt>Status</dt><dd>${esc(l.status)}</dd></div>
-        ${permit ? `<div><dt>Your ${esc(PERMIT_LABEL[permit])} permit</dt><dd>${lotAllows(l, permit) ? "Valid here" : l.hasADA ? "Not valid (accessible spaces still open)" : "Not valid here"}</dd></div>` : ""}
       </dl>
       ${ada}
       <p class="fine">Live space counts aren't tracked for lots in this demo.</p>
@@ -115,10 +138,10 @@ export function createSheet(el: HTMLElement, handlers: { onClose: () => void; on
     if (e.key === "Escape") handlers.onClose();
   });
 
-  let permit: PermitChoice | null = null;
   return {
-    setPermit(p) {
-      permit = p;
+    setPermits(permits, ada) {
+      held = permits;
+      heldAda = ada;
     },
     render(sel, opts) {
       if (!sel) {
@@ -129,10 +152,10 @@ export function createSheet(el: HTMLElement, handlers: { onClose: () => void; on
       let html = "";
       if (sel.kind === "garage") {
         const g = GARAGES.find((x) => x.id === sel.id);
-        if (g) html = garageBody(g, permit);
+        if (g) html = garageBody(g);
       } else if (sel.kind === "lot") {
         const l = LOTS.find((x) => x.id === sel.id);
-        if (l) html = lotBody(l, permit);
+        if (l) html = lotBody(l);
       } else html = buildingBody(sel.id);
       if (!html) {
         el.hidden = true;

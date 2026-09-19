@@ -1,5 +1,6 @@
 import type { Garage, GarageLevel } from "../types.ts";
 import type { LiveConfig } from "./live-config.ts";
+import { SEED_LEVELS } from "../data/garages.ts";
 
 /**
  * Remote occupancy: fetch rows from the Supabase `garage_levels` table, validate every field (the response is
@@ -43,7 +44,14 @@ export function parseOccupancyRows(json: unknown): OccupancyRow[] {
   });
 }
 
-const toLevel = (r: OccupancyRow): GarageLevel => ({ label: r.label, capacity: r.capacity, occupied: r.occupied, adaCapacity: r.ada_capacity, adaOccupied: r.ada_occupied });
+/**
+ * Permit classes are physical signage, not sensor data: they stay with the bundled level config and
+ * are re-attached by level index, never read from the database. An index we have no signage for keeps
+ * an empty list, which the permit rules report as "check the posted sign" rather than guessing.
+ */
+const toLevel = (r: OccupancyRow, classes: GarageLevel["classes"] = []): GarageLevel => ({
+  label: r.label, classes, capacity: r.capacity, occupied: r.occupied, adaCapacity: r.ada_capacity, adaOccupied: r.ada_occupied,
+});
 
 /**
  * Replace levels on every garage that has rows. Returns whether anything changed (so the UI can skip a
@@ -56,7 +64,8 @@ export function applyOccupancy(garages: Garage[], rows: OccupancyRow[]): boolean
   if (!known.length) throw new Error("occupancy rows matched no known garage");
   let changed = false;
   for (const g of known) {
-    const levels = by.get(g.id)!.sort((a, b) => a.level_index - b.level_index).map(toLevel);
+    const signage = SEED_LEVELS[g.id] ?? [];
+    const levels = by.get(g.id)!.sort((a, b) => a.level_index - b.level_index).map((r) => toLevel(r, signage[r.level_index]?.classes ?? []));
     if (JSON.stringify(levels) !== JSON.stringify(g.levels)) {
       g.levels = levels;
       changed = true;

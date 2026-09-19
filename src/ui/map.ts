@@ -4,7 +4,7 @@ import type { Footprint, Selection } from "../types.ts";
 import { footprintToPath, makeProjector, type Projector } from "../lib/projection.ts";
 import { centeredOn, clamp, easeInOutCubic, fitAspect, lerpBox, panBy, zoomAt, type ViewBox } from "../lib/viewport.ts";
 import { garageStatus, garageTotals } from "../lib/occupancy.ts";
-import { eligibleLevels, lotDimmed, type PermitChoice } from "../lib/permits.ts";
+import { classSummary, garageAccess, lotAccess, type PermitId } from "../lib/permits.ts";
 import { esc } from "./format.ts";
 
 export interface MapController {
@@ -14,8 +14,8 @@ export interface MapController {
   reset(): void;
   /** Re-read garage counts (after a live update) and update the markers in place. */
   refreshGarages(): void;
-  /** Dim lots (except ADA lots) and garages that the permit cannot use; null clears it. */
-  setPermit(permit: PermitChoice | null): void;
+  /** Dim whatever the driver's permits don't cover. Empty permits = no dimming. */
+  setPermits(permits: PermitId[], ada: boolean): void;
 }
 
 /** Labeled at every zoom; chosen to be far enough apart not to collide at full-campus view. */
@@ -104,7 +104,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
 
   const lotMarkers = LOTS.map((l) => {
     const a = anchors.get(key("lot", l.id))!;
-    const label = `${l.name} lot, ${l.permit}${l.hasADA ? ", accessible parking available" : ""}`;
+    const label = `${l.name} lot, ${classSummary(l.classes)}${l.hasADA ? ", accessible parking available" : ""}`;
     return `<g class="marker marker-lot${l.hasADA ? " has-ada" : ""}" data-scale data-kind="lot" data-id="${l.id}" data-x="${a.x.toFixed(1)}" data-y="${a.y.toFixed(1)}" tabindex="0" role="button" aria-label="${esc(label)}">
       <circle class="m-bg" r="10"/>
       <text class="m-p" y="4.5" text-anchor="middle">P</text>
@@ -271,6 +271,25 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
   });
 
   return {
+    setPermits(permits, ada) {
+      const on = permits.length > 0 || ada;
+      svg.classList.toggle("filtering", on);
+      // Mark every lot polygon, lot marker and garage with the verdict; CSS does the dimming.
+      for (const l of LOTS) {
+        const v = on ? lotAccess(l, permits, { ada }).verdict : null;
+        for (const n of svg.querySelectorAll<SVGElement>(`[data-kind="lot"][data-id="${CSS.escape(l.id)}"]`)) {
+          n.classList.remove("acc-yes", "acc-no", "acc-check");
+          if (v) n.classList.add(`acc-${v}`);
+        }
+      }
+      for (const g of GARAGES) {
+        const v = on ? garageAccess(g.levels, permits, { ada }).verdict : null;
+        for (const n of svg.querySelectorAll<SVGElement>(`[data-kind="garage"][data-id="${CSS.escape(g.id)}"]`)) {
+          n.classList.remove("acc-yes", "acc-no", "acc-check");
+          if (v) n.classList.add(`acc-${v}`);
+        }
+      }
+    },
     setSelection(sel, { fly }) {
       for (const n of svg.querySelectorAll(".is-selected")) n.classList.remove("is-selected");
       if (!sel) return;
@@ -293,16 +312,6 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     },
     reset() {
       flyTo(home);
-    },
-    setPermit(permit) {
-      for (const l of LOTS) {
-        const dim = lotDimmed(l, permit);
-        for (const n of svg.querySelectorAll(`[data-kind="lot"][data-id="${l.id}"]`)) n.classList.toggle("ineligible", dim);
-      }
-      for (const g of GARAGES) {
-        const dim = !!permit && eligibleLevels(g, permit).length === 0;
-        for (const n of svg.querySelectorAll(`[data-kind="garage"][data-id="${g.id}"]`)) n.classList.toggle("ineligible", dim);
-      }
     },
     refreshGarages() {
       for (const g of GARAGES) {

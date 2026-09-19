@@ -69,3 +69,16 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > i want it all free  /  how do i test on iphone  /  iphone web checks out whats next  /  are these numbers stagnant  /  whats taking so long
 
 **Outcome:** Constraint recorded: everything must be free (GitHub Pages public repo, Supabase free tier, rule-based assistant; a free-tier LLM such as Gemini/Groq is only an optional later add-on, exact terms to be confirmed first; Anthropic has no free API tier). iPhone test done by the user over Wi-Fi (http://<mac-ip>:8080). Explained counts are static until `simulate_occupancy_tick()` runs. Built the permit-eligibility filter meanwhile.
+
+## 11. 2026-09-19 - class-schedule-driven occupancy + Databricks skills (pasted proposal)
+
+> consider this for my terraceb hokie park and how i can implement
+> (pasted text: install databricks ai-dev-kit skills via Databricks CLI; drive garage occupancy from VT Timetable of Classes -> building join -> 15-min demand curve -> simulator -> JSON, plus MLflow model)
+
+**Outcome:** Analysis only, no code changed. Probed the live VT timetable: POST to `https://selfservice.banner.vt.edu/ssb/HZSKVTSC.P_ProcRequest` works (apps.es.vt.edu 307-redirects there). Columns are CRN, Course, Title, Type, Modality, Cr Hrs, **Capacity** (NOT enrollment), Instructor, Days, Begin, End, Location ("GBJ 104"). Gaps vs the proposal: capacity is a seat cap; locations use building abbreviations that `buildings.json` lacks (only num/name); only 2 garages have occupancy in the app (lots are static); garages are mostly F/S permit, so student class density is a weak driver; today is a weekend so "today's timetable" is empty at demo time. Recommendation: Tier A in-repo weekday-replay demand curve feeding the Supabase tick; Tier B Databricks notebook for the track story. Awaiting go-ahead.
+
+## 11. 2026-09-19 - resolve the teammate merge
+
+> no resolve our merge conflicts and keep theirs if it works, if it doesnt work or match then fix and repush
+
+**Outcome:** A teammate's commit (af7a12d) added a VT-sourced permits module overlapping my permit filter in 9 files. Merged origin/main, took THEIR side for every conflict, restored their template, dropped my permit implementation, and rewrote the smoke permit scenarios for their picker. Verified: 82 unit tests, typecheck, and 6 browser runs (3 sizes x feed off/mock-live) all pass. Pushed.

@@ -57,6 +57,7 @@ by `src/live.ts` and applied onto the same `GARAGES` array, so every view stays 
 | `lib/live-config.ts` | validate feed config; refuse service-role/secret keys | `live-config.test.ts` |
 | `live.ts` / `ui/sync.ts` | poller (no overlap, backoff, pause when hidden) and the header status chip | `smoke:live` |
 | `supabase/*` | migration (table, constraints, RLS, simulator), generated seed, optional cron | `seed.test.ts` |
+| `lib/permits.ts` / `ui/permits.ts` | VT permit rules (lot classes, permit types, yes/no/check verdicts) and the map chip picker | `permits.test.ts`, `smoke` permit scenarios |
 | `lib/assistant.ts` | intent + place resolution, deterministic answers, `Answerer` seam | `assistant.test.ts` (3 spec questions) |
 | `data/*` | typed arrays; `garages.ts`/`lots.ts` hold the hand-set fields | `occupancy.test.ts`, `drillfield.test.ts` |
 | `ui/map.ts` | SVG render, pointer pan/pinch, wheel zoom, fly-to, markers, selection highlight | `scripts/smoke.mjs` |

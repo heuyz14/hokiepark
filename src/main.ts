@@ -5,34 +5,17 @@ import { createSheet } from "./ui/sheet.ts";
 import { createList } from "./ui/list.ts";
 import { renderLegend } from "./ui/legend.ts";
 import { createAssistant } from "./ui/assistant.ts";
-import { makeLocalAnswerer } from "./lib/assistant.ts";
-import { parsePermitChoice, PERMIT_CHOICES, PERMIT_LABEL, type PermitChoice } from "./lib/permits.ts";
+import { createPermitPicker, loadSaved } from "./ui/permits.ts";
+import { localAnswerer } from "./lib/assistant.ts";
 import { LIVE_CONFIG } from "./config.ts";
 import { startLive } from "./live.ts";
 import { createSyncChip } from "./ui/sync.ts";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-const PERMIT_KEY = "hokiepark.permit";
-/** localStorage can throw (private mode) or hold junk, so read defensively and validate. */
-const loadPermit = (): PermitChoice | null => {
-  try {
-    return parsePermitChoice(localStorage.getItem(PERMIT_KEY));
-  } catch {
-    return null;
-  }
-};
-const savePermit = (p: PermitChoice | null) => {
-  try {
-    if (p) localStorage.setItem(PERMIT_KEY, p);
-    else localStorage.removeItem(PERMIT_KEY);
-  } catch {
-    /* preference just will not persist */
-  }
-};
-
 function boot() {
-  const store = createStore({ view: "map", selection: null, source: null, query: "", permit: loadPermit() });
+  const saved = loadSaved();
+  const store = createStore({ view: "map", selection: null, source: null, query: "", permits: saved.permits, ada: saved.ada });
   const select = (selection: Selection, source: NonNullable<State["source"]>, view?: View) =>
     store.set({ selection, source, ...(view ? { view } : {}) });
 
@@ -46,23 +29,23 @@ function boot() {
     onQuery: (query) => store.set({ query }),
   });
   renderLegend($("legend"));
+  const picker = createPermitPicker($("permit-picker"), (permits, ada) => store.set({ permits, ada }));
+  // Apply whatever was remembered from last visit before the first paint.
+  picker.set(saved.permits, saved.ada);
+  map.setPermits(saved.permits, saved.ada);
+  list.setPermits(saved.permits, saved.ada);
+  sheet.setPermits(saved.permits, saved.ada);
 
   const views: Record<View, HTMLElement> = { map: $("view-map"), list: $("view-list"), ask: $("view-ask") };
   const tabs = [...document.querySelectorAll<HTMLButtonElement>(".tabbar button")];
 
   // Swap `localAnswerer` for an LLM-backed Answerer here if a backend proxy is ever added.
-  createAssistant($("view-ask"), { answer: makeLocalAnswerer(() => store.get().permit), onSelect: (sel) => select(sel, "assistant", "map") });
+  createAssistant($("view-ask"), { answer: localAnswerer, onSelect: (sel) => select(sel, "assistant", "map") });
 
   store.subscribe((s, prev) => {
     if (s.view !== prev.view) {
       for (const [v, node] of Object.entries(views)) node.hidden = v !== s.view;
       for (const t of tabs) t.toggleAttribute("aria-current", t.dataset.view === s.view);
-    }
-    if (s.permit !== prev.permit) {
-      applyPermit(s.permit);
-      savePermit(s.permit);
-      permitSelect.value = s.permit ?? "";
-      if (s.selection && s.view === "map") sheet.render(s.selection, { preserveScroll: true });
     }
     const selChanged = !sameSelection(s.selection, prev.selection);
     if (selChanged || s.view !== prev.view) {
@@ -70,22 +53,16 @@ function boot() {
       if (s.view === "map") map.setSelection(s.selection, { fly: s.source !== "map" && s.source !== null && selChanged });
     }
     if (selChanged) list.setSelected(s.selection);
+    if (s.permits !== prev.permits || s.ada !== prev.ada) {
+      map.setPermits(s.permits, s.ada);
+      list.setPermits(s.permits, s.ada);
+      sheet.setPermits(s.permits, s.ada);
+      sheet.render(s.view === "map" ? s.selection : null);
+    }
     if (selChanged && s.selection && s.source !== "map" && s.view === "map") {
       document.getElementById("sheet-title")?.focus({ preventScroll: true });
     }
   });
-
-  // Permit picker: any permit (null) or one of the four; everything that depends on it goes through the store.
-  const permitSelect = $<HTMLSelectElement>("permit");
-  permitSelect.innerHTML = `<option value="">Any permit</option>` + PERMIT_CHOICES.map((p) => `<option value="${p}">${PERMIT_LABEL[p]}</option>`).join("");
-  permitSelect.value = store.get().permit ?? "";
-  permitSelect.addEventListener("change", () => store.set({ permit: parsePermitChoice(permitSelect.value) }));
-  const applyPermit = (p: PermitChoice | null) => {
-    map.setPermit(p);
-    sheet.setPermit(p);
-    list.setPermit(p);
-  };
-  applyPermit(store.get().permit);
 
   // Live occupancy (optional). Without config the app just shows the bundled sample counts.
   const chip = createSyncChip($("sync"), { state: LIVE_CONFIG ? "connecting" : "demo", lastSync: null, dataAsOf: null });

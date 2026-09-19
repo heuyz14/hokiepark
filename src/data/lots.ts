@@ -1,42 +1,53 @@
-import type { Lot, LotGeo, PermitType } from "../types.ts";
+import type { Lot, LotGeo } from "../types.ts";
+import type { LotClass } from "../lib/permits.ts";
 import geo from "./lots.geo.json" with { type: "json" };
 
 /**
- * Lot names, positions and status come from VT's ParkingLots GIS layer. VT's public layer has
- * NO permit-type or ADA fields, so `permit`, `hasADA` and `adaSpaces` below are HAND-SET DEMO
- * DATA (spec Section 14: ADA counts are illustrative). The five ADA lots follow spec Section 7
- * (Squires, Cassell/Coliseum, Bookstore, Drillfield North) plus Stanger St. ADA as the fifth,
- * which the spec leaves unnamed - CONFIRM WITH A TEAMMATE.
+ * Lot names, positions and status come from VT's ParkingLots GIS layer, which carries NO permit
+ * or ADA fields. `classes` below is read off VT Parking Services' official 2026-27 campus parking
+ * map (the colour legend: orange = Faculty/Staff/Visitor, teal = Commuter/Graduate, purple =
+ * Faculty/Staff 24-hour, blue = Graduate, pink = ADA/Service 24-hour, dark maroon = Any University
+ * Permit, yellow = F/S and Perry Street permit).
+ *
+ * `confirm: true` marks a lot whose GIS name has no exact label on the printed map, so its class is
+ * inferred from its position among neighbouring lots. The UI degrades these to "check the sign"
+ * rather than showing a confident "you can park here" - VERIFY THESE AGAINST parking.vt.edu.
+ *
+ * `ada`/`adaSpaces` remain illustrative demo counts (spec Section 14).
  */
 interface LotMeta {
-  permit: PermitType;
+  classes: LotClass[];
   ada?: number;
+  confirm?: true;
 }
 
 const META: Record<string, LotMeta> = {
-  "lot-squires": { permit: "Mixed", ada: 8 },
-  "lot-coliseum-west": { permit: "Commuter", ada: 12 },
-  "lot-bookstore": { permit: "Visitor", ada: 6 },
-  "lot-drillfield-north": { permit: "Faculty/Staff", ada: 5 },
-  "lot-stanger-st-ada": { permit: "Mixed", ada: 9 },
-  "lot-drillfield-south": { permit: "Faculty/Staff" },
-  "lot-graduate-life-center-west": { permit: "Commuter" },
-  "lot-owens": { permit: "Resident" },
-  "lot-torgersen": { permit: "Faculty/Staff" },
-  "lot-stadium": { permit: "Commuter" },
-  "lot-alumni-mall-north": { permit: "Faculty/Staff" },
-  "lot-alumni-mall-south": { permit: "Faculty/Staff" },
-  "lot-dietrick": { permit: "Resident" },
-  "lot-ag-quad": { permit: "Faculty/Staff" },
-  "lot-engel": { permit: "Commuter" },
-  "lot-durham": { permit: "Faculty/Staff" },
-  "lot-lower-stanger": { permit: "Commuter" },
-  "lot-upper-stanger": { permit: "Commuter" },
-  "lot-pamplin": { permit: "Faculty/Staff" },
+  // Labelled directly on the official map.
+  "lot-squires": { classes: ["fsv"], ada: 8 }, // "Squires F/S/V"
+  "lot-coliseum-west": { classes: ["fsv", "cg"], ada: 12 }, // map shows both a "Coliseum West F/S/V" and a "Coliseum West C/G" section
+  "lot-drillfield-north": { classes: ["fsv"], ada: 5 }, // "Drillfield North F/S/V"
+  "lot-drillfield-south": { classes: ["fsv"] }, // "Drillfield South F/S/V"
+  "lot-stanger-st-ada": { classes: ["ada-service-24"], ada: 9 }, // pink "ADA/Service 24 hour"
+  "lot-graduate-life-center-west": { classes: ["graduate"] }, // blue "Squires Graduate", beside the Graduate Life Center
+  "lot-owens": { classes: ["fs-24"] }, // purple "Owens"
+  "lot-dietrick": { classes: ["fs-24"] }, // purple "Dietrick F/S 24-hour"
+  "lot-stadium": { classes: ["any-permit"] }, // dark maroon "Stadium - Any University Permit"
+  "lot-ag-quad": { classes: ["fsv"] }, // "Ag Quad F/S/V"
+  "lot-engel": { classes: ["fsv"] }, // "Engel F/S"
+  "lot-lower-stanger": { classes: ["fsv"] }, // "Lower Stanger F/S"
+  "lot-upper-stanger": { classes: ["fsv"] }, // "Upper Stanger F/S"
+  "lot-alumni-mall-north": { classes: ["fsv"] }, // orange lots along Alumni Mall
+  "lot-alumni-mall-south": { classes: ["fsv"] },
+
+  // Not labelled by these names on the printed map; inferred from position. Needs a human check.
+  "lot-bookstore": { classes: ["fsv"], ada: 6, confirm: true },
+  "lot-torgersen": { classes: ["fsv"], confirm: true },
+  "lot-durham": { classes: ["fsv"], confirm: true },
+  "lot-pamplin": { classes: ["fsv"], confirm: true },
 };
 
 export const LOTS: Lot[] = (geo as LotGeo[]).map((l) => {
   const m = META[l.id];
-  if (!m) throw new Error(`No demo metadata for lot ${l.id}`);
-  return { ...l, permit: m.permit, hasADA: m.ada !== undefined, adaSpaces: m.ada ?? 0 };
+  if (!m) throw new Error(`No permit metadata for lot ${l.id}`);
+  return { ...l, classes: m.classes, needsConfirm: m.confirm === true, hasADA: m.ada !== undefined, adaSpaces: m.ada ?? 0 };
 });

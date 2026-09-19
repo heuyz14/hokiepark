@@ -59,16 +59,17 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | 2 Garages/lots/sheet/list | DONE + browser-verified (marker tap, sheet, list search/empty state, list<->map selection sync, keyboard Enter/Escape). |
 | 3 ADA + branding | DONE (single `adaBadge` in 5 places; VT maroon/orange; ADA blue distinct from residential blue). Daylight contrast still to check in Phase 5. |
 | 4 Assistant | DONE rule-based; 3 acceptance questions verified in unit tests AND in the browser; "Show on map" hand-off works. |
-| Permit filter (added) | Built + tested: "My permit" strip (Any/Commuter/Resident/Faculty-Staff/Visitor), lots dim (ADA lots NEVER dimmed), garage sheet shows eligible-open + flags ineligible levels, list shows per-permit numbers + "Full for you" pill + "only my permit" toggle, assistant honors it, choice persisted in localStorage (validated on read). DEMO rules: lot permit values + level labels are invented data, so verify with a teammate. |
+| Permit eligibility (teammate `anaberdzenadze`, commit af7a12d) | **Adopted as the project's permit system.** `lib/permits.ts` encodes VT Parking Services' 2026-27 permit rules and the official lot-map classes (real permit types: C/G, C/G + Perry, F/S, Resident, Visitor, Evening, F/S Remote, Student Remote); verdicts are yes / no / check-the-sign, never a confident guess (`needsConfirm` lots). UI: multi-select chip on the map (`ui/permits.ts`) + ADA credential toggle, map/list/sheet show verdicts, choice persisted in localStorage (validated). Also adds building search in the List (keyboard/screen-reader path to building sheets). **Not yet permit-aware:** the Ask assistant (it only prints lot classes). |
+| ~~My earlier permit filter~~ | Dropped in the merge in favor of the above (mine used invented demo permit values; theirs is sourced from VT's official guide). Lesson: coordinate before building overlapping features. |
 | Supabase live feed (added) | Built + tested: migration (RLS read-only, constraints, simulator), generated seed, poller with backoff/pause, header chip, in-place refresh of map/list/sheet, key guard, `check:supabase`. Verified against a MOCK (`smoke:live`: update, open-sheet update + scroll kept, outage, bad payload, recovery, audit). **Verified against the real project (2026-09-19):** `check:supabase` passes (9 valid rows, both garages, anon key cannot write -> HTTP 401); headless render shows chip `Live` and marker numbers equal the DB rows. Not yet seen: a live change during a session (needs the simulator run from the SQL editor). |
 | PWA (added) | DONE + verified over http: manifest, service worker, precache, loads OFFLINE. Manifest link is injected only over http(s) so file:// stays console-clean. Not yet tested on a real iPhone (needs HTTPS host). |
 | 5 QA pass | DONE for what can be automated: smoke at 3 viewports, cross-view number audit (marker = list = sheet = level sum = assistant, both garages), WCAG AA contrast tests (11 pairs), edge cases (full level, 0 ADA, no-match search). Remaining: a human pass on a real phone. |
 | 6 Rehearsal | Not started (needs team + real machine) |
 
 ## Verified so far
-- `npm run check`: `tsc --noEmit` clean, **64/64 tests pass** (incl. contrast, remote validation, key guard, seed sync)
-- `npm run smoke` (feed OFF, hermetic) and `npm run smoke:live` (mock Supabase, fake key): ALL PASS at 430x900, 375x667, 1280x800. 76 unit tests pass.
-- Bugs found by the small-screen run and fixed: open sheet covered the map reset button (controls are now a horizontal row); smoke harness could attach to a stale Chrome from a crashed run (now OS-assigned port + guaranteed cleanup)., build OK (`dist/index.html` ~322 KB).
+- `npm run check`: `tsc --noEmit` clean, **82/82 tests pass** (incl. contrast, remote validation, key guard, seed sync, permit rules)
+- `npm run smoke` (feed OFF, hermetic) and `npm run smoke:live` (mock Supabase, fake key): ALL PASS at 430x900, 375x667, 1280x800. 82 unit tests pass.
+- Smoke harness fix: it could attach to a stale Chrome from a crashed run (now OS-assigned debug port + guaranteed cleanup). Note for layout changes: an open bottom sheet must not cover the map zoom/reset buttons on a 375x667 phone (it did when an extra header strip was added; fine in the current layout, and the 375x667 smoke run guards it)., build OK (`dist/index.html` ~322 KB).
 - `npm run build && npm run smoke -- <w> <h>` (CDP end-to-end, system Chrome, no deps): ALL PASS at 430x900, 375x667 and 1280x800; zero console errors; no horizontal overflow. (Note: in zsh pass width/height as literal args, not via a `$var` loop.)
 - Bug found by the 375x667 run and fixed: the bottom-sheet header scrolled away, hiding the close button on small screens; header is now sticky.
 - Not verified: real iOS Safari, contrast in sunlight.
@@ -85,13 +86,27 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 2. Actions tab -> "Deploy to Pages" -> Run workflow. URL will be `https://<user>.github.io/terraceb/`.
 3. On the iPhone: open the URL in Safari -> Share -> Add to Home Screen.
 
+## Accessibility fix (2026-09-19, this session)
+- Found: the map's SVG building shapes (102 of them) were mouse/touch-only - no keyboard or screen-reader path
+  reached a building's sheet, so the spec's "tap a building -> nearest parking" journey (Section 6) was unreachable
+  without a pointer. The map's own aria-label already said "Use the List tab for a text alternative," but the List
+  only searched garages/lots.
+- Fix: `ui/list.ts` now also searches `BUILDINGS` (only once the user types a query, so the default browse list
+  stays exactly "every garage and lot" per spec Section 6) and renders a "Buildings" section; selecting one reuses
+  the existing generic `Selection` plumbing (fly-to, `.is-selected` highlight, sheet) with no other changes needed.
+  Updated `scripts/smoke.mjs` to assert this path end-to-end (search "burruss" -> select from list -> sheet with 3
+  nearest-parking rows) and to require Node 26 for native `.ts` execution (npm install/build/check/smoke all
+  re-verified: 45/45 tests, typecheck clean, 41/41 smoke checks at 430x900/375x667/1280x800).
+- Environment note: this Mac had no Node/npm installed; installed Node v26.9.0 to `~/.local/node` (no sudo) and
+  added it to `~/.zshrc` PATH with the user's OK.
+
 ## Known cosmetic items (not blocking)
 - At overview zoom the five ADA lot markers can sit on top of a nearby landmark label (e.g. "Squires Student Center", "Newman Library").
 - Some lot polygons are thin slivers (Drillfield roads) and draw as stray blue lines when ADA-flagged; this is real GIS geometry.
 - Drillfield ellipse is an estimate; 102 vs the spec's 92 buildings.
 
 ## Work log
-- 15:40-17:00 Permit filter (lib/permits, map dimming, sheet/list/assistant, persistence), smoke made hermetic, small-screen UX fix, harness hardening.
+- 15:40-17:30 Built my own permit filter, then a teammate pushed a more rigorous, VT-sourced permits module touching the same files. Resolved the merge by ADOPTING THEIRS (user instruction: keep theirs if it works): took their side for all 9 conflicts, restored their template, dropped my permit code, rewrote the smoke permit scenarios to test their picker against their rules module (map/list/sheet verdicts, multi-select, ADA, persistence, hostile/corrupt storage, Clear all). Also kept: hermetic smoke (own feed-off/live builds), harness cleanup (no stale Chrome), click helper scrolls targets into view. 82 unit tests + 6 browser runs pass.
 - 15:10-15:40 Real Supabase project connected: first check failed with PGRST205 (migration not yet applied), user ran it, `check:supabase` passes; live build renders real rows.
 - 14:35-15:10 Supabase feed: pure client + validators + tests, migration/seed/simulator SQL, poller + chip + in-place refresh, build guard, mock-Supabase e2e (`smoke:live`), `check:supabase`, docs.
 - 14:15-14:35 Overview declutter (only garages + ADA lot markers until zoomed in), fallback screenshots in `docs/fallback/`.
@@ -115,6 +130,7 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | **Team-only:** Phase 6 rehearsal x2, fallback screenshots on the demo machine, confirm ADA lot + demo numbers | 15-30 min |
 
 ## Open questions / needs from the user
+- **Class-schedule occupancy proposal (2026-09-19, analysis only):** see PROMPT_HISTORY #11. Verified VT timetable is fetchable (POST selfservice.banner.vt.edu/ssb/HZSKVTSC.P_ProcRequest) but exposes Capacity, not enrollment, and uses building abbreviations needing a hand-built map to our 102 buildings. Waiting on user go-ahead for Tier A (in-repo demand curve -> Supabase tick).
 - Supabase project is connected locally (`.env.local`, git-ignored). For the DEPLOYED site the two public values must also be added as GitHub Actions Variables.
 - Hosting choice for the HTTPS deploy (needed for iPhone install + service worker). Nothing to do until I finish QA.
 - Teammate to confirm the 5th ADA lot and demo garage numbers (spec header asks for team confirmation).
