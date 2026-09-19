@@ -27,6 +27,7 @@ No backend required: by default it uses bundled sample counts. **Optional Supaba
 ## Git workflow (standing instruction from user)
 - Remote: `origin` = https://github.com/heuyz14/terraceb.git, branch `main`, upstream already set.
 - Commit + push periodically (after each meaningful chunk). End commit messages with the Co-Authored-By line.
+- **Identity:** commits in this repo are authored as `heuyz14 <204778464+heuyz14@users.noreply.github.com>` via repo-local git config (global `~/.gitconfig` is a different GitHub account, `hle142025S`, and is deliberately left alone). Pushes authenticate as heuyz14 through the macOS Keychain (`osxkeychain`, HTTPS). Commits made before 2026-09-19 ~16:00 are authored as `hle142025S` and were not rewritten (that would need a force-push on a shared branch).
 - Merge (not rebase) `origin/main` before pushing; on conflicts **keep the user's local code**.
 - If push fails with HTTP 400 / "remote end hung up": `git -c http.postBuffer=524288000 push` (large raw GIS JSON exceeds the default 1 MB buffer).
 - `dist/` and `node_modules/` are git-ignored. Never commit `.env` files.

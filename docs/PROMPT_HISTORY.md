@@ -51,3 +51,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > yes build the supabase version
 
 **Outcome:** Explained there is no database by design (client-side demo), then agreed live occupancy needs a data store. Built the optional Supabase feed: read-only RLS table `garage_levels`, generated seed, SQL simulator (+ optional pg_cron), zero-dependency polling client with strict validation and all-or-nothing apply, header sync chip, build-time guard against embedding a service-role key, `check:supabase` verifier, and a mocked-Supabase e2e (`smoke:live`). Needs from the user: a Supabase project + its public URL/anon key (see docs/SUPABASE.md).
+
+## 8. 2026-09-19 - commit identity
+
+> also find out why im commiting from a different github profile than heuyz14 and fix that to set push from heuyz14 from our work
+
+**Outcome:** Root cause: global `~/.gitconfig` identity is `hle142025S <heuyz48@gmail.com>` (a different GitHub account whose display name is "heuyz14"), so commits were attributed to it. The push credential in the Keychain was already heuyz14 (account id 204778464). Fixed with a repo-local identity `heuyz14 <204778464+heuyz14@users.noreply.github.com>`; global config untouched; earlier commits not rewritten.
