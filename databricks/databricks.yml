@@ -23,8 +23,9 @@ resources:
     hokiepark_curves:
       name: hokiepark-curves
       description: >-
-        Timetable -> building dimension -> simulated per-level occupancy curves -> MLflow tracking and a registered
-        target-occupancy model. Outputs are SIMULATED (seat capacity, not enrollment), not sensor data.
+        Timetable -> building dimension -> simulated per-level occupancy curves -> MLflow tracking; plus a Monte Carlo
+        simulator, a trained occupancy forecaster registered in Unity Catalog, and batch-scored predictions.json.
+        Outputs are SIMULATED (seat capacity, not enrollment), not sensor data.
       # No cluster settings: tasks run on serverless compute (the only option on Free Edition).
       # To refresh on a schedule, add:  schedule: {quartz_cron_expression: "0 0 6 * * ?", timezone_id: America/New_York}
       tasks:
@@ -46,6 +47,22 @@ resources:
           depends_on: [{task_key: gold_curves}]
           notebook_task:
             notebook_path: ./notebooks/04_mlflow_track.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}"}
+        # --- Forecaster: Monte Carlo labels -> gradient-boosted model in MLflow -> batch scores -> predictions.json ---
+        - task_key: simulate_training_data
+          depends_on: [{task_key: silver_buildings}]
+          notebook_task:
+            notebook_path: ./notebooks/05_simulate_training_data.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}", days_per_dow: "20", seed: "20260919"}
+        - task_key: train_forecaster
+          depends_on: [{task_key: simulate_training_data}]
+          notebook_task:
+            notebook_path: ./notebooks/06_train_forecaster.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}"}
+        - task_key: batch_score_export
+          depends_on: [{task_key: train_forecaster}, {task_key: gold_curves}]
+          notebook_task:
+            notebook_path: ./notebooks/07_batch_score_export.py
             base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}"}
 
 targets:

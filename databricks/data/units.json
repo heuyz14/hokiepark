@@ -1,0 +1,1093 @@
+[
+ {
+  "id": "north-end-center:0",
+  "name": "North End Center Garage - Level 1 - Faculty, staff & visitor",
+  "kind": "garage-level",
+  "garage_id": "north-end-center",
+  "level_index": 0,
+  "capacity": 180,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.233607,
+  "lon": -80.420498
+ },
+ {
+  "id": "north-end-center:1",
+  "name": "North End Center Garage - Level 2 - Faculty, staff & visitor",
+  "kind": "garage-level",
+  "garage_id": "north-end-center",
+  "level_index": 1,
+  "capacity": 220,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.233607,
+  "lon": -80.420498
+ },
+ {
+  "id": "north-end-center:2",
+  "name": "North End Center Garage - Level 3 - Faculty, staff & visitor",
+  "kind": "garage-level",
+  "garage_id": "north-end-center",
+  "level_index": 2,
+  "capacity": 220,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.233607,
+  "lon": -80.420498
+ },
+ {
+  "id": "north-end-center:3",
+  "name": "North End Center Garage - Level 4 - Faculty, staff & visitor (roof)",
+  "kind": "garage-level",
+  "garage_id": "north-end-center",
+  "level_index": 3,
+  "capacity": 180,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.233607,
+  "lon": -80.420498
+ },
+ {
+  "id": "perry-street:0",
+  "name": "Perry Street Garage - Level 1 - Commuter & graduate",
+  "kind": "garage-level",
+  "garage_id": "perry-street",
+  "level_index": 0,
+  "capacity": 250,
+  "classes": [
+   "perry-cg"
+  ],
+  "lat": 37.231259,
+  "lon": -80.42622
+ },
+ {
+  "id": "perry-street:1",
+  "name": "Perry Street Garage - Level 2 - Faculty & staff",
+  "kind": "garage-level",
+  "garage_id": "perry-street",
+  "level_index": 1,
+  "capacity": 300,
+  "classes": [
+   "perry-fs"
+  ],
+  "lat": 37.231259,
+  "lon": -80.42622
+ },
+ {
+  "id": "perry-street:2",
+  "name": "Perry Street Garage - Level 3 - Faculty & staff",
+  "kind": "garage-level",
+  "garage_id": "perry-street",
+  "level_index": 2,
+  "capacity": 300,
+  "classes": [
+   "perry-fs"
+  ],
+  "lat": 37.231259,
+  "lon": -80.42622
+ },
+ {
+  "id": "perry-street:3",
+  "name": "Perry Street Garage - Level 4 - Faculty & staff",
+  "kind": "garage-level",
+  "garage_id": "perry-street",
+  "level_index": 3,
+  "capacity": 300,
+  "classes": [
+   "perry-fs"
+  ],
+  "lat": 37.231259,
+  "lon": -80.42622
+ },
+ {
+  "id": "perry-street:4",
+  "name": "Perry Street Garage - Level 5 - Faculty & staff (roof)",
+  "kind": "garage-level",
+  "garage_id": "perry-street",
+  "level_index": 4,
+  "capacity": 200,
+  "classes": [
+   "perry-fs"
+  ],
+  "lat": 37.231259,
+  "lon": -80.42622
+ },
+ {
+  "id": "lot-ag-quad",
+  "name": "Ag Quad",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 155,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.224925,
+  "lon": -80.422797
+ },
+ {
+  "id": "lot-alumni-center",
+  "name": "Alumni Center",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 80,
+  "classes": [],
+  "lat": 37.229087,
+  "lon": -80.428486
+ },
+ {
+  "id": "lot-alumni-mall-north",
+  "name": "Alumni Mall North",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 25,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.229959,
+  "lon": -80.418888
+ },
+ {
+  "id": "lot-alumni-mall-south",
+  "name": "Alumni Mall South",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 30,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.229738,
+  "lon": -80.418754
+ },
+ {
+  "id": "lot-architecture-annex-media",
+  "name": "Architecture Annex / Media",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 160,
+  "classes": [],
+  "lat": 37.228489,
+  "lon": -80.415947
+ },
+ {
+  "id": "lot-barger-st",
+  "name": "Barger St",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 25,
+  "classes": [],
+  "lat": 37.232012,
+  "lon": -80.421402
+ },
+ {
+  "id": "lot-beamer-way",
+  "name": "Beamer Way",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.221446,
+  "lon": -80.419494
+ },
+ {
+  "id": "lot-bookstore",
+  "name": "Bookstore",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 50,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.227899,
+  "lon": -80.418203
+ },
+ {
+  "id": "lot-center-for-the-arts",
+  "name": "Center for the Arts",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 35,
+  "classes": [],
+  "lat": 37.232315,
+  "lon": -80.418376
+ },
+ {
+  "id": "lot-chicken-hill-lower",
+  "name": "Chicken Hill (Lower)",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 455,
+  "classes": [],
+  "lat": 37.216916,
+  "lon": -80.417884
+ },
+ {
+  "id": "lot-chicken-hill-upper",
+  "name": "Chicken Hill (Upper)",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 435,
+  "classes": [],
+  "lat": 37.216613,
+  "lon": -80.415701
+ },
+ {
+  "id": "lot-clay-street",
+  "name": "Clay Street",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 25,
+  "classes": [],
+  "lat": 37.223236,
+  "lon": -80.41596
+ },
+ {
+  "id": "lot-cmmid-cohr",
+  "name": "CMMID/COHR",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 160,
+  "classes": [],
+  "lat": 37.229918,
+  "lon": -80.438327
+ },
+ {
+  "id": "lot-coliseum-west",
+  "name": "Coliseum West",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 740,
+  "classes": [
+   "fsv",
+   "cg"
+  ],
+  "lat": 37.221541,
+  "lon": -80.420572
+ },
+ {
+  "id": "lot-data-decision-sciences",
+  "name": "Data & Decision Sciences",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 75,
+  "classes": [],
+  "lat": 37.23198,
+  "lon": -80.426777
+ },
+ {
+  "id": "lot-davidson",
+  "name": "Davidson",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 35,
+  "classes": [],
+  "lat": 37.226895,
+  "lon": -80.425568
+ },
+ {
+  "id": "lot-davidson-two",
+  "name": "Davidson (Two)",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 15,
+  "classes": [],
+  "lat": 37.227295,
+  "lon": -80.424628
+ },
+ {
+  "id": "lot-dietrick",
+  "name": "Dietrick",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 80,
+  "classes": [
+   "fs-24"
+  ],
+  "lat": 37.224584,
+  "lon": -80.421707
+ },
+ {
+  "id": "lot-drillfield-north",
+  "name": "Drillfield North",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 45,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.2283,
+  "lon": -80.422831
+ },
+ {
+  "id": "lot-drillfield-south",
+  "name": "Drillfield South",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 75,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.226877,
+  "lon": -80.42169
+ },
+ {
+  "id": "lot-drone-park",
+  "name": "Drone Park",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 250,
+  "classes": [],
+  "lat": 37.223403,
+  "lon": -80.430958
+ },
+ {
+  "id": "lot-duck-pond-dr",
+  "name": "Duck Pond Dr.",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 900,
+  "classes": [],
+  "lat": 37.220535,
+  "lon": -80.428353
+ },
+ {
+  "id": "lot-durham",
+  "name": "Durham",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 65,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.231496,
+  "lon": -80.423097
+ },
+ {
+  "id": "lot-engel",
+  "name": "Engel",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 205,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.223175,
+  "lon": -80.423132
+ },
+ {
+  "id": "lot-english-baseball-field",
+  "name": "English Baseball Field",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 25,
+  "classes": [],
+  "lat": 37.218319,
+  "lon": -80.424756
+ },
+ {
+  "id": "lot-environmental-health-and-safety",
+  "name": "Environmental Health and Safety",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 140,
+  "classes": [],
+  "lat": 37.214502,
+  "lon": -80.417799
+ },
+ {
+  "id": "lot-fieldhouse",
+  "name": "Fieldhouse",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 70,
+  "classes": [],
+  "lat": 37.219228,
+  "lon": -80.42263
+ },
+ {
+  "id": "lot-fleet-services",
+  "name": "Fleet Services",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 400,
+  "classes": [],
+  "lat": 37.219172,
+  "lon": -80.413582
+ },
+ {
+  "id": "lot-food-processing",
+  "name": "Food Processing",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 25,
+  "classes": [],
+  "lat": 37.219586,
+  "lon": -80.425766
+ },
+ {
+  "id": "lot-food-science",
+  "name": "Food Science",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 50,
+  "classes": [],
+  "lat": 37.219678,
+  "lon": -80.425108
+ },
+ {
+  "id": "lot-golf-course",
+  "name": "Golf Course",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 50,
+  "classes": [],
+  "lat": 37.226114,
+  "lon": -80.429315
+ },
+ {
+  "id": "lot-graduate-life-center-east",
+  "name": "Graduate Life Center East",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 30,
+  "classes": [],
+  "lat": 37.2286,
+  "lon": -80.417256
+ },
+ {
+  "id": "lot-graduate-life-center-west",
+  "name": "Graduate Life Center West",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 45,
+  "classes": [
+   "graduate"
+  ],
+  "lat": 37.227945,
+  "lon": -80.417902
+ },
+ {
+  "id": "lot-greenhouse",
+  "name": "Greenhouse",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.22012,
+  "lon": -80.42406
+ },
+ {
+  "id": "lot-hahn",
+  "name": "Hahn",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 70,
+  "classes": [],
+  "lat": 37.227539,
+  "lon": -80.425956
+ },
+ {
+  "id": "lot-hahn-garden",
+  "name": "Hahn Garden",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 30,
+  "classes": [],
+  "lat": 37.219413,
+  "lon": -80.423761
+ },
+ {
+  "id": "lot-hahn-hurst-basketball",
+  "name": "Hahn-Hurst Basketball",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 50,
+  "classes": [],
+  "lat": 37.223358,
+  "lon": -80.418548
+ },
+ {
+  "id": "lot-hillcrest",
+  "name": "Hillcrest",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 30,
+  "classes": [],
+  "lat": 37.223642,
+  "lon": -80.42567
+ },
+ {
+  "id": "lot-hillcrest-extension",
+  "name": "Hillcrest Extension",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 60,
+  "classes": [],
+  "lat": 37.22336,
+  "lon": -80.425054
+ },
+ {
+  "id": "lot-inn-at-vt",
+  "name": "Inn at VT",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 740,
+  "classes": [],
+  "lat": 37.230613,
+  "lon": -80.43095
+ },
+ {
+  "id": "lot-ipg",
+  "name": "IPG",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 15,
+  "classes": [],
+  "lat": 37.228532,
+  "lon": -80.414753
+ },
+ {
+  "id": "lot-kent-st",
+  "name": "Kent St",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.227198,
+  "lon": -80.417886
+ },
+ {
+  "id": "lot-library-east",
+  "name": "Library East",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 15,
+  "classes": [],
+  "lat": 37.229258,
+  "lon": -80.418987
+ },
+ {
+  "id": "lot-litton-reaves",
+  "name": "Litton Reaves",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 565,
+  "classes": [],
+  "lat": 37.222212,
+  "lon": -80.426459
+ },
+ {
+  "id": "lot-litton-reaves-extension",
+  "name": "Litton Reaves Extension",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 170,
+  "classes": [],
+  "lat": 37.222951,
+  "lon": -80.426276
+ },
+ {
+  "id": "lot-lower-moss-arts-center",
+  "name": "Lower Moss Arts Center",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.231078,
+  "lon": -80.417893
+ },
+ {
+  "id": "lot-lower-stanger",
+  "name": "Lower Stanger",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 110,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.232634,
+  "lon": -80.422915
+ },
+ {
+  "id": "lot-mccomas-west",
+  "name": "McComas West",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 40,
+  "classes": [],
+  "lat": 37.219982,
+  "lon": -80.422999
+ },
+ {
+  "id": "lot-merryman-athletic-center",
+  "name": "Merryman Athletic Center",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.220982,
+  "lon": -80.419036
+ },
+ {
+  "id": "lot-oak-lane-1",
+  "name": "Oak Lane 1",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 125,
+  "classes": [],
+  "lat": 37.224495,
+  "lon": -80.436442
+ },
+ {
+  "id": "lot-oak-lane-2",
+  "name": "Oak Lane 2",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 120,
+  "classes": [],
+  "lat": 37.225705,
+  "lon": -80.437156
+ },
+ {
+  "id": "lot-oak-lane-3",
+  "name": "Oak Lane 3",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 165,
+  "classes": [],
+  "lat": 37.226855,
+  "lon": -80.438302
+ },
+ {
+  "id": "lot-oak-lane-4",
+  "name": "Oak Lane 4",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 170,
+  "classes": [],
+  "lat": 37.224243,
+  "lon": -80.438694
+ },
+ {
+  "id": "lot-oak-lane-spe",
+  "name": "Oak Lane SPE",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.225012,
+  "lon": -80.436006
+ },
+ {
+  "id": "lot-old-security-building",
+  "name": "Old Security Building",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.231618,
+  "lon": -80.421901
+ },
+ {
+  "id": "lot-old-visitors-center",
+  "name": "Old Visitors Center",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.215836,
+  "lon": -80.423945
+ },
+ {
+  "id": "lot-owens",
+  "name": "Owens",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 130,
+  "classes": [
+   "fs-24"
+  ],
+  "lat": 37.226986,
+  "lon": -80.418386
+ },
+ {
+  "id": "lot-pamplin",
+  "name": "Pamplin",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 85,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.228705,
+  "lon": -80.425699
+ },
+ {
+  "id": "lot-parking-services",
+  "name": "Parking Services",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 75,
+  "classes": [],
+  "lat": 37.215767,
+  "lon": -80.418393
+ },
+ {
+  "id": "lot-police-sterrett-facilities",
+  "name": "Police & Sterrett / Facilities",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 255,
+  "classes": [],
+  "lat": 37.219591,
+  "lon": -80.413794
+ },
+ {
+  "id": "lot-power-plant-old-turner-st",
+  "name": "Power Plant/Old Turner St",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.23226,
+  "lon": -80.420312
+ },
+ {
+  "id": "lot-price",
+  "name": "Price",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 115,
+  "classes": [],
+  "lat": 37.225353,
+  "lon": -80.424653
+ },
+ {
+  "id": "lot-public-safety",
+  "name": "Public Safety",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 265,
+  "classes": [],
+  "lat": 37.217882,
+  "lon": -80.415778
+ },
+ {
+  "id": "lot-rec-courts",
+  "name": "Rec Courts",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 25,
+  "classes": [],
+  "lat": 37.223913,
+  "lon": -80.417867
+ },
+ {
+  "id": "lot-recreational-fields",
+  "name": "Recreational Fields",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 45,
+  "classes": [],
+  "lat": 37.213873,
+  "lon": -80.417683
+ },
+ {
+  "id": "lot-smithfield-rd",
+  "name": "Smithfield Rd",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 345,
+  "classes": [],
+  "lat": 37.222728,
+  "lon": -80.429446
+ },
+ {
+  "id": "lot-southgate-center",
+  "name": "Southgate Center",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 100,
+  "classes": [],
+  "lat": 37.218636,
+  "lon": -80.415538
+ },
+ {
+  "id": "lot-squires",
+  "name": "Squires",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 200,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.229164,
+  "lon": -80.416853
+ },
+ {
+  "id": "lot-stadium",
+  "name": "Stadium",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 785,
+  "classes": [
+   "any-permit"
+  ],
+  "lat": 37.218089,
+  "lon": -80.417736
+ },
+ {
+  "id": "lot-stadium-west",
+  "name": "Stadium West",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 40,
+  "classes": [],
+  "lat": 37.219975,
+  "lon": -80.419429
+ },
+ {
+  "id": "lot-stanger-st-ada",
+  "name": "Stanger St. ADA",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [
+   "ada-service-24"
+  ],
+  "lat": 37.230846,
+  "lon": -80.421277
+ },
+ {
+  "id": "lot-substation",
+  "name": "Substation",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 35,
+  "classes": [],
+  "lat": 37.232445,
+  "lon": -80.42231
+ },
+ {
+  "id": "lot-tennis-pavilion",
+  "name": "Tennis Pavilion",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 15,
+  "classes": [],
+  "lat": 37.215207,
+  "lon": -80.418702
+ },
+ {
+  "id": "lot-torgersen",
+  "name": "Torgersen",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 15,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.230335,
+  "lon": -80.42075
+ },
+ {
+  "id": "lot-track",
+  "name": "Track",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 135,
+  "classes": [],
+  "lat": 37.2181,
+  "lon": -80.4197
+ },
+ {
+  "id": "lot-upper-stanger",
+  "name": "Upper Stanger",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 55,
+  "classes": [
+   "fsv"
+  ],
+  "lat": 37.232118,
+  "lon": -80.422459
+ },
+ {
+  "id": "lot-utility",
+  "name": "Utility",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 90,
+  "classes": [],
+  "lat": 37.213807,
+  "lon": -80.410422
+ },
+ {
+  "id": "lot-venture-out-center",
+  "name": "Venture Out Center",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 15,
+  "classes": [],
+  "lat": 37.215582,
+  "lon": -80.418942
+ },
+ {
+  "id": "lot-veterinary-medicine",
+  "name": "Veterinary Medicine",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 725,
+  "classes": [],
+  "lat": 37.217923,
+  "lon": -80.427469
+ },
+ {
+  "id": "lot-vt-admissions",
+  "name": "VT Admissions",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 145,
+  "classes": [],
+  "lat": 37.230557,
+  "lon": -80.434556
+ },
+ {
+  "id": "lot-wallace",
+  "name": "Wallace",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 155,
+  "classes": [],
+  "lat": 37.222246,
+  "lon": -80.424599
+ },
+ {
+  "id": "lot-wallace-day-care",
+  "name": "Wallace Day Care",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 50,
+  "classes": [],
+  "lat": 37.223101,
+  "lon": -80.424929
+ },
+ {
+  "id": "lot-ware-lab",
+  "name": "WARE Lab",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 10,
+  "classes": [],
+  "lat": 37.231702,
+  "lon": -80.421251
+ },
+ {
+  "id": "lot-washington-st",
+  "name": "Washington St",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 60,
+  "classes": [],
+  "lat": 37.222311,
+  "lon": -80.421341
+ },
+ {
+  "id": "lot-wright-house",
+  "name": "Wright House",
+  "kind": "lot",
+  "garage_id": null,
+  "level_index": null,
+  "capacity": 65,
+  "classes": [],
+  "lat": 37.22654,
+  "lon": -80.426006
+ }
+]
