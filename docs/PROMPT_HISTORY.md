@@ -106,3 +106,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > run npm dev and pull to see changes so far and whats next  /  1 (pasted a 404 page)  /  it works now whats next databricks?
 
 **Outcome:** Ran `npm run dev` (watch build only; the app is served from `dist/` on port 8080, so the URL is `http://localhost:8080/`, my first `/dist/index.html` link was wrong and 404'd). Header chip showed "Data 53m ago" (no tick since 19:12 UTC; pg_cron still needed). Then built the Databricks Tier B scaffold in `databricks/` (details in STATE.md), verified locally as far as possible, and documented what is unverified.
+
+## 16. 2026-09-19 - running the Databricks notebooks
+
+> i ran seed.sql and curves.seed.sql, whats next i also set up my free databricks account  /  notebooks are in my workspace what next  /  the last cell is skipped for 1  /  what do i upload  /  done  /  notebook 04 finished, what next  /  downloaded the curves file, compare it
+
+**Outcome:** Made `databricks/upload/` (the 4 input files, git-ignored) for the volume upload. The "last cell skipped" in notebook 01 was the intended missing-file stop. After upload, notebooks 01-04 all completed on the user's Free Edition workspace, and the exported `curves.seed.sql` matched the repo's file exactly after the header line (diffed here). Databricks Tier B is now verified end to end except `bundle deploy` and Genie.

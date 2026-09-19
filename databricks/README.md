@@ -45,14 +45,18 @@ Regenerate inputs after changing the app's garages: `npm run databricks:inputs`.
 skills for this work; see the top-level `ai-dev-kit/README.md` (it installs through the Databricks CLI, not from this repo).
 
 ## What was verified, and what was not
-Verified locally (2026-09-19):
+Verified locally before the workspace run (2026-09-19):
 - `npm run test:py`: 9 tests, including exact match with the TypeScript-generated curves, the notebooks' sort order, and half-up rounding.
 - Notebook 04 executed end to end against a fake `spark`/`dbutils` with real MLflow (3.16, local store): 9 runs logged with tags and
   metrics, model registered, and `predict` returns 95 for Perry Level 1, Wednesday 10:30 (matches the curve).
 - All notebooks parse; `databricks.yml` structure checks (task graph, paths, notebook headers).
 
-**Not verified (no workspace was available):** the Spark cells (table writes, the view, `COMMENT ON`), Unity Catalog model
-registration permissions, the volume paths, and the bundle deploy. Expect to fix small things on first run, then tell us what broke.
+**Run on a real Databricks Free Edition workspace (2026-09-19):** notebooks 01-04 ran to completion, including the Spark table
+writes, the volume paths and the MLflow model registration. The `out/curves.seed.sql` the workspace produced matched
+`supabase/curves.seed.sql` on every line after the header comment (45 rows).
+
+**Still not verified:** `databricks bundle deploy` (the workspace was driven by hand, not through `databricks.yml`) and Genie
+availability on Free Edition.
 A bug found by the local run and already fixed: MLflow 3.x could not infer the model signature and handed `predict` one column, so
 the signature is declared explicitly.
 
