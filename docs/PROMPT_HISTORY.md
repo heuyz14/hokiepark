@@ -100,3 +100,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > yes do this also sync with my other agent running so there are no problems
 
 **Outcome:** Coordinated with the other session (projectport-f5) over SendMessage before editing: agreed disjoint file lists, explicit-path staging only, fetch+merge before every push. Worked in an isolated git worktree (`terraceb-wt-e7`, branch `e7-labels-assistant`). Shipped (1) signage-is-code: level labels + permit classes always come from the app, the DB supplies only live counts, `check:supabase` warns on label drift, so re-running `seed.sql` is now optional; (2) the Ask assistant honors the permit chooser via lib/permits verdicts. Bugs found by testing my own work and fixed: multi-permit answers mislabeled a garage with 133 usable spaces as "no open spaces"; "Stanger St. ADA" was read as a generic accessible-parking request; two of my checks were vacuous and were tightened (mutation-verified).
+
+## 15. 2026-09-19 - "run npm dev and pull to see changes so far and whats next" / "it works now whats next databricks?"
+
+> run npm dev and pull to see changes so far and whats next  /  1 (pasted a 404 page)  /  it works now whats next databricks?
+
+**Outcome:** Ran `npm run dev` (watch build only; the app is served from `dist/` on port 8080, so the URL is `http://localhost:8080/`, my first `/dist/index.html` link was wrong and 404'd). Header chip showed "Data 53m ago" (no tick since 19:12 UTC; pg_cron still needed). Then built the Databricks Tier B scaffold in `databricks/` (details in STATE.md), verified locally as far as possible, and documented what is unverified.

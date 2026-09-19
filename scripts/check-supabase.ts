@@ -9,6 +9,7 @@ import { GARAGES } from "../src/data/index.ts";
 import { SEED_LEVELS } from "../src/data/garages.ts";
 import { parseLiveConfig } from "../src/lib/live-config.ts";
 import { fetchOccupancy, latestUpdate } from "../src/lib/occupancy-remote.ts";
+import { findSeedDrift } from "../src/lib/seed-drift.ts";
 
 const fail = (msg: string): never => {
   console.error(`FAIL  ${msg}`);
@@ -44,16 +45,18 @@ for (const g of GARAGES) {
 }
 console.log(`PASS  every garage present (${GARAGES.map((g) => g.id).join(", ")})`);
 
-// Level names + permit classes are signage: the app uses its own and ignores DB labels for known levels, so a mismatch
-// is harmless. It is still worth knowing about, because the dashboard/Table Editor would show stale names.
-const drift = Object.entries(SEED_LEVELS).flatMap(([gid, ls]) => ls.flatMap((l, i) => {
-  const r = rows.find((x) => x.garage_id === gid && x.level_index === i);
-  return r && r.label !== l.label ? [`${gid} L${i + 1}: database "${r.label}" vs app "${l.label}"`] : [];
-}));
-if (drift.length) {
-  console.log(`WARN  ${drift.length} level label(s) in the database differ from the app's signage (harmless: the app uses its own labels):`);
-  for (const d of drift) console.log(`        - ${d}`);
-  console.log("      To tidy the dashboard, re-run supabase/seed.sql (NOTE: that also resets the counts to the seed).");
+// Compare with the bundled seed. Labels are signage (the app ignores DB labels), so drift there is harmless; capacities are
+// taken from the database, so a stale table shows the wrong garage sizes in the live app.
+const drift = findSeedDrift(rows, SEED_LEVELS);
+if (drift.capacities.length) {
+  console.log(`WARN  ${drift.capacities.length} level(s) have different capacity in the database than in the app - the LIVE view shows the database sizes:`);
+  for (const d of drift.capacities) console.log(`        - ${d}`);
+  console.log("      Fix: run supabase/seed.sql in the SQL editor (this RESETS the counts to the seed), then supabase/curves.seed.sql.");
+} else console.log("PASS  database capacities match the app");
+if (drift.labels.length) {
+  console.log(`WARN  ${drift.labels.length} level label(s) in the database differ from the app's signage (harmless: the app uses its own labels):`);
+  for (const d of drift.labels) console.log(`        - ${d}`);
+  console.log("      Re-running supabase/seed.sql also tidies these.");
 } else console.log("PASS  database level labels match the app's signage");
 
 const ageMin = Math.round((Date.now() - latestUpdate(rows)) / 60000);
@@ -72,4 +75,5 @@ const res = await fetch(`${c.url}/rest/v1/garage_levels?garage_id=eq.${first.gar
 });
 if (res.ok) fail("SECURITY: the anon key was able to WRITE to garage_levels. Re-run the migration (RLS + revoke) before going live.");
 console.log(`PASS  anon key cannot write (HTTP ${res.status})`);
-console.log("\nAll good. Run `npm run build` - it should report: live feed: ON.");
+const warnings = (drift.capacities.length ? 1 : 0) + (drift.labels.length ? 1 : 0);
+console.log(warnings ? `\nConnected and secure, but with ${warnings} warning(s) above - the capacity warning means the live app shows outdated garage sizes until you re-seed.` : "\nAll good. Run `npm run build` - it should report: live feed: ON.");

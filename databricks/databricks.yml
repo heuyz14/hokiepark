@@ -1,0 +1,54 @@
+# Databricks Asset Bundle: runs the HokiePark curve pipeline as one serverless job.
+# Untested against a live workspace (none was available when this was written); the notebook logic and the Python model
+# were exercised locally (see README "What was verified"). Validate with: databricks bundle validate
+bundle:
+  name: hokiepark
+
+variables:
+  catalog:
+    description: Unity Catalog catalog to write to (Free Edition workspaces have a default catalog; confirm its name in the Catalog explorer)
+    default: workspace
+  schema:
+    description: Schema for the bronze/silver/gold tables and the raw/out volumes
+    default: hokiepark
+
+# Ship the Python model next to the notebooks so `sys.path.insert(.., "../src")` in 03/04 resolves.
+sync:
+  include:
+    - src/**
+    - notebooks/**
+
+resources:
+  jobs:
+    hokiepark_curves:
+      name: hokiepark-curves
+      description: >-
+        Timetable -> building dimension -> simulated per-level occupancy curves -> MLflow tracking and a registered
+        target-occupancy model. Outputs are SIMULATED (seat capacity, not enrollment), not sensor data.
+      # No cluster settings: tasks run on serverless compute (the only option on Free Edition).
+      # To refresh on a schedule, add:  schedule: {quartz_cron_expression: "0 0 6 * * ?", timezone_id: America/New_York}
+      tasks:
+        - task_key: bronze_timetable
+          notebook_task:
+            notebook_path: ./notebooks/01_bronze_timetable.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}"}
+        - task_key: silver_buildings
+          depends_on: [{task_key: bronze_timetable}]
+          notebook_task:
+            notebook_path: ./notebooks/02_silver_buildings.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}"}
+        - task_key: gold_curves
+          depends_on: [{task_key: silver_buildings}]
+          notebook_task:
+            notebook_path: ./notebooks/03_gold_curves.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}"}
+        - task_key: mlflow_track
+          depends_on: [{task_key: gold_curves}]
+          notebook_task:
+            notebook_path: ./notebooks/04_mlflow_track.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}"}
+
+targets:
+  dev:
+    mode: development
+    default: true
