@@ -6,6 +6,7 @@
  *   3. SECURITY: the anon key can NOT write (a no-op PATCH must be rejected by RLS/grants)
  */
 import { GARAGES } from "../src/data/index.ts";
+import { SEED_LEVELS } from "../src/data/garages.ts";
 import { parseLiveConfig } from "../src/lib/live-config.ts";
 import { fetchOccupancy, latestUpdate } from "../src/lib/occupancy-remote.ts";
 
@@ -42,6 +43,18 @@ for (const g of GARAGES) {
   if (n !== g.levels.length) fail(`${g.name}: database has ${n} levels, app expects ${g.levels.length}. Re-run supabase/seed.sql.`);
 }
 console.log(`PASS  every garage present (${GARAGES.map((g) => g.id).join(", ")})`);
+
+// Level names + permit classes are signage: the app uses its own and ignores DB labels for known levels, so a mismatch
+// is harmless. It is still worth knowing about, because the dashboard/Table Editor would show stale names.
+const drift = Object.entries(SEED_LEVELS).flatMap(([gid, ls]) => ls.flatMap((l, i) => {
+  const r = rows.find((x) => x.garage_id === gid && x.level_index === i);
+  return r && r.label !== l.label ? [`${gid} L${i + 1}: database "${r.label}" vs app "${l.label}"`] : [];
+}));
+if (drift.length) {
+  console.log(`WARN  ${drift.length} level label(s) in the database differ from the app's signage (harmless: the app uses its own labels):`);
+  for (const d of drift) console.log(`        - ${d}`);
+  console.log("      To tidy the dashboard, re-run supabase/seed.sql (NOTE: that also resets the counts to the seed).");
+} else console.log("PASS  database level labels match the app's signage");
 
 const ageMin = Math.round((Date.now() - latestUpdate(rows)) / 60000);
 console.log(`INFO  newest row updated ${ageMin} min ago${ageMin > 5 ? " (fine unless you expect the simulator to be running)" : ""}`);

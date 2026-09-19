@@ -49,8 +49,19 @@ export function parseOccupancyRows(json: unknown): OccupancyRow[] {
  * are re-attached by level index, never read from the database. An index we have no signage for keeps
  * an empty list, which the permit rules report as "check the posted sign" rather than guessing.
  */
-const toLevel = (r: OccupancyRow, classes: GarageLevel["classes"] = []): GarageLevel => ({
-  label: r.label, classes, capacity: r.capacity, occupied: r.occupied, adaCapacity: r.ada_capacity, adaOccupied: r.ada_occupied,
+/**
+ * Signage vs data. A level's NAME and permit CLASSES describe what is painted on the wall: they live in code
+ * (SEED_LEVELS) so they can never disagree with the permit rules. The database supplies only the live numbers
+ * (capacity/occupied/ADA). For a level the app does not know (the DB has more levels than the code), the DB label
+ * is used and `classes` stays empty, which the permit rules treat as "check the sign", never a confident yes.
+ */
+const toLevel = (r: OccupancyRow, signage?: GarageLevel): GarageLevel => ({
+  label: signage?.label ?? r.label,
+  classes: signage?.classes ?? [],
+  capacity: r.capacity,
+  occupied: r.occupied,
+  adaCapacity: r.ada_capacity,
+  adaOccupied: r.ada_occupied,
 });
 
 /**
@@ -65,7 +76,7 @@ export function applyOccupancy(garages: Garage[], rows: OccupancyRow[]): boolean
   let changed = false;
   for (const g of known) {
     const signage = SEED_LEVELS[g.id] ?? [];
-    const levels = by.get(g.id)!.sort((a, b) => a.level_index - b.level_index).map((r) => toLevel(r, signage[r.level_index]?.classes ?? []));
+    const levels = by.get(g.id)!.sort((a, b) => a.level_index - b.level_index).map((r) => toLevel(r, signage[r.level_index]));
     if (JSON.stringify(levels) !== JSON.stringify(g.levels)) {
       g.levels = levels;
       changed = true;

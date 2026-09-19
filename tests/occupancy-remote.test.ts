@@ -43,8 +43,36 @@ test("apply replaces levels, sorts by level_index, and reports change", () => {
   const g = garage();
   const changed = applyOccupancy([g], [row({ level_index: 1, label: "L2", occupied: 10 }), row({ level_index: 0 })]);
   assert.equal(changed, true);
-  assert.deepEqual(g.levels.map((l) => l.label), ["L1", "L2"]);
+  // known levels take their name from the app's signage (not the DB), and stay sorted by level_index
+  assert.deepEqual(g.levels.map((l) => l.label), [SEED_LEVELS["perry-street"]![0]!.label, SEED_LEVELS["perry-street"]![1]!.label]);
   assert.equal(g.levels[0]!.adaOccupied, 2);
+  assert.equal(g.levels[1]!.occupied, 10, "the live counts come from the DB");
+});
+
+test("SIGNAGE IS CODE: stale or edited DB labels never change a known level's label or permit classes", () => {
+  const g = garage();
+  const signage = SEED_LEVELS["perry-street"]!;
+  applyOccupancy([g], [row({ level_index: 0, label: "Level 1 - SOMETHING ELSE", capacity: 120, occupied: 7 })]);
+  assert.equal(g.levels[0]!.label, signage[0]!.label);
+  assert.deepEqual(g.levels[0]!.classes, signage[0]!.classes);
+  assert.equal(g.levels[0]!.occupied, 7, "...while the count still updates");
+  assert.ok(g.levels[0]!.classes.length > 0, "a known level keeps its permit classes");
+});
+
+test("a level the code does not know keeps the DB label but has NO permit classes (never a confident yes)", () => {
+  const g = garage();
+  const extra = SEED_LEVELS["perry-street"]!.length; // one past the last known level
+  applyOccupancy([g], [row({ level_index: extra, label: "Level 9 - Mystery" })]);
+  assert.equal(g.levels[0]!.label, "Level 9 - Mystery");
+  assert.deepEqual(g.levels[0]!.classes, []);
+});
+
+test("seed-equal rows reproduce the bundled levels INCLUDING labels and classes even if every DB label is stale", () => {
+  const copy: Garage[] = GARAGES.map((x) => ({ ...x, levels: x.levels.map((l) => ({ ...l })) }));
+  const stale = seedRows().map((r) => ({ ...r, label: `stale ${r.garage_id} ${r.level_index}` }));
+  copy[0]!.levels[0]!.occupied = 0;
+  applyOccupancy(copy, stale);
+  assert.deepEqual(copy.map((x) => JSON.stringify(x.levels)), GARAGES.map((x) => JSON.stringify(x.levels)));
 });
 
 test("apply is a no-op (returns false) when nothing changed, so the UI can skip re-rendering", () => {
