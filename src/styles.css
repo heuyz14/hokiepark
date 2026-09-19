@@ -81,9 +81,15 @@ h1, h2, h3, p { margin: 0; }
 
 /* HTML markers (maplibregl.Marker) for garages and lots - kept as real, focusable DOM elements so
    they read out to assistive tech and stay a constant screen size at any zoom, same as before. */
-.marker { cursor: pointer; display: flex; align-items: center; gap: 4px; }
-.marker-lot:not(.has-ada):not(.is-selected) { display: none; }
+.marker { position: relative; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.marker-lot { display: none; }
+.marker-lot.has-ada,
+.marker-lot.is-selected,
 .show-all-lots .marker-lot { display: flex; }
+.map.filtering .marker { display: none; }
+.map.filtering .marker.acc-yes,
+.map.filtering .marker.has-permit-label.acc-check,
+.map.filtering .marker.is-selected { display: flex; }
 
 .m-pill { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 15px; background: #fff; border: 2.5px solid var(--maroon); box-shadow: 0 1px 4px rgb(0 0 0 / 0.35); font: 800 14px var(--font); }
 .m-p { color: var(--maroon); }
@@ -97,6 +103,8 @@ h1, h2, h3, p { margin: 0; }
 
 .m-dot { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: #fff; border: 2.5px solid var(--maroon); box-shadow: 0 1px 3px rgb(0 0 0 / 0.35); color: var(--maroon); font: 800 12px var(--font); }
 .m-ada-dot { width: 17px; height: 17px; padding: 2px; border-radius: 999px; background: var(--ada); color: #fff; margin-left: -8px; margin-top: -14px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.35); }
+.m-permit { position: absolute; top: calc(100% + 3px); left: 50%; display: none; translate: -50% 0; padding: 2px 5px; border: 1px solid rgb(0 0 0 / 0.25); border-radius: 4px; background: rgb(255 255 255 / 0.94); box-shadow: 0 1px 3px rgb(0 0 0 / 0.3); color: var(--ink); font: 800 9px/1.2 var(--font); white-space: nowrap; }
+.map.filtering .m-permit { display: block; }
 
 .marker.is-selected .m-pill, .marker.is-selected .m-dot { border-color: var(--orange); border-width: 3px; }
 .marker:focus-visible { outline: none; }
@@ -107,18 +115,31 @@ h1, h2, h3, p { margin: 0; }
 .cat-support { background: var(--cat-support); }
 .cat-athletic { background: var(--cat-athletic); }
 
-.legend { position: absolute; left: 8px; right: 8px; bottom: 8px; background: rgb(255 255 255 / 0.95); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); font-size: 12px; }
+.legend { position: absolute; left: 8px; right: 8px; bottom: 32px; background: rgb(255 255 255 / 0.95); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); font-size: 12px; }
 .legend-toggle { width: 100%; text-align: left; border: 0; background: none; padding: 6px 12px; min-height: 32px; font-weight: 700; color: var(--maroon); }
 .legend-toggle::after { content: "\25BE"; float: right; }
 .legend-toggle[aria-expanded="false"]::after { content: "\25B4"; }
 .legend ul { list-style: none; margin: 0; padding: 0 12px 8px; display: flex; flex-wrap: wrap; gap: 6px 12px; }
 .legend li { display: flex; align-items: center; gap: 6px; }
+.legend-parking { width: 20px; height: 20px; display: grid; place-items: center; border: 2px solid var(--maroon); border-radius: 50%; background: #fff; color: var(--maroon); font-size: 12px; font-weight: 800; }
+.permit-result-key { display: none !important; }
+.map.filtering ~ .legend .permit-result-key { display: flex !important; }
 .swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgb(0 0 0 / 0.3); flex: none; }
 .swatch-drill { background: #cfe6b8; border-color: #a9cf8c; }
+.swatch-permit-yes { background: #008f5a; border-color: #005f3c; }
+.swatch-permit-check { background: #f2a900; border-color: #9b6500; }
+.swatch-permit-no { background: #8d9296; border-color: #666b70; opacity: 0.55; }
 
 .map-controls { position: absolute; top: 10px; right: 10px; display: grid; gap: 6px; }
 .map-controls button { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); font-size: 22px; font-weight: 600; color: var(--maroon); display: grid; place-items: center; }
 .map-controls button:active { background: #f6ecef; }
+.map-controls button.is-locating svg { animation: location-spin 0.9s linear infinite; }
+.map-controls button.has-error { color: var(--bad); }
+@keyframes location-spin { to { rotate: 360deg; } }
+.user-location { position: relative; width: 18px; height: 18px; border: 3px solid #fff; border-radius: 50%; background: #1677ff; box-shadow: 0 0 0 2px #0b4fd0, 0 2px 8px rgb(0 0 0 / 0.45); }
+.user-location::before { content: ""; position: absolute; inset: -10px; border-radius: 50%; background: rgb(22 119 255 / 0.2); }
+.location-status { position: absolute; z-index: 4; left: 50%; bottom: 82px; translate: -50% 0; width: max-content; max-width: calc(100% - 32px); padding: 7px 11px; border-radius: 6px; background: rgb(31 26 28 / 0.92); color: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / 0.25); font-size: 12px; text-align: center; }
+.location-status.is-error { background: #8d1b16; }
 
 /* ---------- ADA badge (single component, three call sites) ---------- */
 .ada { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px 2px 6px; border-radius: 999px; background: var(--ada); color: #fff; font-weight: 700; font-size: 13px; line-height: 1.3; white-space: nowrap; }
@@ -269,4 +290,14 @@ h1, h2, h3, p { margin: 0; }
 .map-svg.filtering .marker.acc-yes .m-bg { stroke: #1c7a3e; stroke-width: 3.5px; }
 .map.filtering .marker.acc-no { opacity: 0.4; }
 .map.filtering .marker.acc-check { opacity: 0.7; }
-.map.filtering .marker.acc-yes { filter: drop-shadow(0 0 2px #1c7a3e); }
+.map.filtering .marker.acc-yes { opacity: 1; filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.4)); }
+.map.filtering .marker.acc-yes .m-pill,
+.map.filtering .marker.acc-yes .m-dot { background: #008f5a; border-color: #fff; color: #fff; box-shadow: 0 0 0 3px #008f5a, 0 2px 6px rgb(0 0 0 / 0.45); }
+.map.filtering .marker.acc-yes .m-p,
+.map.filtering .marker.acc-yes .m-count { color: #fff; }
+.map.filtering .marker.acc-yes .m-permit { background: #008f5a; border-color: #fff; color: #fff; box-shadow: 0 0 0 2px #005f3c, 0 2px 5px rgb(0 0 0 / 0.4); }
+.map.filtering .marker.acc-check .m-pill,
+.map.filtering .marker.acc-check .m-dot { background: #f2a900; border-color: #fff; color: #241900; box-shadow: 0 0 0 2px #9b6500, 0 2px 5px rgb(0 0 0 / 0.35); }
+.map.filtering .marker.acc-check .m-p,
+.map.filtering .marker.acc-check .m-count { color: #241900; }
+.map.filtering .marker.acc-check .m-permit { background: #f2a900; border-color: #fff; color: #241900; box-shadow: 0 0 0 2px #9b6500, 0 2px 5px rgb(0 0 0 / 0.35); }
