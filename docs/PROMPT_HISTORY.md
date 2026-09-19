@@ -35,3 +35,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > yes that sounds good continue, only stop when you need me to perform an action and make sure you document all work and estimated remaining time periodically
 
 **Outcome:** Decisions taken: (a) PWA is the mobile target (iOS via Safari "Add to Home Screen"), Capacitor deferred; (b) AI assistant is deterministic/rule-based on the app's own data (no API key, no backend, no cost) behind an `Answerer` interface so an LLM proxy can be added later. Standing instruction: work autonomously, stop only for user-only actions, keep STATE.md updated with work log + remaining-time estimate.
+
+## 6. 2026-09-19 - periodic commits (sent mid-build)
+
+> make sure to periodically upload work to the current repo with commit and push check if upstream needs to be set, resolve any merge conflicts and prioritize current code from my user
+
+**Outcome:** Upstream was already set (`origin/main` -> github.com/heuyz14/terraceb). A teammate had pushed an independent Leaflet prototype at the repo root (no file overlap). Made 2 commits, merged `origin/main` with a normal merge (no conflicts), pushed. First push failed with HTTP 400 (payload > default 1 MB post buffer); fixed with `git -c http.postBuffer=524288000 push`. Standing routine: commit + push after each meaningful chunk; on conflict, keep the user's local code.

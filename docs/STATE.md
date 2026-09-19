@@ -1,6 +1,6 @@
 # HokiePark - current state
 
-_Last updated: 2026-09-19 ~13:15 (Phases 1-4 built as code; PWA scaffolding added; awaiting browser verification)._
+_Last updated: 2026-09-19 ~13:40 (Phases 1-4 + PWA built and browser-verified via CDP smoke run; committed and pushed)._
 Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `../HOKIEPARK_SPEC.md`, `../HokiePark - 6-Hour Build Plan.md`.
 
 ## What this is
@@ -18,6 +18,14 @@ No backend, no database. (AGENTS.md's Supabase/Next.js stack is for the other re
 | **Assistant = rule-based, no LLM** | Artifact-platform AI sampling doesn't exist outside claude.ai; an LLM needs a paid backend proxy + API key (needs user approval). `Answerer` interface in `src/lib/assistant.ts` is the seam. |
 | Assistant reads only the three data arrays via `lib/occupancy.ts` | Same numbers as map/list/sheet (Phase 5 requirement). |
 | Nearest = distance to footprint vertex, not centroid | Centroids mislead for large multi-polygon lots. |
+
+## Git workflow (standing instruction from user)
+- Remote: `origin` = https://github.com/heuyz14/terraceb.git, branch `main`, upstream already set.
+- Commit + push periodically (after each meaningful chunk). End commit messages with the Co-Authored-By line.
+- Merge (not rebase) `origin/main` before pushing; on conflicts **keep the user's local code**.
+- If push fails with HTTP 400 / "remote end hung up": `git -c http.postBuffer=524288000 push` (large raw GIS JSON exceeds the default 1 MB buffer).
+- `dist/` and `node_modules/` are git-ignored. Never commit `.env` files.
+- **Teammate prototype:** commit `1bb0f36` (Jnhim) added a separate Leaflet-based prototype at the repo root (`index.html`, `parking.js`, `data.js`, `distance.js`, `parking.css`, tests). Different approach (Leaflet tiles from unpkg, permit filter, demo scenarios, 5 approximate lots). Does NOT overlap this build's files (`src/`, `dist/`). Team should decide which is the demo, or merge ideas (their permit-eligibility filter is a good feature).
 
 ## Data
 - Raw VT ArcGIS pulls in `data/raw/` (WGS84). Refetch: `node scripts/fetch-gis.ts`; flatten: `npm run data`.
@@ -56,12 +64,14 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 ## Work log
 - 12:29-12:45 Read spec+plan; confirmed VT ArcGIS reachable; saved raw data; wrote flatten script; spot-checked landmarks.
 - 12:45-13:00 Libs + tests (projection/viewport/occupancy/search/nearby/Drillfield); map, sheet, list, badge, legend, CSS, build script.
+- 13:15-13:40 CDP smoke run (27 checks pass, zero console errors), PWA verified over http incl. offline; fixed chip overflow + manifest-on-file:// error; first commits + merge with teammate prototype + push.
 - 13:00-13:15 Screenshot review + fixes; PWA files + icons; assistant logic (found+fixed 2 bugs: "life" false place match, centroid-distance ranking); chat UI.
 
 ## Remaining work and estimate (~2.5-3 h of my time, plus user-only steps)
 | Item | Est. |
 | --- | --- |
-| Browser verification (CDP smoke driver) + fix findings | 30-45 min |
+| ~~Browser verification (CDP smoke driver)~~ done: 27/27 checks + PWA/offline pass on phone width; polish findings below | done |
+| Polish from screenshots: label/marker collisions, fly-to zoom on large lots | 20-30 min |
 | `docs/ARCHITECTURE.md` + README + task split | 20 min |
 | Phase 5 QA: cross-view number consistency check, edge cases, phone + desktop widths, contrast | 30-40 min |
 | Playwright-free E2E of critical flows (or keep CDP script in `scripts/`) | 20 min |
