@@ -6,7 +6,7 @@ import { createList } from "./ui/list.ts";
 import { renderLegend } from "./ui/legend.ts";
 import { createAssistant } from "./ui/assistant.ts";
 import { createPermitPicker, loadSaved } from "./ui/permits.ts";
-import { localAnswerer } from "./lib/assistant.ts";
+import { makeLocalAnswerer } from "./lib/assistant.ts";
 import { LIVE_CONFIG } from "./config.ts";
 import { startLive } from "./live.ts";
 import { createSyncChip } from "./ui/sync.ts";
@@ -39,8 +39,8 @@ function boot() {
   const views: Record<View, HTMLElement> = { map: $("view-map"), list: $("view-list"), ask: $("view-ask") };
   const tabs = [...document.querySelectorAll<HTMLButtonElement>(".tabbar button")];
 
-  // Swap `localAnswerer` for an LLM-backed Answerer here if a backend proxy is ever added.
-  createAssistant($("view-ask"), { answer: localAnswerer, onSelect: (sel) => select(sel, "assistant", "map") });
+  // Swap this for an LLM-backed Answerer here if a backend proxy is ever added (it should receive the same context).
+  createAssistant($("view-ask"), { answer: makeLocalAnswerer(() => ({ permits: store.get().permits, ada: store.get().ada })), onSelect: (sel) => select(sel, "assistant", "map") });
 
   store.subscribe((s, prev) => {
     if (s.view !== prev.view) {

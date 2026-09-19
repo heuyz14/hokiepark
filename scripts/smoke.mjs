@@ -87,7 +87,8 @@ ws.onmessage = (m) => {
 // ---- controllable mock of the Supabase REST endpoint (only used with --live) ----
 import { SEED_LEVELS } from "../src/data/garages.ts";
 import { GARAGES, LOTS } from "../src/data/index.ts";
-import { garageAccess, lotAccess } from "../src/lib/permits.ts";
+import { garageAccess, lotAccess, SIGNAGE_NOTE } from "../src/lib/permits.ts";
+import { openSpaces } from "../src/lib/occupancy.ts";
 const mock = {
   mode: "ok", // ok | down (HTTP 503) | bad (200 with an out-of-range row)
   requests: [],
@@ -346,6 +347,50 @@ await audit("initial");
   check("permit: Clear all removes filtering and the saved choice", (await ev(`document.querySelector('.map-svg').classList.contains('filtering')`)) === false && (await ev(`document.querySelectorAll('.acc-no, .acc-check').length`)) === 0);
   await click('[data-done]');
   await ev(`localStorage.removeItem(${JSON.stringify(PKEY)})`);
+}
+
+// ---- assistant honors the permit chooser (same rules module; changes apply to the very next question) ----
+{
+  const ask = async (q) => { await click('.tabbar [data-view="ask"]'); await ev(`document.getElementById('chat-q').value=${JSON.stringify(q)}`); await ev(`document.getElementById('chat-form').requestSubmit()`); await sleep(350); return ev(`[...document.querySelectorAll('#chat-log .msg.bot')].pop().innerText`); };
+  const usableOpen = (g, p) => g.levels.filter((l) => lotAccess({ classes: l.classes }, p).verdict === "yes").reduce((n, l) => n + openSpaces(l), 0);
+  const Q = "Where is the closest open parking to Newman Library?";
+  await click('.tabbar [data-view="map"]');
+  const baseline = await ask(Q);
+  check("assistant: no permit chosen => the original answer (no permit wording)", baseline.startsWith("Closest parking to Newman Library:") && !/permit/i.test(baseline.split("\n")[0]));
+
+  await click('.tabbar [data-view="map"]'); await click('.permit-chip'); await click('[data-permit="cg"]'); await click('[data-done]'); await sleep(200);
+  const cg = await ask(Q);
+  check("assistant: answer names the chosen permit", /^Closest parking for Commuter\/Graduate to Newman Library:/.test(cg), JSON.stringify(cg.split("\n")[0]));
+  check("assistant: includes the signage disclaimer", cg.includes(SIGNAGE_NOTE));
+  // The chat UI draws bullets with CSS, so innerText has no "- " prefix; normalise before parsing.
+  const cgLines = cg.split("\n").map((l) => l.replace(/^\s*[-\u2022]\s*/, ""));
+  const listedLots = cgLines.map((l) => l.match(/^(.+?) lot \(/)?.[1]).filter(Boolean);
+  const badLots = LOTS.filter((l) => listedLots.includes(l.name) && lotAccess(l, ["cg"]).verdict === "no").map((l) => l.name);
+  check("assistant: suggests at least one lot to inspect (check is not vacuous)", listedLots.length > 0, JSON.stringify(cgLines));
+  check("assistant: never suggests a lot the rules mark 'no'", badLots.length === 0, JSON.stringify({ listedLots, badLots }));
+  for (const g of GARAGES) {
+    const u = usableOpen(g, ["cg"]);
+    const line = cgLines.find((l) => l.startsWith(g.name)) ?? "";
+    const ok = u > 0 ? line.includes(`${u} open on levels your permit covers`) : /not valid|no open spaces|check the posted sign/.test(line);
+    check(`assistant: ${g.name} line matches the rules (${u} usable open)`, ok, JSON.stringify(line));
+  }
+  await shot("15-assistant-permit");
+
+  await click('.tabbar [data-view="map"]'); await click('.permit-chip'); await click('[data-permit="fs"]'); await click('[data-done]'); await sleep(200); // C/G is still on, so this adds F/S
+  const both = await ask(Q);
+  check("assistant: changing the chooser applies to the next question (now 2 permits)", /^Closest parking for Commuter\/Graduate \+ Faculty\/Staff to Newman Library:/.test(both), JSON.stringify(both.split("\n")[0]));
+  const bothLines = both.split("\n").map((l) => l.replace(/^\s*[-\u2022]\s*/, ""));
+  const bothGarage = GARAGES.map((g) => ({ g, u: usableOpen(g, ["cg", "fs"]), line: bothLines.find((l) => l.startsWith(g.name)) ?? "" }));
+  check("assistant: two permits use the BEST verdict across both (matches the rules)", bothGarage.every(({ g, u, line }) => (u > 0 ? line.includes(`${u} open on levels your permit covers`) : /not valid|no open spaces|check the posted sign/.test(line))), JSON.stringify(bothGarage.map((x) => [x.g.id, x.u, x.line.slice(0, 70)])));
+
+  const named = await ask("Where is the closest parking for visitors to Newman Library?");
+  check("assistant: a permit named in the question overrides the chooser", /^Closest parking for Visitor to Newman Library:/.test(named), JSON.stringify(named.split("\n")[0]));
+
+  await click('.tabbar [data-view="map"]'); await click('.permit-chip'); await click('[data-clear]'); await click('[data-done]'); await sleep(200);
+  const cleared = await ask(Q);
+  check("assistant: after Clear all it answers the original way again", cleared === baseline || cleared.startsWith("Closest parking to Newman Library:"), JSON.stringify(cleared.split("\n")[0]));
+  await ev(`localStorage.removeItem('hokiepark.permits.v1')`);
+  await click('.tabbar [data-view="map"]');
 }
 
 // ---- chip + live feed ----
