@@ -259,6 +259,9 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     },
     setSelection(sel, { fly }) {
       whenReady(() => {
+        // The List and Ask views hide the map with display:none. Refresh MapLibre's cached canvas
+        // dimensions immediately after returning to Map, before fitBounds calculates its padding.
+        map.resize();
         for (const n of markerEls.values()) n.classList.remove("is-selected");
         if (!sel) {
           (map.getSource("selection") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
@@ -282,10 +285,16 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
       });
     },
     zoom(factor) {
-      whenReady(() => map.easeTo({ zoom: map.getZoom() + Math.log2(factor), duration: 200 }));
+      whenReady(() => {
+        map.resize();
+        map.easeTo({ zoom: map.getZoom() + Math.log2(factor), duration: 200 });
+      });
     },
     reset() {
-      whenReady(() => map.fitBounds(homeBounds, { padding: 40, duration: 600 }));
+      whenReady(() => {
+        map.resize();
+        map.fitBounds(homeBounds, { padding: 40, duration: 600 });
+      });
     },
     refreshGarages() {
       whenReady(() => {

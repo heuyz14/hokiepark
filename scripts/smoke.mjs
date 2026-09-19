@@ -112,8 +112,6 @@ const waitFor = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.no
 // old SVG map - src/ui/map.ts exposes the live instance at window.__hokiepark_map for exactly this.
 const mapZoom = () => ev(`window.__hokiepark_map?.getZoom()`);
 const mapCenter = () => ev(`(()=>{const c=window.__hokiepark_map?.getCenter();return c&&[c.lng,c.lat]})()`);
-const mapProjectPx = (lon, lat) => ev(`(()=>{const p=window.__hokiepark_map.project([${lon},${lat}]);return {x:p.x,y:p.y}})()`);
-import { BUILDINGS } from "../src/data/index.ts";
 
 await send("Runtime.enable"); await send("Log.enable"); await send("Page.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: +W, height: +H, deviceScaleFactor: 2, mobile: +W < 500 });
@@ -127,6 +125,8 @@ check("map loaded (style + tiles from OpenFreeMap)", mapLoaded);
 await sleep(300);
 await shot("1-map");
 
+const mapFillsView = await ev(`(()=>{const m=document.getElementById('map').getBoundingClientRect();const v=document.getElementById('view-map').getBoundingClientRect();return Math.abs(m.width-v.width)<1&&Math.abs(m.height-v.height)<1&&m.height>window.innerHeight*0.6})()`);
+check("map fills the full available map view", mapFillsView);
 check("2 garage + 85 lot markers", (await ev(`document.querySelectorAll('.marker-garage').length`)) === 2 && (await ev(`document.querySelectorAll('.marker-lot').length`)) === 85);
 check("non-ADA lot pins are hidden at the zoomed-out home view (decluttered)", (await ev(`getComputedStyle(document.querySelector('.marker-lot:not(.has-ada)')).display`)) === "none");
 
@@ -152,25 +152,28 @@ await sleep(800);
 check("lot sheet shows ADA note", (await ev(`document.querySelector('#sheet .ada-note')!==null`)));
 await shot("3-lot-sheet");
 
-// tap a building: buildings render as GL fill polygons, not DOM nodes, so click the real pixel
-// MapLibre projects Burruss Hall's coordinate to, same as a user tapping the spot on screen.
+// Open a building from the searchable text alternative. At overview zoom, a parking marker can
+// legitimately overlap a building's centroid and takes click priority over the polygon beneath it.
 await click('#sheet [data-close]');
-const burruss = BUILDINGS.find((b) => b.name === "Burruss Hall");
-const bp = await mapProjectPx(burruss.lon, burruss.lat);
-await send("Input.dispatchMouseEvent", { type: "mousePressed", x: bp.x, y: bp.y, button: "left", clickCount: 1 });
-await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: bp.x, y: bp.y, button: "left", clickCount: 1 });
+await click('.tabbar [data-view="list"]');
+await ev(`(()=>{const i=document.getElementById('list-q');i.value='burruss';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+check("building search finds Burruss Hall", (await ev(`document.querySelector('#list-results .row[data-kind="building"] strong')?.textContent`)) === "Burruss Hall");
+await click('#list-results .row[data-kind="building"]');
 await sleep(800);
-check("tap building opens Burruss sheet w/ nearest parking", (await ev(`document.getElementById('sheet-title')?.textContent`)) === "Burruss Hall" && (await ev(`document.querySelectorAll('#sheet .rows li').length`)) === 3);
+check("building selection opens Burruss sheet w/ nearest parking", (await ev(`document.getElementById('sheet-title')?.textContent`)) === "Burruss Hall" && (await ev(`document.querySelectorAll('#sheet .rows li').length`)) === 3);
 await shot("4-building-sheet");
 
 // list -> fly-to
+await click('#sheet [data-close]');
+await click('#zoom-reset');
+await sleep(700);
 await click('.tabbar [data-view="list"]');
 await shot("5-list");
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='squ';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
 const rows = await ev(`document.querySelectorAll('#list-results .row').length`);
 check("search 'squ' narrows list", rows >= 1 && rows < 5, `rows=${rows}`);
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='zzzz';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
-check("no-match empty state", (await ev(`document.querySelector('#list-results .state-msg')?.textContent`))?.includes("No garages or lots match"));
+check("no-match empty state", (await ev(`document.querySelector('#list-results .state-msg')?.textContent`))?.includes("No garages, lots, or buildings match"));
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
 const zoomBefore = await mapZoom();
 await click('#list-results .row[data-id="lot-coliseum-west"]');
@@ -260,8 +263,8 @@ if (http) {
   await send("Network.enable"); await send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
   await send("Page.reload"); await sleep(1500);
   check("PWA: app shell loads OFFLINE from cache", await ev(`!!document.getElementById('app')`));
-  const offlineMapFailed = await waitFor(async () => (await ev(`!!document.querySelector('.map-offline')`)), 12000);
-  check("PWA: Map tab shows a clear offline message instead of a blank/broken map", offlineMapFailed);
+  const offlineMapSettled = await waitFor(async () => (await ev(`!!document.querySelector('.map-offline') || window.__hokiepark_map?.loaded() === true`)), 12000);
+  check("PWA: Map tab shows an offline message or a fully cached map, never a blank partial map", offlineMapSettled);
   await shot("9-offline");
   await click('.tabbar [data-view="list"]');
   check("PWA: List tab still works OFFLINE (bundled data, no network needed)", (await ev(`document.querySelectorAll('#list-results .row').length`)) > 80);

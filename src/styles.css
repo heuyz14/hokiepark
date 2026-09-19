@@ -68,6 +68,9 @@ h1, h2, h3, p { margin: 0; }
 
 /* ---------- map (MapLibre GL JS + OpenFreeMap basemap; VT data drawn as GL layers on top) ---------- */
 .map { position: absolute; inset: 0; background: var(--land); }
+/* MapLibre's bundled stylesheet is appended after this file and sets its root to position:relative.
+   The extra class specificity keeps our map pinned to every edge of the available map view. */
+.map.maplibregl-map { position: absolute; inset: 0; width: 100%; height: 100%; }
 .map .maplibregl-canvas-container { cursor: grab; }
 .map .maplibregl-canvas-container.maplibregl-interactive:active { cursor: grabbing; }
 .map .maplibregl-ctrl-bottom-left { font-size: 11px; }
