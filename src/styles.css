@@ -128,7 +128,8 @@ path.is-selected { stroke: var(--orange) !important; stroke-width: 3px !importan
 @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
 .sheet-grip { width: 38px; height: 4px; border-radius: 4px; background: #d3ccce; margin: 8px auto 0; }
-.sheet-head { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px 4px; }
+/* sticky so the title and close button stay reachable while scrolling long garage level lists */
+.sheet-head { position: sticky; top: 0; z-index: 1; background: var(--paper); display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px 4px; }
 .sheet-head h2 { font-size: 20px; line-height: 1.2; color: var(--maroon); }
 .sheet-head h2:focus { outline: none; }
 .sub { color: var(--muted); font-size: 13.5px; }

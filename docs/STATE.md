@@ -49,21 +49,24 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | Phase | Status |
 | --- | --- |
 | 0 Setup & data | DONE |
-| 1 Core map | Built. One headless screenshot reviewed earlier; fixes since (legend to bottom strip, edge padding, label collisions, Drillfield refit) not yet re-screenshotted. |
-| 2 Garages/lots/sheet/list | Built (sheet for garage/lot/building + nearest parking, searchable list, fly-to both ways). Not yet exercised in a browser. |
-| 3 ADA + branding | Built (single `adaBadge` component in 5 places; VT maroon/orange; ADA blue distinct). Daylight contrast not checked. |
-| 4 Assistant | Built rule-based; 3 acceptance questions covered by unit tests with data-derived expected numbers. UI untested in browser. |
-| PWA (added) | Manifest, icons, service worker, iOS meta, safe-area + no-zoom-on-focus CSS done. SW only registers over http(s); not testable from `file://`. |
-| 5 QA pass | Not started |
+| 1 Core map | DONE + browser-verified (pan, drag, wheel/button zoom, reset, fly-to). Polish in progress: label/marker collisions, fly-to zoom on large lots. |
+| 2 Garages/lots/sheet/list | DONE + browser-verified (marker tap, sheet, list search/empty state, list<->map selection sync, keyboard Enter/Escape). |
+| 3 ADA + branding | DONE (single `adaBadge` in 5 places; VT maroon/orange; ADA blue distinct from residential blue). Daylight contrast still to check in Phase 5. |
+| 4 Assistant | DONE rule-based; 3 acceptance questions verified in unit tests AND in the browser; "Show on map" hand-off works. |
+| PWA (added) | DONE + verified over http: manifest, service worker, precache, loads OFFLINE. Manifest link is injected only over http(s) so file:// stays console-clean. Not yet tested on a real iPhone (needs HTTPS host). |
+| 5 QA pass | Partly: smoke covers core flows at 3 viewports. Still to do: contrast check, explicit cross-view number audit (marker/list/sheet/assistant). |
 | 6 Rehearsal | Not started (needs team + real machine) |
 
 ## Verified so far
 - `npm run check`: `tsc --noEmit` clean, **33/33 tests pass**, build OK (`dist/index.html` ~322 KB).
-- NOT verified: any browser interaction, console errors, iOS Safari, service worker behavior, phone-width layout after fixes.
+- `npm run build && npm run smoke -- <w> <h>` (CDP end-to-end, system Chrome, no deps): ALL PASS at 430x900, 375x667 and 1280x800; zero console errors; no horizontal overflow. (Note: in zsh pass width/height as literal args, not via a `$var` loop.)
+- Bug found by the 375x667 run and fixed: the bottom-sheet header scrolled away, hiding the close button on small screens; header is now sticky.
+- Not verified: real iOS Safari, contrast in sunlight.
 
 ## Work log
 - 12:29-12:45 Read spec+plan; confirmed VT ArcGIS reachable; saved raw data; wrote flatten script; spot-checked landmarks.
 - 12:45-13:00 Libs + tests (projection/viewport/occupancy/search/nearby/Drillfield); map, sheet, list, badge, legend, CSS, build script.
+- 13:40-14:00 Turned the driver into `scripts/smoke.mjs` (`npm run smoke`); found + fixed sticky-sheet-header bug at small sizes; label/fly-to polish.
 - 13:15-13:40 CDP smoke run (27 checks pass, zero console errors), PWA verified over http incl. offline; fixed chip overflow + manifest-on-file:// error; first commits + merge with teammate prototype + push.
 - 13:00-13:15 Screenshot review + fixes; PWA files + icons; assistant logic (found+fixed 2 bugs: "life" false place match, centroid-distance ranking); chat UI.
 
@@ -71,10 +74,10 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | Item | Est. |
 | --- | --- |
 | ~~Browser verification (CDP smoke driver)~~ done: 27/27 checks + PWA/offline pass on phone width; polish findings below | done |
-| Polish from screenshots: label/marker collisions, fly-to zoom on large lots | 20-30 min |
+| ~~Polish: label offset, fly-to zoom~~ applied; needs a visual re-check | 10 min |
 | `docs/ARCHITECTURE.md` + README + task split | 20 min |
 | Phase 5 QA: cross-view number consistency check, edge cases, phone + desktop widths, contrast | 30-40 min |
-| Playwright-free E2E of critical flows (or keep CDP script in `scripts/`) | 20 min |
+| ~~E2E script~~ done: `scripts/smoke.mjs` | done |
 | Polish from QA (label density, marker overlap, Drillfield tune) | 30 min |
 | **User-only:** choose host + deploy over HTTPS (Vercel/Netlify/GitHub Pages), test on a real iPhone | 15-30 min |
 | **Team-only:** Phase 6 rehearsal x2, fallback screenshots on the demo machine, confirm ADA lot + demo numbers | 15-30 min |

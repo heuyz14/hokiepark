@@ -72,7 +72,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
 
   const labelsSvg = BUILDINGS.map((b) => {
     const a = anchors.get(key("building", b.id))!;
-    return `<text class="bldg-label${LANDMARKS.has(b.name) ? " lm" : ""}" data-scale data-x="${a.x.toFixed(1)}" data-y="${a.y.toFixed(1)}" text-anchor="middle">${esc(b.name)}</text>`;
+    return `<text class="bldg-label${LANDMARKS.has(b.name) ? " lm" : ""}" data-scale data-x="${a.x.toFixed(1)}" data-y="${a.y.toFixed(1)}" dy="22" text-anchor="middle">${esc(b.name)}</text>`;
   }).join("");
 
   const drillAnchor = proj(DRILLFIELD_CENTER.lat, DRILLFIELD_CENTER.lon);
@@ -269,7 +269,8 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
       }
       const a = anchors.get(key(sel.kind, sel.id));
       if (!a) return;
-      const width = clamp(a.size * 4, 180, 360);
+      // ~3x the footprint so the whole lot/garage plus some context fits; capped for huge lots.
+      const width = clamp(a.size * 3, 200, 520);
       if (fly) return flyTo(boxFor(a, width));
       // Tapped on the map: only move if the item is hidden behind the sheet or off-screen.
       const fx = (a.x - vb.x) / vb.w;
