@@ -13,6 +13,9 @@ VT Timetable (public)  --npm run timetable (laptop, once)-->  timetable.json
 02_silver_buildings   -> silver_building_dim, silver_meetings   (code -> GIS building; gate: >= 98% of seats placed)
 03_gold_curves        -> gold_level_curves, gold_level_curves_by_time (view), and out/curves.seed.sql (volume file)
 04_mlflow_track       -> experiment runs + sensitivity sweep, registered model <catalog>.<schema>.hokiepark_occupancy_target
+05_simulate_training_data -> sim_features, sim_training_labels (Monte Carlo over the real timetable), sim_day_params, sim_run_metadata
+06_train_forecaster   -> gradient-boosted forecaster, evaluated on held-out days AND held-out places, registered as ...hokiepark_occupancy_forecaster
+07_batch_score_export -> gold_predictions (Delta) + out/predictions.json (what the app will read)
         download out/curves.seed.sql  ->  run it in the Supabase SQL editor
 ```
 
@@ -21,9 +24,11 @@ VT Timetable (public)  --npm run timetable (laptop, once)-->  timetable.json
 | --- | --- |
 | `notebooks/01..04_*.py` | Databricks source-format notebooks (import via Workspace -> Import, or deploy the bundle) |
 | `src/hokiepark_demand.py` | Pure-Python port of `src/lib/demand.ts`; the notebooks call it |
+| `src/hokiepark_sim.py` | Monte Carlo simulator + feature builder (reproduces the live curves exactly with randomness off) |
+| `src/hokiepark_ml.py` | Training + evaluation helpers (pandas, scikit-learn) shared by notebooks 06 and 07 |
 | `databricks.yml` | Asset Bundle: one serverless job running the four notebooks in order |
-| `data/garages.json`, `data/building_points.json` | Generated inputs (`npm run databricks:inputs`) |
-| `tests/test_parity.py` | Proves the Python model reproduces `supabase/curves.seed.sql` byte for byte (`npm run test:py`) |
+| `data/garages.json`, `data/building_points.json`, `data/units.json` | Generated inputs (`npm run databricks:inputs`, which also refreshes the git-ignored `upload/` folder) |
+| `tests/test_parity.py`, `test_sim.py`, `test_ml.py` | Python model parity with the TypeScript curves, simulator properties, ML helpers (`npm run test:py`) |
 
 ## Setup (about 20 minutes, needs a Databricks workspace)
 Free Edition is enough (free signup at databricks.com). It is serverless-only, restricts outbound internet to trusted domains, and
@@ -32,9 +37,9 @@ That is why the notebooks read uploaded files instead of scraping VT or calling 
 
 1. **Find your catalog name** in the Catalog explorer. The notebooks default to `workspace`; if yours differs, change the `catalog` widget (or `--var catalog=...` in the bundle).
 2. **Run notebook 01 once** (it creates the schema and the `raw` and `out` volumes and then stops with "file not found").
-3. **Upload four files** to the `raw` volume (Catalog -> your schema -> Volumes -> raw -> Upload to this volume):
-   `data/raw/timetable.json`, `data/timetable-building-codes.json`, `databricks/data/building_points.json`, `databricks/data/garages.json`.
-4. **Run the notebooks in order** 01 -> 04 (attach to serverless), or from a terminal with the Databricks CLI signed in:
+3. **Upload five files** to the `raw` volume (Catalog -> your schema -> Volumes -> raw -> Upload to this volume); all are in `databricks/upload/`:
+   `timetable.json`, `timetable-building-codes.json`, `building_points.json`, `garages.json`, `units.json`.
+4. **Run the notebooks in order** 01 -> 07 (attach to serverless), or from a terminal with the Databricks CLI signed in:
    `cd databricks && databricks bundle validate && databricks bundle deploy && databricks bundle run hokiepark_curves`.
 5. **Get the SQL into Supabase:** download `out/curves.seed.sql` from the `out` volume and run it in the Supabase SQL editor. It is
    identical to the repo's `supabase/curves.seed.sql` while the model parameters match.
@@ -46,7 +51,7 @@ skills for this work; see the top-level `ai-dev-kit/README.md` (it installs thro
 
 ## What was verified, and what was not
 Verified locally before the workspace run (2026-09-19):
-- `npm run test:py`: 9 tests, including exact match with the TypeScript-generated curves, the notebooks' sort order, and half-up rounding.
+- `npm run test:py`: 26 tests (parity 9, simulator 10, ML 7), including exact match with the TypeScript-generated curves, the notebooks' sort order, and half-up rounding.
 - Notebook 04 executed end to end against a fake `spark`/`dbutils` with real MLflow (3.16, local store): 9 runs logged with tags and
   metrics, model registered, and `predict` returns 95 for Perry Level 1, Wednesday 10:30 (matches the curve).
 - All notebooks parse; `databricks.yml` structure checks (task graph, paths, notebook headers).
@@ -55,10 +60,21 @@ Verified locally before the workspace run (2026-09-19):
 writes, the volume paths and the MLflow model registration. The `out/curves.seed.sql` the workspace produced matched
 `supabase/curves.seed.sql` on every line after the header comment (45 rows).
 
-**Still not verified:** `databricks bundle deploy` (the workspace was driven by hand, not through `databricks.yml`) and Genie
-availability on Free Edition.
+**Notebooks 05-07 (forecaster)** were executed locally end to end against a fake `spark`/`dbutils` with real scikit-learn and MLflow 3.16
+(902,400 simulated rows, ~28 s to train, model registered, `predictions.json` 131 KB, forecast vs live curves MAE 1.6 points) but **have not yet run on the
+workspace**. A bug found by that run and fixed: MLflow 3.x's default scikit-learn serializer needs `skops`, so the model is logged with `cloudpickle`.
+
+**Still not verified:** notebooks 05-07 on a real workspace, scikit-learn availability on serverless, `databricks bundle deploy` (the workspace was
+driven by hand, not through `databricks.yml`), and Genie availability on Free Edition.
 A bug found by the local run and already fixed: MLflow 3.x could not infer the model signature and handed `predict` one column, so
 the signature is declared explicitly.
+
+## The forecaster (notebooks 05-07): purpose, data, evaluation
+See **`docs/DATABRICKS_ML.md`** for the full explanation (what it is for, every data source and whether it is real, assumed or generated, how the labels are
+simulated, what the evaluation does and does not show). Short version: labels are **simulated** (there is no real occupancy data), generated from the real
+VT timetable with randomised driver behaviour; the model is judged on held-out days (it only matches a lookup there, the noise floor) and on **held-out
+places** (whole lots hidden: MAE 2.99 vs 7.30 for a place-agnostic average), and an ablation shows the class-schedule features matter within the simulation.
+Notebook 06 needs scikit-learn; if the serverless environment lacks it, add a first cell `%pip install scikit-learn` (a Python restart is expected).
 
 ## Findings worth saying in the pitch
 - The sensitivity sweep (radius 600/900/1200 m x commuter class weight 0.7/0.9) moves the curves by under 0.5 percentage points on

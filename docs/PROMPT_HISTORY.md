@@ -112,3 +112,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > i ran seed.sql and curves.seed.sql, whats next i also set up my free databricks account  /  notebooks are in my workspace what next  /  the last cell is skipped for 1  /  what do i upload  /  done  /  notebook 04 finished, what next  /  downloaded the curves file, compare it
 
 **Outcome:** Made `databricks/upload/` (the 4 input files, git-ignored) for the volume upload. The "last cell skipped" in notebook 01 was the intended missing-file stop. After upload, notebooks 01-04 all completed on the user's Free Edition workspace, and the exported `curves.seed.sql` matched the repo's file exactly after the header line (diffed here). Databricks Tier B is now verified end to end except `bundle deploy` and Genie.
+
+## 17. 2026-09-19 - the Databricks ML spec and "deep databricks implementation"
+
+> deploy the site to github pages, also whats next for the databricks part? [Databricks ML spec attached]  /  how long would ML take fastest  /  lets do it i want a deep databricks implemenatation in hokiepark but explain what its for and how were are training it with what data and where is the data coming from
+
+**Outcome:** Pages deploy not done by me (needs the user's GitHub settings; CI simulated cleanly on a fresh clone under Node 24, see STATE). Read the ML spec and corrected it against tested facts (timetable has capacity not enrollment; lots have invented/derived capacities; simulated-label circularity). Built the forecaster: Monte Carlo simulator, evaluation on held-out days AND places with ablation, MLflow + Unity Catalog registration, batch scoring to `predictions.json`, bundle tasks, 26 Python tests, and `docs/DATABRICKS_ML.md`. Decided the app-side "plan ahead" recommender should consume the workspace-produced `predictions.json`, so it comes after the user runs notebooks 05-07.

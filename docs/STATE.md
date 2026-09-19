@@ -172,5 +172,11 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 - **RUN ON A REAL FREE EDITION WORKSPACE (2026-09-19, by the user):** notebooks 01-04 completed; the downloaded `out/curves.seed.sql` matches `supabase/curves.seed.sql` on every line after the header (45 rows). Still not verified: `databricks bundle deploy` (run by hand instead), Genie on Free Edition.
 - Finding for the pitch: the sweep (radius 600/900/1200 x commuter weight 0.7/0.9) moves curves < 0.5 pp on average; output is dominated by the staff-workday shape and fill cap. Two copies of the model (TS + Python) must stay in sync: `npm run test:py` fails if they drift.
 
+## Databricks forecaster (added 2026-09-19, evening)
+- Explanation for teammates/judges: `docs/DATABRICKS_ML.md` (purpose, every data source real/assumed/generated, simulator, model, evaluation, limits, 30-second pitch).
+- Notebooks 05 (Monte Carlo labels), 06 (train + evaluate + register `hokiepark_occupancy_forecaster`), 07 (batch score -> `gold_predictions` + `predictions.json`); `databricks/src/hokiepark_sim.py`, `hokiepark_ml.py`; bundle has 7 tasks. Inputs now 5 files (adds `units.json`: 85 lots + 9 garage levels).
+- Verified locally end to end (fake spark, real sklearn + MLflow): 902,400 label rows; held-out days: model 2.45 ~ lookup 2.41 MAE (noise floor); held-out places: model 2.99 vs place-agnostic 7.30; ablation without class features 4.83; forecast vs live curves 1.6 pts MAE. 26 Python tests via `npm run test:py`. NOT yet run on the user's workspace.
+- NEXT: user uploads `units.json` and runs 05-07 in the workspace; then the app work: bundle the workspace's `predictions.json` and build the "plan ahead" recommender (building + time + permit -> top 2-3 with Likely open / Filling up / Risky). Only recommend lots whose permit class is known (66 of 85 lots have none).
+
 ## Commands
 `npm run data` | `npm run build` | `npm run dev` (watch) | `npm test` | `npm run typecheck` | `npm run check` (all three) | `npm run timetable` (re-pull term) | `npm run curves` (regenerate curves SQL)
