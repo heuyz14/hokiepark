@@ -1,6 +1,6 @@
 # HokiePark - current state
 
-_Last updated: 2026-09-19 ~15:10 (Phases 1-5 done; Supabase live-occupancy feature built and tested against a mock; waiting on the user for a real Supabase project)._
+_Last updated: 2026-09-19 ~15:40 (Phases 1-5 done; Supabase live feed verified against the REAL project; next: deploy + iPhone test + rehearsal)._
 Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `../HOKIEPARK_SPEC.md`, `../HokiePark - 6-Hour Build Plan.md`.
 
 ## What this is
@@ -58,7 +58,7 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | 2 Garages/lots/sheet/list | DONE + browser-verified (marker tap, sheet, list search/empty state, list<->map selection sync, keyboard Enter/Escape). |
 | 3 ADA + branding | DONE (single `adaBadge` in 5 places; VT maroon/orange; ADA blue distinct from residential blue). Daylight contrast still to check in Phase 5. |
 | 4 Assistant | DONE rule-based; 3 acceptance questions verified in unit tests AND in the browser; "Show on map" hand-off works. |
-| Supabase live feed (added) | Built + tested: migration (RLS read-only, constraints, simulator), generated seed, poller with backoff/pause, header chip, in-place refresh of map/list/sheet, key guard, `check:supabase`. Verified against a MOCK (`smoke:live`: update, open-sheet update + scroll kept, outage, bad payload, recovery, audit). **Not yet run against a real project.** |
+| Supabase live feed (added) | Built + tested: migration (RLS read-only, constraints, simulator), generated seed, poller with backoff/pause, header chip, in-place refresh of map/list/sheet, key guard, `check:supabase`. Verified against a MOCK (`smoke:live`: update, open-sheet update + scroll kept, outage, bad payload, recovery, audit). **Verified against the real project (2026-09-19):** `check:supabase` passes (9 valid rows, both garages, anon key cannot write -> HTTP 401); headless render shows chip `Live` and marker numbers equal the DB rows. Not yet seen: a live change during a session (needs the simulator run from the SQL editor). |
 | PWA (added) | DONE + verified over http: manifest, service worker, precache, loads OFFLINE. Manifest link is injected only over http(s) so file:// stays console-clean. Not yet tested on a real iPhone (needs HTTPS host). |
 | 5 QA pass | DONE for what can be automated: smoke at 3 viewports, cross-view number audit (marker = list = sheet = level sum = assistant, both garages), WCAG AA contrast tests (11 pairs), edge cases (full level, 0 ADA, no-match search). Remaining: a human pass on a real phone. |
 | 6 Rehearsal | Not started (needs team + real machine) |
@@ -70,7 +70,7 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 - Bug found by the 375x667 run and fixed: the bottom-sheet header scrolled away, hiding the close button on small screens; header is now sticky.
 - Not verified: real iOS Safari, contrast in sunlight.
 
-## Connecting a real Supabase project (needs you, ~10 min; see docs/SUPABASE.md)
+## Connecting a real Supabase project (DONE for local builds; step 5 still open)
 1. Create a free Supabase project. 2. SQL editor: run `supabase/migrations/20260919000000_garage_levels.sql`, then `supabase/seed.sql`.
 3. Copy the **Project URL** and **anon/publishable** key (NOT service_role) into `.env.local` (copy of `.env.example`).
 4. `npm run check:supabase` (tell me the result; it never prints the key), then `npm run build` -> "live feed: ON".
@@ -88,6 +88,7 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 - Drillfield ellipse is an estimate; 102 vs the spec's 92 buildings.
 
 ## Work log
+- 15:10-15:40 Real Supabase project connected: first check failed with PGRST205 (migration not yet applied), user ran it, `check:supabase` passes; live build renders real rows.
 - 14:35-15:10 Supabase feed: pure client + validators + tests, migration/seed/simulator SQL, poller + chip + in-place refresh, build guard, mock-Supabase e2e (`smoke:live`), `check:supabase`, docs.
 - 14:15-14:35 Overview declutter (only garages + ADA lot markers until zoomed in), fallback screenshots in `docs/fallback/`.
 - 14:00-14:15 Cross-view number audit + contrast tests + ARCHITECTURE.md + README + Pages workflow.
@@ -110,7 +111,7 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | **Team-only:** Phase 6 rehearsal x2, fallback screenshots on the demo machine, confirm ADA lot + demo numbers | 15-30 min |
 
 ## Open questions / needs from the user
-- **Supabase project** (see section above). Until then the app runs on bundled counts, chip says "Sample data".
+- Supabase project is connected locally (`.env.local`, git-ignored). For the DEPLOYED site the two public values must also be added as GitHub Actions Variables.
 - Hosting choice for the HTTPS deploy (needed for iPhone install + service worker). Nothing to do until I finish QA.
 - Teammate to confirm the 5th ADA lot and demo garage numbers (spec header asks for team confirmation).
 - Optional later: LLM-backed assistant (needs API key + proxy) and Capacitor/Xcode wrapper.
