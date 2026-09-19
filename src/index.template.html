@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#861f41">
+<script>/* manifest only over http(s): file:// blocks it and logs a console error */if(/^https?:/.test(location.protocol))document.head.insertAdjacentHTML("beforeend",'<link rel="manifest" href="manifest.webmanifest">');</script>
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HokiePark">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<title>HokiePark</title>
+<meta name="description" content="Live-feeling parking map for Virginia Tech's Blacksburg campus, with level-by-level garage counts and accessible (ADA) parking.">
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-wheelchair" viewBox="0 0 24 24">
+    <circle cx="11" cy="4.2" r="2" fill="currentColor" stroke="none"/>
+    <path d="M11 7.5v6.5h5.2l2.6 5.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M11 10.5h4.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M8.2 11.4a5.4 5.4 0 1 0 7.1 8.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+</svg>
+<div class="stage">
+  <div class="phone" id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">P</span>
+        <div>
+          <h1>HokiePark</h1>
+          <p>Virginia Tech &middot; Blacksburg campus</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="views">
+      <section id="view-map" class="view" aria-label="Campus parking map">
+        <div id="map" class="map" aria-busy="true"><p class="state-msg">Loading campus map&hellip;</p></div>
+        <div id="legend" class="legend"></div>
+        <div class="map-controls" role="group" aria-label="Map zoom controls">
+          <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+          <button type="button" id="zoom-out" aria-label="Zoom out">&minus;</button>
+          <button type="button" id="zoom-reset" aria-label="Reset to full campus view" class="reset">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </section>
+      <section id="view-list" class="view" aria-label="Garages and lots" hidden></section>
+      <section id="view-ask" class="view" aria-label="Parking assistant" hidden></section>
+    </main>
+
+    <aside id="sheet" class="sheet" role="dialog" aria-modal="false" aria-labelledby="sheet-title" hidden></aside>
+
+    <nav class="tabbar" aria-label="Views">
+      <button type="button" data-view="map" aria-current="page">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 4 3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4Zm0 0v13.5m6-11v13.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        <span>Map</span>
+      </button>
+      <button type="button" data-view="list">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <span>List</span>
+      </button>
+      <button type="button" data-view="ask">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        <span>Ask</span>
+      </button>
+    </nav>
+  </div>
+</div>
+<noscript><p style="padding:24px;font:16px system-ui">HokiePark needs JavaScript to draw the campus map.</p></noscript>
+<script>/*__JS__*/</script>
+</body>
+</html>
