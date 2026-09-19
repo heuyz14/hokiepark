@@ -1,16 +1,14 @@
-import type { BuildingCategory } from "../types.ts";
-import { CATEGORY_SHORT } from "./format.ts";
 import { adaBadge } from "./badge.ts";
-
-const ORDER: BuildingCategory[] = ["academic", "residential", "support", "athletic"];
 
 export function renderLegend(el: HTMLElement): void {
   el.innerHTML = `
-    <button type="button" class="legend-toggle" aria-expanded="true" aria-controls="legend-body">Legend</button>
+    <button type="button" class="legend-toggle" aria-expanded="true" aria-controls="legend-body">Map legend</button>
     <ul id="legend-body">
-      ${ORDER.map((c) => `<li><span class="swatch cat-${c}"></span>${CATEGORY_SHORT[c]}</li>`).join("")}
-      <li><span class="swatch swatch-drill"></span>Drillfield</li>
+      <li><span class="legend-parking" aria-hidden="true">P</span>Parking</li>
       <li>${adaBadge({ label: "Accessible" })}</li>
+      <li class="permit-result-key"><span class="swatch swatch-permit-yes"></span>Permit valid</li>
+      <li class="permit-result-key"><span class="swatch swatch-permit-check"></span>Check sign</li>
+      <li class="permit-result-key"><span class="swatch swatch-permit-no"></span>Not covered</li>
     </ul>`;
   const btn = el.querySelector<HTMLButtonElement>(".legend-toggle")!;
   const body = el.querySelector<HTMLElement>("#legend-body")!;

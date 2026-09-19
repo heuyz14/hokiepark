@@ -81,6 +81,7 @@ function boot() {
   for (const t of tabs) t.addEventListener("click", () => store.set({ view: t.dataset.view as View }));
   $("zoom-in").addEventListener("click", () => map.zoom(1.6));
   $("zoom-out").addEventListener("click", () => map.zoom(1 / 1.6));
+  $("locate-me").addEventListener("click", () => map.locate());
   $("zoom-reset").addEventListener("click", () => {
     map.reset();
     if (store.get().selection) select(null, "sheet");

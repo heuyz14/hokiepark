@@ -4,7 +4,7 @@ import { DRILLFIELD_CENTER } from "../data/drillfield.ts";
 import type { Building, Footprint, Garage, Lot, Selection } from "../types.ts";
 import { footprintBounds, footprintToGeoJSON } from "../lib/geojson.ts";
 import { garageStatus, garageTotals } from "../lib/occupancy.ts";
-import { classSummary, garageAccess, lotAccess, type PermitId } from "../lib/permits.ts";
+import { classSummary, garageAccess, lotAccess, type LotClass, type PermitId } from "../lib/permits.ts";
 import { esc } from "./format.ts";
 
 export interface MapController {
@@ -12,6 +12,8 @@ export interface MapController {
   setSelection(sel: Selection, opts: { fly: boolean }): void;
   zoom(factor: number): void;
   reset(): void;
+  /** Ask for the device location, place it on the map, and center the view there. */
+  locate(): void;
   /** Re-read garage counts (after a live update) and update the markers in place. */
   refreshGarages(): void;
   /** Dim locations the driver's selected permits do not cover. */
@@ -39,10 +41,33 @@ const ADA_COLOR = "#0b4fd0";
 const GARAGE_FILL = "#3d3036";
 const ORANGE = "#e5751f";
 const MAROON = "#861f41";
+// Permit-filter colors deliberately override the map's category colors so the answer is
+// recognizable at a glance, even over a detailed basemap.
+const PERMIT_YES = "#008f5a";
+const PERMIT_CHECK = "#f2a900";
+const PERMIT_NO = "#8d9296";
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
 const key = (kind: string, id: string) => `${kind}:${id}`;
+
+const PERMIT_MARKER_LABEL: Record<LotClass, string> = {
+  "any-permit": "Any permit",
+  "fs-remote": "F/S Remote",
+  "ada-service-24": "ADA 24h",
+  "fs-24": "F/S 24h",
+  fsv: "F/S + V",
+  "perry-fs": "Perry F/S",
+  "perry-cg": "Perry C/G",
+  cg: "C/G",
+  graduate: "Graduate",
+  "student-remote": "Student Remote",
+};
+
+function permitMarker(classes: LotClass[]): string {
+  if (!classes.length) return "";
+  return `<span class="m-permit">${esc(classes.map((c) => PERMIT_MARKER_LABEL[c]).join(" / "))}</span>`;
+}
 
 function unionBounds(all: [[number, number], [number, number]][]): [[number, number], [number, number]] {
   const lons = all.flatMap((b) => [b[0][0], b[1][0]]);
@@ -68,17 +93,19 @@ function garageMarkerHtml(g: Garage): string {
   const t = garageTotals(g);
   const st = garageStatus(g);
   const count = st === "full" ? "Full" : String(t.open);
+  const classes = [...new Set(g.levels.flatMap((level) => level.classes))];
   return `<span class="m-pill"><span class="m-p">P</span><span class="m-count">${esc(count)}</span></span>
-    <span class="m-ada">${wheelchairIcon("m-ada-icon")}<span class="m-ada-count">${t.adaOpen}</span></span>`;
+    <span class="m-ada">${wheelchairIcon("m-ada-icon")}<span class="m-ada-count">${t.adaOpen}</span></span>
+    ${permitMarker(classes)}`;
 }
 
 function lotMarkerHtml(l: Lot): string {
-  return `<span class="m-dot">P</span>${l.hasADA ? wheelchairIcon("m-ada-dot") : ""}`;
+  return `<span class="m-dot">P</span>${l.hasADA ? wheelchairIcon("m-ada-dot") : ""}${permitMarker(l.classes)}`;
 }
 
 /** No-op controller returned when the map can't be created at all (e.g. no WebGL2 support), so a
  * broken map never crashes the rest of the app - main.ts keeps working with the list and assistant. */
-const NOOP_CONTROLLER: MapController = { setSelection() {}, zoom() {}, reset() {}, refreshGarages() {}, setPermits() {} };
+const NOOP_CONTROLLER: MapController = { setSelection() {}, zoom() {}, reset() {}, locate() {}, refreshGarages() {}, setPermits() {} };
 
 function showMapProblem(el: HTMLElement, message: string) {
   el.innerHTML = `<div class="map-offline"><p>${esc(message)}</p><button type="button" data-retry>Try again</button></div>`;
@@ -114,6 +141,8 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
   (window as unknown as { __hokiepark_map?: maplibregl.Map }).__hokiepark_map = map;
 
   const markerEls = new Map<string, HTMLElement>();
+  let locationMarker: maplibregl.Marker | undefined;
+  let locationStatusTimer: number | undefined;
   let activePermits: PermitId[] = [];
   let activeAda = false;
   let ready = false;
@@ -163,17 +192,21 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     clearTimeout(timeout);
     el.removeAttribute("aria-busy");
 
+    // Put all colored geography below the basemap's labels. Street and building names therefore
+    // remain readable even when a permit highlight covers the same area.
+    const belowLabels = map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id;
+
     map.addSource("buildings", { type: "geojson", data: toFeatureCollection(BUILDINGS, (b) => ({ category: b.category })) });
-    map.addLayer({ id: "buildings-fill", type: "fill", source: "buildings", paint: { "fill-color": ["match", ["get", "category"], "academic", CAT_COLOR.academic, "residential", CAT_COLOR.residential, "support", CAT_COLOR.support, "athletic", CAT_COLOR.athletic, "#999"], "fill-opacity": 0.78 } });
-    map.addLayer({ id: "buildings-outline", type: "line", source: "buildings", paint: { "line-color": "rgba(0,0,0,0.35)", "line-width": 1 } });
+    map.addLayer({ id: "buildings-fill", type: "fill", source: "buildings", paint: { "fill-color": ["match", ["get", "category"], "academic", CAT_COLOR.academic, "residential", CAT_COLOR.residential, "support", CAT_COLOR.support, "athletic", CAT_COLOR.athletic, "#999"], "fill-opacity": 0.48 } }, belowLabels);
+    map.addLayer({ id: "buildings-outline", type: "line", source: "buildings", paint: { "line-color": "rgba(76,55,62,0.82)", "line-width": 1.2 } }, belowLabels);
 
     map.addSource("lots", { type: "geojson", data: toFeatureCollection(LOTS, (l) => ({ hasADA: l.hasADA })) });
-    map.addLayer({ id: "lots-fill", type: "fill", source: "lots", paint: { "fill-color": ["case", ["get", "hasADA"], LOT_ADA_FILL, LOT_FILL], "fill-opacity": 0.85 } });
-    map.addLayer({ id: "lots-outline", type: "line", source: "lots", paint: { "line-color": ["case", ["get", "hasADA"], ADA_COLOR, LOT_LINE], "line-width": ["case", ["get", "hasADA"], 1.6, 1] } });
+    map.addLayer({ id: "lots-fill", type: "fill", source: "lots", layout: { visibility: "none" }, paint: { "fill-color": ["case", ["get", "hasADA"], LOT_ADA_FILL, LOT_FILL], "fill-opacity": 0 } }, belowLabels);
+    map.addLayer({ id: "lots-outline", type: "line", source: "lots", layout: { visibility: "none" }, paint: { "line-color": ["case", ["get", "hasADA"], ADA_COLOR, LOT_LINE], "line-width": ["case", ["get", "hasADA"], 1.6, 1] } }, belowLabels);
 
     map.addSource("garages", { type: "geojson", data: toFeatureCollection(GARAGES, () => ({})) });
-    map.addLayer({ id: "garages-fill", type: "fill", source: "garages", paint: { "fill-color": GARAGE_FILL, "fill-opacity": 0.9 } });
-    map.addLayer({ id: "garages-outline", type: "line", source: "garages", paint: { "line-color": "#000", "line-width": 1 } });
+    map.addLayer({ id: "garages-fill", type: "fill", source: "garages", layout: { visibility: "none" }, paint: { "fill-color": GARAGE_FILL, "fill-opacity": 0 } }, belowLabels);
+    map.addLayer({ id: "garages-outline", type: "line", source: "garages", layout: { visibility: "none" }, paint: { "line-color": "#000", "line-width": 1 } }, belowLabels);
 
     map.addSource("selection", { type: "geojson", data: EMPTY_FC });
     map.addLayer({ id: "selection-outline", type: "line", source: "selection", paint: { "line-color": ORANGE, "line-width": 4 } });
@@ -206,7 +239,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     // Painting garages last keeps the two garages - fewer, and the more prominent target - on top.
     for (const l of LOTS) {
       const label = `${l.name} lot, ${classSummary(l.classes) || "permit type unknown"}${l.hasADA ? ", accessible parking available" : ""}`;
-      addMarker("lot", l.id, l.lon, l.lat, `marker marker-lot${l.hasADA ? " has-ada" : ""}`, lotMarkerHtml(l), label, () => onSelect({ kind: "lot", id: l.id }));
+      addMarker("lot", l.id, l.lon, l.lat, `marker marker-lot${l.hasADA ? " has-ada" : ""}${l.classes.length ? " has-permit-label" : ""}`, lotMarkerHtml(l), label, () => onSelect({ kind: "lot", id: l.id }));
     }
     for (const g of GARAGES) {
       addMarker("garage", g.id, g.lon, g.lat, `marker marker-garage st-${garageStatus(g)}`, garageMarkerHtml(g), garageLabel(g), () => onSelect({ kind: "garage", id: g.id }));
@@ -238,6 +271,10 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
       whenReady(() => {
         const on = activePermits.length > 0 || activeAda;
         el.classList.toggle("filtering", on);
+        const visibility = on ? "visible" : "none";
+        for (const layer of ["lots-fill", "lots-outline", "garages-fill", "garages-outline"]) {
+          map.setLayoutProperty(layer, "visibility", visibility);
+        }
         const mark = (node: HTMLElement | undefined, verdict: string | null) => {
           if (!node) return;
           node.classList.remove("acc-yes", "acc-no", "acc-check");
@@ -253,8 +290,23 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
         (map.getSource("garages") as maplibregl.GeoJSONSource | undefined)?.setData(toFeatureCollection(GARAGES, (g) => ({
           access: on ? garageAccess(g.levels, activePermits, { ada: activeAda }).verdict : "",
         })));
-        map.setPaintProperty("lots-fill", "fill-opacity", on ? ["match", ["get", "access"], "no", 0.24, "check", 0.48, 0.85] : 0.85);
-        map.setPaintProperty("garages-fill", "fill-opacity", on ? ["match", ["get", "access"], "no", 0.24, "check", 0.48, 0.9] : 0.9);
+        map.setPaintProperty("lots-fill", "fill-color", on
+          ? ["match", ["get", "access"], "yes", PERMIT_YES, "check", PERMIT_CHECK, PERMIT_NO]
+          : ["case", ["get", "hasADA"], LOT_ADA_FILL, LOT_FILL]);
+        map.setPaintProperty("lots-fill", "fill-opacity", on ? ["match", ["get", "access"], "yes", 0.38, "check", 0.3, 0.02] : 0);
+        map.setPaintProperty("lots-outline", "line-color", on
+          ? ["match", ["get", "access"], "yes", "#005f3c", "check", "#9b6500", "#666b70"]
+          : ["case", ["get", "hasADA"], ADA_COLOR, LOT_LINE]);
+        map.setPaintProperty("lots-outline", "line-width", on ? ["match", ["get", "access"], "yes", 3.5, "check", 2.5, 0] : 0);
+
+        map.setPaintProperty("garages-fill", "fill-color", on
+          ? ["match", ["get", "access"], "yes", PERMIT_YES, "check", PERMIT_CHECK, PERMIT_NO]
+          : GARAGE_FILL);
+        map.setPaintProperty("garages-fill", "fill-opacity", on ? ["match", ["get", "access"], "yes", 0.42, "check", 0.34, 0.02] : 0);
+        map.setPaintProperty("garages-outline", "line-color", on
+          ? ["match", ["get", "access"], "yes", "#005f3c", "check", "#9b6500", "#666b70"]
+          : "#000");
+        map.setPaintProperty("garages-outline", "line-width", on ? ["match", ["get", "access"], "yes", 4, "check", 3, 0] : 0);
       });
     },
     setSelection(sel, { fly }) {
@@ -294,6 +346,56 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
       whenReady(() => {
         map.resize();
         map.fitBounds(homeBounds, { padding: 40, duration: 600 });
+      });
+    },
+    locate() {
+      whenReady(() => {
+        const button = document.getElementById("locate-me");
+        const announce = (message: string, state?: "error") => {
+          let status = el.querySelector<HTMLElement>(".location-status");
+          if (!status) {
+            status = document.createElement("div");
+            status.className = "location-status";
+            status.setAttribute("role", "status");
+            el.append(status);
+          }
+          status.textContent = message;
+          status.classList.toggle("is-error", state === "error");
+          status.hidden = false;
+          if (locationStatusTimer !== undefined) window.clearTimeout(locationStatusTimer);
+          locationStatusTimer = window.setTimeout(() => {
+            status.hidden = true;
+            locationStatusTimer = undefined;
+          }, 3500);
+        };
+        if (!navigator.geolocation) {
+          announce("Location is not available in this browser.", "error");
+          return;
+        }
+        button?.classList.add("is-locating");
+        navigator.geolocation.getCurrentPosition(
+          ({ coords }) => {
+            button?.classList.remove("is-locating", "has-error");
+            const point: [number, number] = [coords.longitude, coords.latitude];
+            if (!locationMarker) {
+              const dot = document.createElement("div");
+              dot.className = "user-location";
+              dot.setAttribute("role", "img");
+              dot.setAttribute("aria-label", "Your location");
+              locationMarker = new maplibregl.Marker({ element: dot }).setLngLat(point).addTo(map);
+            } else {
+              locationMarker.setLngLat(point);
+            }
+            map.easeTo({ center: point, zoom: Math.max(map.getZoom(), 16), duration: 700 });
+            announce(`Location found within about ${Math.round(coords.accuracy)} meters.`);
+          },
+          () => {
+            button?.classList.remove("is-locating");
+            button?.classList.add("has-error");
+            announce("Location access was unavailable. Check your browser permission.", "error");
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+        );
       });
     },
     refreshGarages() {
