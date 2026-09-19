@@ -10,28 +10,28 @@
     "classes": [
      "fsv"
     ],
-    "capacity": 90
+    "capacity": 180
    },
    {
     "label": "Level 2 - Faculty, staff & visitor",
     "classes": [
      "fsv"
     ],
-    "capacity": 110
+    "capacity": 220
    },
    {
     "label": "Level 3 - Faculty, staff & visitor",
     "classes": [
      "fsv"
     ],
-    "capacity": 110
+    "capacity": 220
    },
    {
     "label": "Level 4 - Faculty, staff & visitor (roof)",
     "classes": [
      "fsv"
     ],
-    "capacity": 95
+    "capacity": 180
    }
   ]
  },
@@ -46,35 +46,35 @@
     "classes": [
      "perry-cg"
     ],
-    "capacity": 120
+    "capacity": 250
    },
    {
     "label": "Level 2 - Faculty & staff",
     "classes": [
      "perry-fs"
     ],
-    "capacity": 140
+    "capacity": 300
    },
    {
     "label": "Level 3 - Faculty & staff",
     "classes": [
      "perry-fs"
     ],
-    "capacity": 140
+    "capacity": 300
    },
    {
     "label": "Level 4 - Faculty & staff",
     "classes": [
      "perry-fs"
     ],
-    "capacity": 140
+    "capacity": 300
    },
    {
     "label": "Level 5 - Faculty & staff (roof)",
     "classes": [
      "perry-fs"
     ],
-    "capacity": 110
+    "capacity": 200
    }
   ]
  }
