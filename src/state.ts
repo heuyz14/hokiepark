@@ -1,4 +1,5 @@
 import type { Selection } from "./types.ts";
+import type { PermitChoice } from "./lib/permits.ts";
 
 export type View = "map" | "list" | "ask";
 
@@ -8,6 +9,8 @@ export interface State {
   /** Where the selection came from. Only non-map sources trigger the fly-to animation. */
   source: "map" | "list" | "sheet" | "assistant" | null;
   query: string;
+  /** The user's permit, or null for "any permit" (nothing dimmed or filtered). */
+  permit: PermitChoice | null;
 }
 
 type Listener = (next: State, prev: State) => void;

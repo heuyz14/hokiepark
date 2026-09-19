@@ -4,6 +4,7 @@ import type { Footprint, Selection } from "../types.ts";
 import { footprintToPath, makeProjector, type Projector } from "../lib/projection.ts";
 import { centeredOn, clamp, easeInOutCubic, fitAspect, lerpBox, panBy, zoomAt, type ViewBox } from "../lib/viewport.ts";
 import { garageStatus, garageTotals } from "../lib/occupancy.ts";
+import { eligibleLevels, lotDimmed, type PermitChoice } from "../lib/permits.ts";
 import { esc } from "./format.ts";
 
 export interface MapController {
@@ -13,6 +14,8 @@ export interface MapController {
   reset(): void;
   /** Re-read garage counts (after a live update) and update the markers in place. */
   refreshGarages(): void;
+  /** Dim lots (except ADA lots) and garages that the permit cannot use; null clears it. */
+  setPermit(permit: PermitChoice | null): void;
 }
 
 /** Labeled at every zoom; chosen to be far enough apart not to collide at full-campus view. */
@@ -290,6 +293,16 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     },
     reset() {
       flyTo(home);
+    },
+    setPermit(permit) {
+      for (const l of LOTS) {
+        const dim = lotDimmed(l, permit);
+        for (const n of svg.querySelectorAll(`[data-kind="lot"][data-id="${l.id}"]`)) n.classList.toggle("ineligible", dim);
+      }
+      for (const g of GARAGES) {
+        const dim = !!permit && eligibleLevels(g, permit).length === 0;
+        for (const n of svg.querySelectorAll(`[data-kind="garage"][data-id="${g.id}"]`)) n.classList.toggle("ineligible", dim);
+      }
     },
     refreshGarages() {
       for (const g of GARAGES) {

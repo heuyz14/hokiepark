@@ -63,3 +63,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > change the identity for the entire folder
 
 **Outcome:** Read as "every repo under ~/ProjectPort". `laelaps` and `nqmate` already used `heuyz14 <heuyz14@yahoo.com>` (GitHub credits that email to heuyz14), so standardized on it: added an `includeIf "gitdir:/Users/bubba/ProjectPort/"` rule in `~/.gitconfig` pointing at `~/.gitconfig-projectport`, removed terraceb's repo-local override, and verified all four repos plus a fresh repo inside the folder; outside the folder the global identity is unchanged. Backup: `~/.gitconfig.bak-before-projectport`.
+
+## 10. 2026-09-19 - free-only, iPhone, next steps
+
+> i want it all free  /  how do i test on iphone  /  iphone web checks out whats next  /  are these numbers stagnant  /  whats taking so long
+
+**Outcome:** Constraint recorded: everything must be free (GitHub Pages public repo, Supabase free tier, rule-based assistant; a free-tier LLM such as Gemini/Groq is only an optional later add-on, exact terms to be confirmed first; Anthropic has no free API tier). iPhone test done by the user over Wi-Fi (http://<mac-ip>:8080). Explained counts are static until `simulate_occupancy_tick()` runs. Built the permit-eligibility filter meanwhile.

@@ -2,11 +2,14 @@ import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
 import type { Garage, GarageLevel, Lot, Selection } from "../types.ts";
 import { availability, garageStatus, garageTotals, levelStatus, openAdaSpaces, openSpaces } from "../lib/occupancy.ts";
 import { nearest, walkMinutes } from "../lib/nearby.ts";
+import { eligibleOpen, levelAllows, lotAllows, PERMIT_LABEL, type PermitChoice } from "../lib/permits.ts";
 import { adaBadge } from "./badge.ts";
 import { CATEGORY_LABEL, esc, meters, statusPill } from "./format.ts";
 
 export interface SheetController {
   render(sel: Selection, opts?: { preserveScroll?: boolean }): void;
+  /** Set the permit used for eligibility notes; call render() afterwards to refresh an open sheet. */
+  setPermit(permit: PermitChoice | null): void;
 }
 
 const head = (title: string, sub: string, right = "") => `
@@ -19,13 +22,14 @@ const head = (title: string, sub: string, right = "") => `
     <button type="button" class="sheet-close" data-close aria-label="Close details">&times;</button>
   </div>${right}`;
 
-function levelRow(l: GarageLevel): string {
+function levelRow(l: GarageLevel, permit: PermitChoice | null): string {
   const open = openSpaces(l);
   const st = levelStatus(l);
   const pct = l.capacity ? Math.round((l.occupied / l.capacity) * 100) : 100;
-  return `<li class="level level-${st}">
+  const off = !!permit && !levelAllows(l, permit);
+  return `<li class="level level-${st}${off ? " level-off" : ""}">
     <div class="level-top">
-      <span class="level-label">${esc(l.label)}</span>
+      <span class="level-label">${esc(l.label)}${off ? ` <span class="tag">Not for ${esc(PERMIT_LABEL[permit!])}</span>` : ""}</span>
       ${adaBadge({ count: openAdaSpaces(l), muted: openAdaSpaces(l) === 0 })}
     </div>
     <div class="level-bar" role="img" aria-label="${pct}% full"><span style="width:${pct}%"></span></div>
@@ -36,7 +40,7 @@ function levelRow(l: GarageLevel): string {
   </li>`;
 }
 
-function garageBody(g: Garage): string {
+function garageBody(g: Garage, permit: PermitChoice | null): string {
   const t = garageTotals(g);
   const st = garageStatus(g);
   return (
@@ -47,14 +51,15 @@ function garageBody(g: Garage): string {
         ${statusPill(st)}
         ${adaBadge({ count: t.adaOpen, label: "accessible open", muted: t.adaOpen === 0 })}
       </div>
+      ${permit ? `<p class="permit-note">For your <strong>${esc(PERMIT_LABEL[permit])}</strong> permit: <strong>${eligibleOpen(g, permit)} open</strong> on eligible levels. Accessible spaces are open to placard holders regardless of permit.</p>` : ""}
       <h3>By level</h3>
-      <ul class="levels">${g.levels.map(levelRow).join("")}</ul>
+      <ul class="levels">${g.levels.map((l) => levelRow(l, permit)).join("")}</ul>
       <p class="fine">Demo data &mdash; counts are simulated, not from live sensors.</p>
     </div>`
   );
 }
 
-function lotBody(l: Lot): string {
+function lotBody(l: Lot, permit: PermitChoice | null): string {
   const ada = l.hasADA
     ? `<div class="ada-note">${adaBadge({ label: "Accessible parking available" })}<p>${l.adaSpaces} designated accessible spaces (illustrative count).</p></div>`
     : `<p class="no-ada">No designated accessible spaces flagged in this lot.</p>`;
@@ -64,6 +69,7 @@ function lotBody(l: Lot): string {
       <dl class="facts">
         <div><dt>Permit</dt><dd>${esc(l.permit)}</dd></div>
         <div><dt>Status</dt><dd>${esc(l.status)}</dd></div>
+        ${permit ? `<div><dt>Your ${esc(PERMIT_LABEL[permit])} permit</dt><dd>${lotAllows(l, permit) ? "Valid here" : l.hasADA ? "Not valid (accessible spaces still open)" : "Not valid here"}</dd></div>` : ""}
       </dl>
       ${ada}
       <p class="fine">Live space counts aren't tracked for lots in this demo.</p>
@@ -109,7 +115,11 @@ export function createSheet(el: HTMLElement, handlers: { onClose: () => void; on
     if (e.key === "Escape") handlers.onClose();
   });
 
+  let permit: PermitChoice | null = null;
   return {
+    setPermit(p) {
+      permit = p;
+    },
     render(sel, opts) {
       if (!sel) {
         el.hidden = true;
@@ -119,10 +129,10 @@ export function createSheet(el: HTMLElement, handlers: { onClose: () => void; on
       let html = "";
       if (sel.kind === "garage") {
         const g = GARAGES.find((x) => x.id === sel.id);
-        if (g) html = garageBody(g);
+        if (g) html = garageBody(g, permit);
       } else if (sel.kind === "lot") {
         const l = LOTS.find((x) => x.id === sel.id);
-        if (l) html = lotBody(l);
+        if (l) html = lotBody(l, permit);
       } else html = buildingBody(sel.id);
       if (!html) {
         el.hidden = true;

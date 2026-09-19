@@ -1,6 +1,6 @@
 # HokiePark - current state
 
-_Last updated: 2026-09-19 ~15:40 (Phases 1-5 done; Supabase live feed verified against the REAL project; next: deploy + iPhone test + rehearsal)._
+_Last updated: 2026-09-19 ~17:00 (Phases 1-5 done; Supabase live feed verified against the REAL project; permit-eligibility filter built; iPhone (Wi-Fi) check passed by user; next: deploy + rehearsal)._
 Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `../HOKIEPARK_SPEC.md`, `../HokiePark - 6-Hour Build Plan.md`.
 
 ## What this is
@@ -59,6 +59,7 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | 2 Garages/lots/sheet/list | DONE + browser-verified (marker tap, sheet, list search/empty state, list<->map selection sync, keyboard Enter/Escape). |
 | 3 ADA + branding | DONE (single `adaBadge` in 5 places; VT maroon/orange; ADA blue distinct from residential blue). Daylight contrast still to check in Phase 5. |
 | 4 Assistant | DONE rule-based; 3 acceptance questions verified in unit tests AND in the browser; "Show on map" hand-off works. |
+| Permit filter (added) | Built + tested: "My permit" strip (Any/Commuter/Resident/Faculty-Staff/Visitor), lots dim (ADA lots NEVER dimmed), garage sheet shows eligible-open + flags ineligible levels, list shows per-permit numbers + "Full for you" pill + "only my permit" toggle, assistant honors it, choice persisted in localStorage (validated on read). DEMO rules: lot permit values + level labels are invented data, so verify with a teammate. |
 | Supabase live feed (added) | Built + tested: migration (RLS read-only, constraints, simulator), generated seed, poller with backoff/pause, header chip, in-place refresh of map/list/sheet, key guard, `check:supabase`. Verified against a MOCK (`smoke:live`: update, open-sheet update + scroll kept, outage, bad payload, recovery, audit). **Verified against the real project (2026-09-19):** `check:supabase` passes (9 valid rows, both garages, anon key cannot write -> HTTP 401); headless render shows chip `Live` and marker numbers equal the DB rows. Not yet seen: a live change during a session (needs the simulator run from the SQL editor). |
 | PWA (added) | DONE + verified over http: manifest, service worker, precache, loads OFFLINE. Manifest link is injected only over http(s) so file:// stays console-clean. Not yet tested on a real iPhone (needs HTTPS host). |
 | 5 QA pass | DONE for what can be automated: smoke at 3 viewports, cross-view number audit (marker = list = sheet = level sum = assistant, both garages), WCAG AA contrast tests (11 pairs), edge cases (full level, 0 ADA, no-match search). Remaining: a human pass on a real phone. |
@@ -66,7 +67,8 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 
 ## Verified so far
 - `npm run check`: `tsc --noEmit` clean, **64/64 tests pass** (incl. contrast, remote validation, key guard, seed sync)
-- `npm run smoke:live` ALL PASS at 430x900, 375x667, 1280x800 (mock Supabase; fake key)., build OK (`dist/index.html` ~322 KB).
+- `npm run smoke` (feed OFF, hermetic) and `npm run smoke:live` (mock Supabase, fake key): ALL PASS at 430x900, 375x667, 1280x800. 76 unit tests pass.
+- Bugs found by the small-screen run and fixed: open sheet covered the map reset button (controls are now a horizontal row); smoke harness could attach to a stale Chrome from a crashed run (now OS-assigned port + guaranteed cleanup)., build OK (`dist/index.html` ~322 KB).
 - `npm run build && npm run smoke -- <w> <h>` (CDP end-to-end, system Chrome, no deps): ALL PASS at 430x900, 375x667 and 1280x800; zero console errors; no horizontal overflow. (Note: in zsh pass width/height as literal args, not via a `$var` loop.)
 - Bug found by the 375x667 run and fixed: the bottom-sheet header scrolled away, hiding the close button on small screens; header is now sticky.
 - Not verified: real iOS Safari, contrast in sunlight.
@@ -89,6 +91,7 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 - Drillfield ellipse is an estimate; 102 vs the spec's 92 buildings.
 
 ## Work log
+- 15:40-17:00 Permit filter (lib/permits, map dimming, sheet/list/assistant, persistence), smoke made hermetic, small-screen UX fix, harness hardening.
 - 15:10-15:40 Real Supabase project connected: first check failed with PGRST205 (migration not yet applied), user ran it, `check:supabase` passes; live build renders real rows.
 - 14:35-15:10 Supabase feed: pure client + validators + tests, migration/seed/simulator SQL, poller + chip + in-place refresh, build guard, mock-Supabase e2e (`smoke:live`), `check:supabase`, docs.
 - 14:15-14:35 Overview declutter (only garages + ADA lot markers until zoomed in), fallback screenshots in `docs/fallback/`.

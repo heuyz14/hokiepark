@@ -3,7 +3,7 @@
  * Chrome, serves dist/ from a throwaway local server (so the manifest + service worker are exercised),
  * drives the real UI with mouse/keyboard events, and fails on any console error.
  *
- *   npm run build && npm run smoke -- [width] [height]     (default 430x900; try 375 667 and 1280 800)
+ *   npm run smoke -- [width] [height]                      (default 430x900; try 375 667 and 1280 800)
  *   npm run smoke:live                                     (adds --live: builds a feed-enabled bundle and mocks Supabase)
  *
  * --live builds a second bundle configured for https://smoke.supabase.co with a FAKE anon key, then answers those
@@ -24,16 +24,17 @@ const OUT = `${W}x${H}${LIVE ? "-live" : ""}`;
 const ROOT = new URL("../", import.meta.url).pathname;
 const FAKE_B64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const FAKE_ANON = `${FAKE_B64({ alg: "HS256", typ: "JWT" })}.${FAKE_B64({ role: "anon", iss: "smoke-test" })}.fake-signature`;
-let DIST = join(ROOT, "dist");
-if (LIVE) {
-  DIST = join(ROOT, "smoke-out", "dist-live");
-  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "https://smoke.supabase.co", HOKIEPARK_SUPABASE_ANON_KEY: FAKE_ANON, HOKIEPARK_POLL_MS: "1000" }, encoding: "utf8" });
-  if (r.status !== 0) throw new Error("live build failed: " + r.stderr + r.stdout);
+// Always test a bundle built by THIS script so the run is hermetic: feed OFF (bundled counts) normally, or a feed
+// pointed at the in-process mock with --live. It never depends on dist/ or on your real .env.local.
+const DIST = join(ROOT, "smoke-out", LIVE ? "dist-live" : "dist-off");
+{
+  const env = { ...process.env, HOKIEPARK_SUPABASE_URL: "", HOKIEPARK_SUPABASE_ANON_KEY: "", HOKIEPARK_POLL_MS: "" };
+  if (LIVE) Object.assign(env, { HOKIEPARK_SUPABASE_URL: "https://smoke.supabase.co", HOKIEPARK_SUPABASE_ANON_KEY: FAKE_ANON, HOKIEPARK_POLL_MS: "1000" });
+  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build.ts"), "--out", DIST], { env, encoding: "utf8" });
+  if (r.status !== 0) throw new Error("smoke build failed: " + r.stderr + r.stdout);
 }
 const DIR = join(ROOT, "smoke-out") + "/";
 const CH = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const PORT = 9333;
-if (!LIVE && !existsSync(join(DIST, "index.html"))) throw new Error("dist/index.html missing - run `npm run build` first");
 if (!existsSync(CH)) throw new Error(`Chrome not found at ${CH}; set CHROME=/path/to/chrome`);
 mkdirSync(DIR, { recursive: true });
 
@@ -47,10 +48,23 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const APP = `http://127.0.0.1:${server.address().port}/index.html`;
 
-const proc = spawn(CH, ["--headless=new", "--disable-gpu", `--remote-debugging-port=${PORT}`, "--user-data-dir=" + mkdtempSync(join(tmpdir(), "hokiepark-smoke-")), "--no-first-run", "about:blank"], { stdio: "ignore" });
+// Chrome picks a free debugging port itself (port 0) and reports it in DevToolsActivePort, so a stale browser from an
+// earlier crashed run can never be mistaken for this one. It is always killed on exit, crash or Ctrl+C.
+const userDir = mkdtempSync(join(tmpdir(), "hokiepark-smoke-"));
+const proc = spawn(CH, ["--headless=new", "--disable-gpu", "--remote-debugging-port=0", "--user-data-dir=" + userDir, "--no-first-run", "about:blank"], { stdio: "ignore" });
+const cleanup = () => { try { proc.kill("SIGKILL"); } catch {} try { server.close(); } catch {} };
+process.on("exit", cleanup);
+for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(130));
+process.on("uncaughtException", (e) => { console.error("FAIL  smoke crashed:", e.message); process.exit(1); });
+process.on("unhandledRejection", (e) => { console.error("FAIL  smoke crashed:", e?.message ?? e); process.exit(1); });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-let targets;
+let PORT, targets;
+for (let i = 0; i < 100 && !PORT; i++) {
+  try { PORT = readFileSync(join(userDir, "DevToolsActivePort"), "utf8").split("\n")[0].trim(); } catch {}
+  if (!PORT) await sleep(150);
+}
+if (!PORT) throw new Error("Chrome did not start (no DevToolsActivePort)");
 for (let i = 0; i < 50; i++) {
   try { targets = await (await fetch(`http://127.0.0.1:${PORT}/json`)).json(); if (targets.find((t) => t.type === "page")) break; } catch {}
   await sleep(200);
@@ -72,6 +86,10 @@ ws.onmessage = (m) => {
 
 // ---- controllable mock of the Supabase REST endpoint (only used with --live) ----
 import { SEED_LEVELS } from "../src/data/garages.ts";
+import { GARAGES, LOTS } from "../src/data/index.ts";
+import { eligibleOpen, levelAllows, lotAllows, lotDimmed } from "../src/lib/permits.ts";
+import { garageTotals } from "../src/lib/occupancy.ts";
+const garageTotalsOpen = (g) => garageTotals(g).open;
 const mock = {
   mode: "ok", // ok | down (HTTP 503) | bad (200 with an out-of-range row)
   requests: [],
@@ -255,6 +273,76 @@ await click('.tabbar [data-view="map"]');
 }
 await audit("initial");
 
+// ---- permit filter (runs before any live-data changes, so expected numbers come straight from the seed) ----
+{
+  const selectPermit = async (v) => { await ev(`(()=>{const s=document.getElementById('permit');s.value=${JSON.stringify(v)};s.dispatchEvent(new Event('change',{bubbles:true}))})()`); await sleep(250); };
+  const ids = (sel) => ev(`[...document.querySelectorAll(${JSON.stringify(sel)})].map(e=>e.dataset.id).sort()`);
+  const sameSet = (a, b) => JSON.stringify(a) === JSON.stringify([...b].sort());
+  const nec = GARAGES.find((g) => g.id === "north-end-center"), perry = GARAGES.find((g) => g.id === "perry-street");
+  await click('.tabbar [data-view="map"]'); await click('#zoom-reset'); await sleep(700);
+
+  await selectPermit("commuter");
+  const expectDim = LOTS.filter((l) => lotDimmed(l, "commuter")).map((l) => l.id);
+  check(`permit: commuter dims exactly the ${expectDim.length} ineligible non-ADA lots`, sameSet(await ids("path.lot.ineligible"), expectDim), JSON.stringify(await ids("path.lot.ineligible")));
+  check("permit: accessible (ADA) lots are never dimmed", (await ev(`document.querySelectorAll('.lot-ada.ineligible, .marker.has-ada.ineligible').length`)) === 0);
+  check("permit: garages stay undimmed for commuter (both have commuter levels)", (await ids(".marker-garage.ineligible")).length === 0);
+
+  await click('.marker-garage[data-id="north-end-center"]'); await sleep(700);
+  const note = await ev(`document.querySelector('#sheet .permit-note')?.innerText`);
+  check("permit: garage sheet shows eligible-open total", note?.includes(`${eligibleOpen(nec, "commuter")} open`) && note.includes("Commuter"), JSON.stringify(note));
+  const off = await ev(`document.querySelectorAll('#sheet .level-off').length`);
+  check("permit: levels not allowed for commuter are flagged", off === nec.levels.filter((l) => !levelAllows(l, "commuter")).length && off > 0, `flagged=${off}`);
+  check("permit: headline totals are NOT changed by the filter (still all open spaces)", (await ev(`document.querySelector('#sheet .big')?.innerText`)) === String(garageTotalsOpen(nec)));
+  await click('#sheet [data-close]');
+  await click('#zoom-reset'); await sleep(700);
+  await click('.marker-garage[data-id="perry-street"]'); await sleep(700);
+  check("permit: Perry has 0 open commuter spaces (its only commuter level is full)", (await ev(`document.querySelector('#sheet .permit-note')?.innerText`)).includes("0 open"));
+  await shot("12-permit-commuter-sheet");
+  await click('#sheet [data-close]');
+
+  // resident: no garage levels at all -> both garage markers dim; ADA still not dimmed
+  await selectPermit("resident");
+  check("permit: resident dims both garages (no resident levels)", (await ids(".marker-garage.ineligible")).length === 2);
+  check("permit: ADA lots still undimmed for resident", (await ev(`document.querySelectorAll('.lot-ada.ineligible').length`)) === 0);
+
+  // list: annotations + "only my permit" filter
+  await selectPermit("commuter");
+  await click('.tabbar [data-view="list"]');
+  const sub = await ev(`document.querySelector('#list-results .row[data-id="north-end-center"] .sub').innerText`);
+  check("permit: list garage row shows the eligible number", sub.includes(`${eligibleOpen(nec, "commuter")} for your permit`) && sub.includes("179 of 405 open"), sub);
+  const pill = await ev(`document.querySelector('#list-results .row[data-id="perry-street"] .pill').innerText`);
+  check("permit: list pill says 'Full for you' when the permit's levels are full", pill === "Full for you", pill);
+  const before = await ev(`document.querySelectorAll('#list-results .row').length`);
+  await click('#only-mine');
+  const expectRows = GARAGES.filter((g) => g.levels.some((l) => levelAllows(l, "commuter"))).length + LOTS.filter((l) => lotAllows(l, "commuter") || l.hasADA).length;
+  const after = await ev(`document.querySelectorAll('#list-results .row').length`);
+  check("permit: 'only my permit' hides ineligible options but keeps ADA lots", after === expectRows && after < before, `${before} -> ${after}`);
+  await shot("13-permit-list");
+  await click('#only-mine');
+
+  // assistant honors the picked permit
+  await click('.tabbar [data-view="ask"]');
+  await ev(`document.getElementById('chat-q').value='Where is the closest open parking to Newman Library?'`);
+  await ev(`document.getElementById('chat-form').requestSubmit()`); await sleep(300);
+  const ans = await ev(`[...document.querySelectorAll('#chat-log .msg.bot')].pop().innerText`);
+  check("permit: assistant restricts to the picked permit with matching numbers", /Closest parking for a Commuter permit to Newman Library/.test(ans) && ans.includes(`${eligibleOpen(nec, "commuter")} open on levels for a Commuter permit`) && /Perry Street Garage has no open spaces for a Commuter permit/.test(ans), JSON.stringify(ans.split("\n").slice(0, 3)));
+  await shot("14-permit-assistant");
+
+  // persistence across a reload; then clear it
+  await click('.tabbar [data-view="map"]');
+  await send("Page.reload"); await sleep(1500);
+  check("permit: choice survives a reload (dropdown + dimming)", (await ev(`document.getElementById('permit').value`)) === "commuter" && sameSet(await ids("path.lot.ineligible"), expectDim));
+  await selectPermit("");
+  check("permit: 'Any permit' clears all dimming", (await ev(`document.querySelectorAll('.ineligible').length`)) === 0);
+  await ev(`localStorage.getItem('hokiepark.permit')`);
+  check("permit: cleared choice is not persisted", (await ev(`localStorage.getItem('hokiepark.permit')`)) === null);
+  // junk in storage is ignored, not trusted
+  await ev(`localStorage.setItem('hokiepark.permit','<img src=x onerror=alert(1)>')`);
+  await send("Page.reload"); await sleep(1500);
+  check("permit: junk in storage is rejected (falls back to Any permit)", (await ev(`document.getElementById('permit').value`)) === "" && (await ev(`document.querySelectorAll('.ineligible').length`)) === 0);
+  await ev(`localStorage.removeItem('hokiepark.permit')`);
+}
+
 // ---- chip + live feed ----
 const chipText = () => ev(`document.getElementById('sync').textContent`);
 const waitFor = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await fn()) return true; await sleep(150); } return false; };
@@ -311,5 +399,4 @@ check("no horizontal page overflow", (await ev(`document.documentElement.scrollW
 const unexpected = errors.filter((e) => !e.expected);
 check("zero console errors/warnings", unexpected.length === 0, unexpected.map((e) => e.text).join(" | "));
 console.log(`\n${failures ? failures + " FAILED" : "ALL PASSED"} at ${OUT}`);
-ws.close(); proc.kill(); server.close();
-process.exit(failures ? 1 : 0);
+process.exit(failures ? 1 : 0); // the exit handler closes Chrome and the server

@@ -41,7 +41,7 @@ h1, h2, h3, p { margin: 0; }
 .stage { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .phone {
   position: relative; width: 100%; max-width: 410px; height: min(880px, calc(100dvh - 32px));
-  display: grid; grid-template-rows: auto 1fr auto; overflow: hidden;
+  display: grid; grid-template-rows: auto auto 1fr auto; overflow: hidden;
   background: var(--paper); border-radius: 34px; border: 8px solid #211b1e; box-shadow: 0 18px 50px rgb(50 20 30 / 0.3);
 }
 @media (max-width: 480px) {
@@ -111,7 +111,8 @@ path.is-selected { stroke: var(--orange) !important; stroke-width: 3px !importan
 .swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgb(0 0 0 / 0.3); flex: none; }
 .swatch-drill { background: #cfe6b8; border-color: #a9cf8c; }
 
-.map-controls { position: absolute; top: 10px; right: 10px; display: grid; gap: 6px; }
+/* a horizontal row (not a stack) so an open bottom sheet on a short phone never covers the reset button */
+.map-controls { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
 .map-controls button { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); font-size: 22px; font-weight: 600; color: var(--maroon); display: grid; place-items: center; }
 .map-controls button:active { background: #f6ecef; }
 
@@ -205,3 +206,23 @@ path.is-selected { stroke: var(--orange) !important; stroke-width: 3px !importan
 .sync-live::before { background: #6ee7a0; }
 .sync-warn::before { background: var(--orange); }
 @media (max-width: 400px) { .brand p { display: none; } }
+
+/* ---------- permit strip + eligibility ---------- */
+.permitbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.permitbar label { font-size: 12.5px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.permitbar select { min-width: 0; flex: 0 1 150px; height: 40px; padding: 0 28px 0 10px; border: 2px solid #cfc7ca; border-radius: 10px; background: #fff; font-size: 16px; font-weight: 600; color: var(--maroon); }
+.permitbar select:focus-visible { border-color: var(--maroon); }
+.permitbar .sync { margin-left: auto; background: #f4eff0; color: var(--ink); }
+.permitbar .sync::before { background: #9a8f94; }
+.permitbar .sync-live::before { background: #1b6b3a; }
+.permitbar .sync-warn::before { background: var(--orange); }
+.lot.ineligible { opacity: 0.32; }
+.marker.ineligible { opacity: 0.45; }
+.level.level-off { background: #faf7f8; }
+.level.level-off .level-label, .level.level-off .level-bottom > span:first-child { color: var(--muted); }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #ece7e8; color: #4a4145; white-space: nowrap; }
+.tag-ok { background: var(--ok-bg); color: var(--ok); }
+.permit-note { margin: 2px 0 8px; padding: 8px 12px; border-radius: 12px; background: #f4eff0; font-size: 14px; }
+.permit-note strong { color: var(--maroon); }
+.list-filter { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; min-height: 44px; }
+.list-filter input { width: 22px; height: 22px; accent-color: var(--maroon); }
