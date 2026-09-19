@@ -12,7 +12,7 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node", "geojson"]
   },
   "include": ["src", "scripts", "tests"]
 }

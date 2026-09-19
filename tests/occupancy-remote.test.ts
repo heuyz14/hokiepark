@@ -7,7 +7,8 @@ import { garageTotals } from "../src/lib/occupancy.ts";
 import type { Garage } from "../src/types.ts";
 
 const row = (o: Partial<OccupancyRow> = {}): OccupancyRow => ({ garage_id: "perry-street", level_index: 0, label: "L1", capacity: 100, occupied: 40, ada_capacity: 5, ada_occupied: 2, updated_at: "2026-09-19T18:00:00Z", ...o });
-const garage = (): Garage => ({ id: "perry-street", name: "P", lat: 0, lon: 0, footprint: [], levels: [{ label: "old", capacity: 10, occupied: 1, adaCapacity: 1, adaOccupied: 0 }] });
+const info = { source: "test", permitDetail: "", overnightParking: "", payment: "", enforcement: "", location: "" };
+const garage = (): Garage => ({ id: "perry-street", name: "P", lat: 0, lon: 0, footprint: [], levels: [{ label: "old", capacity: 10, occupied: 1, adaCapacity: 1, adaOccupied: 0 }], info });
 
 /** Rows equivalent to the bundled seed, as the database would return them. */
 const seedRows = (): OccupancyRow[] =>

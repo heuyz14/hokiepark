@@ -17,8 +17,12 @@
     "check:supabase": "node --env-file-if-exists=.env.local scripts/check-supabase.ts"
   },
   "devDependencies": {
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^26.6.2",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "maplibre-gl": "^6.10.0"
   }
 }

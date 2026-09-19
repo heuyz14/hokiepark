@@ -1,9 +1,20 @@
 import type { Footprint } from "../types.ts";
-import { haversineMeters } from "./projection.ts";
+
+/** Mean Earth radius in meters (IUGG). */
+const EARTH_RADIUS_M = 6_371_008.8;
 
 export interface Located {
   lat: number;
   lon: number;
+}
+
+/** Great-circle distance in meters. */
+export function haversineMeters(a: Located, b: Located): number {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLon = (b.lon - a.lon) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
 }
 
 /** Meters from a point to the nearest vertex of a footprint. Better than centroid distance for big lots. */

@@ -38,6 +38,7 @@ export const garageStatus = (g: Garage) => {
 };
 
 export const levelStatus = (l: GarageLevel) => availability(openSpaces(l), l.capacity);
+export const lotStatus = (l: Lot) => availability(openSpaces(l), l.capacity);
 
 /** Human summary used verbatim by the list view and the AI context. */
 export function garageSummary(g: Garage): string {
@@ -46,5 +47,5 @@ export function garageSummary(g: Garage): string {
 }
 
 export function lotSummary(l: Lot): string {
-  return l.hasADA ? `${l.permit} - ADA parking available` : l.permit;
+  return `Lot &middot; ${openSpaces(l)} of ${l.capacity} open &middot; ${l.permit}`;
 }

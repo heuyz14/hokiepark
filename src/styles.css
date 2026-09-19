@@ -65,42 +65,43 @@ h1, h2, h3, p { margin: 0; }
 .tabbar button { border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 12.5px; font-weight: 600; color: var(--muted); border-top: 3px solid transparent; }
 .tabbar button[aria-current] { color: var(--maroon); border-top-color: var(--orange); }
 
-/* ---------- map ---------- */
+/* ---------- map (MapLibre GL JS + OpenFreeMap basemap; VT data drawn as GL layers on top) ---------- */
 .map { position: absolute; inset: 0; background: var(--land); }
-.map-svg { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
-.map-svg.dragging { cursor: grabbing; }
-.map-svg path { vector-effect: non-scaling-stroke; }
-.drill { fill: #cfe6b8; stroke: #a9cf8c; stroke-width: 1px; pointer-events: none; }
-.drill-label { font: italic 600 12px var(--font); fill: #3f6b2c; pointer-events: none; text-anchor: middle; }
-.lot { fill: #dcd8d0; stroke: #bfb9ad; stroke-width: 1px; cursor: pointer; }
-.lot-ada { fill: #cbd9f6; stroke: var(--ada); stroke-width: 1.5px; }
-.bldg { stroke: rgb(0 0 0 / 0.3); stroke-width: 0.8px; cursor: pointer; }
-.cat-academic { fill: var(--cat-academic); background: var(--cat-academic); }
-.cat-residential { fill: var(--cat-residential); background: var(--cat-residential); }
-.cat-support { fill: var(--cat-support); background: var(--cat-support); }
-.cat-athletic { fill: var(--cat-athletic); background: var(--cat-athletic); }
-.garage { fill: #3d3036; stroke: #1f1a1c; stroke-width: 1px; cursor: pointer; }
-path.is-selected { stroke: var(--orange) !important; stroke-width: 3px !important; }
+.map .maplibregl-canvas-container { cursor: grab; }
+.map .maplibregl-canvas-container.maplibregl-interactive:active { cursor: grabbing; }
+.map .maplibregl-ctrl-bottom-left { font-size: 11px; }
 
-.bldg-label { display: none; font: 600 10.5px var(--font); fill: var(--ink); stroke: #fff; stroke-width: 3px; paint-order: stroke; pointer-events: none; }
-.bldg-label.lm, .show-all-labels .bldg-label { display: block; }
+.map-offline { position: absolute; inset: 0; display: grid; place-items: center; gap: 14px; padding: 24px; text-align: center; background: var(--land); }
+.map-offline p { color: var(--muted); max-width: 26em; }
+.map-offline button { padding: 10px 20px; border-radius: 999px; border: 0; background: var(--maroon); color: #fff; font-weight: 700; }
 
-.marker { cursor: pointer; color: #fff; }
+/* HTML markers (maplibregl.Marker) for garages and lots - kept as real, focusable DOM elements so
+   they read out to assistive tech and stay a constant screen size at any zoom, same as before. */
+.marker { cursor: pointer; display: flex; align-items: center; gap: 4px; }
 .marker-lot:not(.has-ada):not(.is-selected) { display: none; }
-.show-all-lots .marker-lot { display: inline; }
-.marker .m-bg { fill: #fff; stroke: var(--maroon); stroke-width: 2.5px; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35)); }
-.marker text { font: 800 13px var(--font); pointer-events: none; }
-.marker .m-p { fill: var(--maroon); }
-.marker .m-count { fill: var(--ink); font-size: 14px; }
-.marker .m-ada-bg, .marker .m-ada-dot { fill: var(--ada); }
-.marker .m-ada-count { fill: #fff; }
-.marker-garage.st-open .m-bg { stroke: var(--ok); }
-.marker-garage.st-limited .m-bg { stroke: #c77700; }
-.marker-garage.st-full .m-bg { stroke: var(--bad); }
-.marker-garage.st-full .m-count { fill: var(--bad); }
-.marker.is-selected .m-bg { stroke: var(--orange); stroke-width: 5px; }
+.show-all-lots .marker-lot { display: flex; }
+
+.m-pill { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 15px; background: #fff; border: 2.5px solid var(--maroon); box-shadow: 0 1px 4px rgb(0 0 0 / 0.35); font: 800 14px var(--font); }
+.m-p { color: var(--maroon); }
+.m-count { color: var(--ink); }
+.m-ada { display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px 0 6px; border-radius: 13px; background: var(--ada); color: #fff; font: 800 14px var(--font); }
+.m-ada-icon { width: 16px; height: 16px; color: #fff; }
+.marker-garage.st-open .m-pill { border-color: var(--ok); }
+.marker-garage.st-limited .m-pill { border-color: #c77700; }
+.marker-garage.st-full .m-pill { border-color: var(--bad); }
+.marker-garage.st-full .m-count { color: var(--bad); }
+
+.m-dot { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: #fff; border: 2.5px solid var(--maroon); box-shadow: 0 1px 3px rgb(0 0 0 / 0.35); color: var(--maroon); font: 800 12px var(--font); }
+.m-ada-dot { width: 17px; height: 17px; padding: 2px; border-radius: 999px; background: var(--ada); color: #fff; margin-left: -8px; margin-top: -14px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.35); }
+
+.marker.is-selected .m-pill, .marker.is-selected .m-dot { border-color: var(--orange); border-width: 3px; }
 .marker:focus-visible { outline: none; }
-.marker:focus-visible .m-bg { stroke: var(--orange); stroke-width: 5px; }
+.marker:focus-visible .m-pill, .marker:focus-visible .m-dot { box-shadow: 0 0 0 3px var(--orange); }
+
+.cat-academic { background: var(--cat-academic); }
+.cat-residential { background: var(--cat-residential); }
+.cat-support { background: var(--cat-support); }
+.cat-athletic { background: var(--cat-athletic); }
 
 .legend { position: absolute; left: 8px; right: 8px; bottom: 8px; background: rgb(255 255 255 / 0.95); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); font-size: 12px; }
 .legend-toggle { width: 100%; text-align: left; border: 0; background: none; padding: 6px 12px; min-height: 32px; font-weight: 700; color: var(--maroon); }
@@ -154,6 +155,11 @@ path.is-selected { stroke: var(--orange) !important; stroke-width: 3px !importan
 .facts div { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; font-weight: 700; }
+/* Longer, sentence-length values (permit rules, addresses): stack label over value instead of a tight row. */
+.facts-stack { display: grid; gap: 12px; margin: 10px 0; }
+.facts-stack div { border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.facts-stack dt { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+.facts-stack dd { margin: 0; font-weight: 600; }
 .ada-note { display: grid; gap: 6px; justify-items: start; background: #eaf0fd; border: 1px solid #b8ccf5; border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
 .no-ada { color: var(--muted); margin: 10px 0; }
 .fine { color: var(--muted); font-size: 12.5px; margin-top: 12px; }

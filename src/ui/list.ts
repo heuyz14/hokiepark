@@ -1,6 +1,6 @@
 import { GARAGES, LOTS } from "../data/index.ts";
 import type { Selection } from "../types.ts";
-import { garageStatus, garageTotals, lotSummary } from "../lib/occupancy.ts";
+import { garageStatus, garageTotals, lotStatus, lotSummary } from "../lib/occupancy.ts";
 import { filterByName } from "../lib/search.ts";
 import { sameSelection } from "../state.ts";
 import { adaBadge } from "./badge.ts";
@@ -43,7 +43,7 @@ export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selectio
       const t = garageTotals(g);
       return row("garage", g.id, g.name, `Garage &middot; ${t.open} of ${t.capacity} open`, `${statusPill(garageStatus(g))}${adaBadge({ count: t.adaOpen, muted: t.adaOpen === 0 })}`);
     });
-    const lRows = lots.map((l) => row("lot", l.id, l.name, esc(lotSummary(l)), l.hasADA ? adaBadge({ label: "ADA" }) : ""));
+    const lRows = lots.map((l) => row("lot", l.id, l.name, lotSummary(l), `${statusPill(lotStatus(l))}${l.hasADA ? adaBadge({ label: "ADA" }) : ""}`));
     results.innerHTML =
       (gRows.length ? `<h2 class="list-h">Garages <span>${gRows.length}</span></h2><ul class="rows">${gRows.join("")}</ul>` : "") +
       (lRows.length ? `<h2 class="list-h">Lots <span>${lRows.length}</span></h2><ul class="rows">${lRows.join("")}</ul>` : "");
