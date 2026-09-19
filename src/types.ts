@@ -1,3 +1,5 @@
+import type { LotClass } from "./lib/permits.ts";
+
 /** A polygon ring as [lon, lat] pairs (GeoJSON order). A footprint may have several rings. */
 export type Ring = [number, number][];
 export type Footprint = Ring[];
@@ -25,10 +27,11 @@ export interface LotGeo {
   footprint: Footprint;
 }
 
-export type PermitType = "Faculty/Staff" | "Commuter" | "Resident" | "Visitor" | "Mixed";
-
 export interface Lot extends LotGeo {
-  permit: PermitType;
+  /** Categories this lot is signed as, from VT's official parking map. Several when a lot is split. */
+  classes: LotClass[];
+  /** True when the class was inferred from map position, not a printed label: never show a confident "yes". */
+  needsConfirm: boolean;
   hasADA: boolean;
   /** Illustrative count of designated accessible spaces (only when hasADA). */
   adaSpaces: number;
@@ -44,6 +47,8 @@ export interface GarageGeo {
 
 export interface GarageLevel {
   label: string;
+  /** What this level is signed as; drives permit eligibility per level. */
+  classes: LotClass[];
   capacity: number;
   occupied: number;
   adaCapacity: number;

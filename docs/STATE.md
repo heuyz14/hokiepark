@@ -83,6 +83,20 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 2. Actions tab -> "Deploy to Pages" -> Run workflow. URL will be `https://<user>.github.io/terraceb/`.
 3. On the iPhone: open the URL in Safari -> Share -> Add to Home Screen.
 
+## Accessibility fix (2026-09-19, this session)
+- Found: the map's SVG building shapes (102 of them) were mouse/touch-only - no keyboard or screen-reader path
+  reached a building's sheet, so the spec's "tap a building -> nearest parking" journey (Section 6) was unreachable
+  without a pointer. The map's own aria-label already said "Use the List tab for a text alternative," but the List
+  only searched garages/lots.
+- Fix: `ui/list.ts` now also searches `BUILDINGS` (only once the user types a query, so the default browse list
+  stays exactly "every garage and lot" per spec Section 6) and renders a "Buildings" section; selecting one reuses
+  the existing generic `Selection` plumbing (fly-to, `.is-selected` highlight, sheet) with no other changes needed.
+  Updated `scripts/smoke.mjs` to assert this path end-to-end (search "burruss" -> select from list -> sheet with 3
+  nearest-parking rows) and to require Node 26 for native `.ts` execution (npm install/build/check/smoke all
+  re-verified: 45/45 tests, typecheck clean, 41/41 smoke checks at 430x900/375x667/1280x800).
+- Environment note: this Mac had no Node/npm installed; installed Node v26.9.0 to `~/.local/node` (no sudo) and
+  added it to `~/.zshrc` PATH with the user's OK.
+
 ## Known cosmetic items (not blocking)
 - At overview zoom the five ADA lot markers can sit on top of a nearby landmark label (e.g. "Squires Student Center", "Newman Library").
 - Some lot polygons are thin slivers (Drillfield roads) and draw as stray blue lines when ADA-flagged; this is real GIS geometry.

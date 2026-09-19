@@ -2,6 +2,7 @@ import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
 import type { Garage, Lot, SelectionKind } from "../types.ts";
 import { formatMeters, nearest, walkMinutes } from "./nearby.ts";
 import { garageStatus, garageTotals, levelStatus, openAdaSpaces, openSpaces, STATUS_LABEL } from "./occupancy.ts";
+import { classSummary, canPark } from "./permits.ts";
 
 /**
  * Deterministic parking assistant (Phase 4). It answers ONLY from BUILDINGS/LOTS/GARAGES through the
@@ -86,7 +87,7 @@ function adaAnswer(place: Place | null): Answer {
   const adaGarages = nearest(GARAGES.filter((g) => garageTotals(g).adaOpen > 0), from, 1);
   lines.push(place ? `Accessible parking near ${place.name}:` : "Accessible parking on campus:");
   for (const { item, meters } of adaLots) {
-    lines.push(`- ${item.name} lot: ${place ? distText(meters) + ", " : ""}${item.adaSpaces} designated accessible spaces (${item.permit} permit).`);
+    lines.push(`- ${item.name} lot: ${place ? distText(meters) + ", " : ""}${item.adaSpaces} designated accessible spaces (${classSummary(item.classes)}).`);
     refs.push(ref("lot", item.id, `${item.name} lot`));
   }
   for (const { item, meters } of adaGarages) {
@@ -110,7 +111,7 @@ function nearestAnswer(place: Place): Answer {
   }
   for (const g of fullGarages) lines.push(`- ${g.name} is full right now.`);
   for (const { item, meters } of nearest(LOTS, place, 2)) {
-    lines.push(`- ${item.name} lot (${item.permit} permit${item.hasADA ? ", accessible spaces" : ""}) - ${distText(meters)}.`);
+    lines.push(`- ${item.name} lot (${classSummary(item.classes)}${item.hasADA ? ", accessible spaces" : ""}) - ${distText(meters)}.`);
     refs.push(ref("lot", item.id, `${item.name} lot`));
   }
   lines.push(lotNote);
@@ -139,7 +140,7 @@ function placeStatusAnswer(place: Place): Answer {
   if (place.kind === "lot") {
     const l = LOTS.find((x) => x.id === place.id) as Lot;
     return {
-      lines: [`${l.name} lot: ${l.permit} permit, status ${l.status}${l.hasADA ? `, ${l.adaSpaces} designated accessible spaces` : ", no designated accessible spaces"}.`, lotNote],
+      lines: [`${l.name} lot: ${classSummary(l.classes)}, status ${l.status}${l.hasADA ? `, ${l.adaSpaces} designated accessible spaces` : ", no designated accessible spaces"}.`, lotNote],
       refs: [ref("lot", l.id, `${l.name} lot`)],
     };
   }
@@ -147,12 +148,12 @@ function placeStatusAnswer(place: Place): Answer {
 }
 
 function visitorAnswer(): Answer {
-  const lots = LOTS.filter((l) => l.permit === "Visitor" || l.permit === "Mixed");
+  const lots = LOTS.filter((l) => l.classes.some((c) => canPark(c, "visitor").verdict === "yes"));
   const levels = GARAGES.flatMap((g) => g.levels.filter((l) => /visitor/i.test(l.label)).map((l) => ({ g, l })));
   return {
     lines: [
       "Visitor-friendly parking:",
-      ...lots.map((l) => `- ${l.name} lot (${l.permit} permit)`),
+      ...lots.map((l) => `- ${l.name} lot (${classSummary(l.classes)})`),
       ...levels.map(({ g, l }) => `- ${g.name}, ${l.label}: ${openSpaces(l)} open`),
       lotNote,
     ],

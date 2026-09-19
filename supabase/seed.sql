@@ -3,12 +3,12 @@
 insert into public.garage_levels (garage_id, level_index, label, capacity, occupied, ada_capacity, ada_occupied)
 values
   ('perry-street', 0, 'Level 1 - Commuter & graduate', 120, 120, 6, 6),
-  ('perry-street', 1, 'Level 2 - Faculty, staff & visitor', 140, 112, 6, 3),
-  ('perry-street', 2, 'Level 3 - Faculty, staff & visitor', 140, 131, 4, 4),
+  ('perry-street', 1, 'Level 2 - Faculty & staff', 140, 112, 6, 3),
+  ('perry-street', 2, 'Level 3 - Faculty & staff', 140, 131, 4, 4),
   ('perry-street', 3, 'Level 4 - Faculty & staff', 140, 96, 4, 1),
   ('perry-street', 4, 'Level 5 - Faculty & staff (roof)', 110, 58, 2, 2),
-  ('north-end-center', 0, 'Level 1 - Commuter & graduate', 90, 82, 5, 5),
-  ('north-end-center', 1, 'Level 2 - Commuter', 110, 79, 4, 2),
+  ('north-end-center', 0, 'Level 1 - Faculty, staff & visitor', 90, 82, 5, 5),
+  ('north-end-center', 1, 'Level 2 - Faculty, staff & visitor', 110, 79, 4, 2),
   ('north-end-center', 2, 'Level 3 - Faculty, staff & visitor', 110, 44, 3, 3),
   ('north-end-center', 3, 'Level 4 - Faculty, staff & visitor (roof)', 95, 21, 2, 2)
 on conflict (garage_id, level_index) do update set

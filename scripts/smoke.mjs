@@ -140,7 +140,17 @@ await ev(`(()=>{const i=document.getElementById('list-q');i.value='squ';i.dispat
 const rows = await ev(`document.querySelectorAll('#list-results .row').length`);
 check("search 'squ' narrows list", rows >= 1 && rows < 5, `rows=${rows}`);
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='zzzz';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
-check("no-match empty state", (await ev(`document.querySelector('#list-results .state-msg')?.textContent`))?.includes("No garages or lots match"));
+check("no-match empty state", (await ev(`document.querySelector('#list-results .state-msg')?.textContent`))?.includes("No garages, lots, or buildings match"));
+// keyboard/screen-reader path to a building: the map's SVG shapes aren't individually
+// tab-reachable (102 of them), so the list search is the only non-pointer way in.
+await ev(`(()=>{const i=document.getElementById('list-q');i.value='burruss';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+check("building search finds Burruss Hall", (await ev(`document.querySelector('#list-results .row[data-kind="building"][data-id="b0176"] strong')?.textContent`)) === "Burruss Hall");
+await shot("5b-building-search");
+await click('#list-results .row[data-kind="building"][data-id="b0176"]');
+await sleep(900);
+check("building selected from list opens its sheet with nearest parking", (await ev(`document.getElementById('sheet-title')?.textContent`)) === "Burruss Hall" && (await ev(`document.querySelectorAll('#sheet .rows li').length`)) === 3);
+await click('#sheet [data-close]');
+await click('.tabbar [data-view="list"]'); // selecting from the list switches to Map; come back
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
 const before = await ev(`document.querySelector('.map-svg').getAttribute('viewBox')`);
 await click('#list-results .row[data-id="lot-coliseum-west"]');

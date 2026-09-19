@@ -22,15 +22,15 @@ test("availability thresholds: full at 0, limited under 10%, else open", () => {
 test("garageTotals sums levels", () => {
   const t = garageTotals(
     g([
-      { label: "1", capacity: 100, occupied: 100, adaCapacity: 5, adaOccupied: 5 },
-      { label: "2", capacity: 50, occupied: 20, adaCapacity: 3, adaOccupied: 1 },
+      { label: "1", classes: [], capacity: 100, occupied: 100, adaCapacity: 5, adaOccupied: 5 },
+      { label: "2", classes: [], capacity: 50, occupied: 20, adaCapacity: 3, adaOccupied: 1 },
     ]),
   );
   assert.deepEqual(t, { capacity: 150, occupied: 120, open: 30, adaCapacity: 8, adaOpen: 2 });
 });
 
 test("a garage at zero open spaces is full and reads '0 of N open'", () => {
-  const full = g([{ label: "1", capacity: 10, occupied: 10, adaCapacity: 1, adaOccupied: 1 }]);
+  const full = g([{ label: "1", classes: [], capacity: 10, occupied: 10, adaCapacity: 1, adaOccupied: 1 }]);
   assert.equal(garageStatus(full), "full");
   assert.equal(levelStatus(full.levels[0]!), "full");
   assert.equal(garageSummary(full), "0 of 10 open, 0 accessible open");

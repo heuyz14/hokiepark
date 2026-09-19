@@ -1,4 +1,5 @@
 import type { Selection } from "./types.ts";
+import type { PermitId } from "./lib/permits.ts";
 
 export type View = "map" | "list" | "ask";
 
@@ -8,6 +9,10 @@ export interface State {
   /** Where the selection came from. Only non-map sources trigger the fly-to animation. */
   source: "map" | "list" | "sheet" | "assistant" | null;
   query: string;
+  /** Permits the driver says they hold. Empty = no filtering, show everything unjudged. */
+  permits: PermitId[];
+  /** State-issued accessible plate or placard. */
+  ada: boolean;
 }
 
 type Listener = (next: State, prev: State) => void;
