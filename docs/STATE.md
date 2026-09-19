@@ -83,6 +83,22 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 2. Actions tab -> "Deploy to Pages" -> Run workflow. URL will be `https://<user>.github.io/terraceb/`.
 3. On the iPhone: open the URL in Safari -> Share -> Add to Home Screen.
 
+## Permit filter (2026-09-19, this session)
+Source: VT Parking Services' **2026-27 Parking Quick Guide** PDF (rules) + its official campus parking map (lot
+colours). Replaces the invented `Lot.permit` field, which was wrong in ways that would have caused citations
+(Owens/Dietrick were labelled "Resident" but are F/S 24-hour; Stadium was "Commuter" but is Any University Permit).
+- `lib/permits.ts` - `LotClass` (map legend categories) x `PermitId` (what you bought) -> `yes | no | check`, every
+  rule citing the Guide line it came from. 18 unit tests in `tests/permits.test.ts`.
+- **`check` is a first-class verdict**: graduate-only spaces, visitor access to Perry, and the 4 lots whose names
+  aren't printed on VT's map (Bookstore, Torgersen, Durham, Pamplin - `needsConfirm: true`) never return a confident
+  "yes". A wrong yes is a $35-$300 ticket, so uncertainty is shown, not guessed.
+- UI: permit chooser (top-left of the map, multi-select + ADA credential toggle, persisted to localStorage);
+  verdict banner on lot/garage sheets; "Permit not valid"/"Check sign" tags in the list; ineligible lots dimmed
+  on the map and eligible ones ringed green.
+- Live data: permit classes are signage, NOT sensor data - `occupancy-remote.ts` re-attaches them from
+  `SEED_LEVELS` by level index, so a Supabase update can never change who may park somewhere.
+- **NEEDS A HUMAN CHECK:** the 4 inferred lots above, against parking.vt.edu.
+
 ## Accessibility fix (2026-09-19, this session)
 - Found: the map's SVG building shapes (102 of them) were mouse/touch-only - no keyboard or screen-reader path
   reached a building's sheet, so the spec's "tap a building -> nearest parking" journey (Section 6) was unreachable
