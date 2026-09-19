@@ -5,7 +5,16 @@
  * Selection is rule-based so it is reproducible, not the spec's hand-picked 92:
  *   buildings: four VT categories, existing, inside CORE_BOX, footprint >= MIN_AREA,
  *              plus LANDMARK_NUMS regardless of box. Multi-part buildings are merged by bldg_num.
- *   lots:      the curated CAMPUS_LOTS list below (grouped by lot name, polygons merged).
+ *   lots:      every "Main Campus"-precinct lot in VT's own ParkingLots layer (polygons merged
+ *              by name), i.e. all of them - minus EXCLUDED_LOTS, which are literally driveways/
+ *              loading docks caught in the same layer, not places a driver would park; and minus
+ *              REMOTE_LOTS, real lots that are still miles from the walkable campus this app (and
+ *              its BUILDINGS list) models - the airport (~1.4 mi SE) and the Plantation Road
+ *              research farm (~1 mi S) - where "nearest building, N min walk" would be nonsense.
+ *              "CRC" precinct (~17 lots) is Corporate Research Center, a satellite office park
+ *              ~1.5 mi south with the same problem, so it's left out along with it.
+ *              `Shape__Area` (real GIS polygon area, sq ft) is carried through so lots.ts can
+ *              derive a realistic capacity per lot instead of guessing dozens of numbers by hand.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import type { Building, BuildingCategory, Footprint, GarageGeo, LotGeo, Ring } from "../src/types.ts";
@@ -28,6 +37,7 @@ interface LotAttrs {
   lot_number: number | null;
   status: string | null;
   precinct: string | null;
+  Shape__Area: number;
 }
 
 const CORE_BOX = { latMin: 37.2215, latMax: 37.2335, lonMin: -80.4265, lonMax: -80.416 };
@@ -43,21 +53,19 @@ const CATEGORY: Record<string, BuildingCategory> = {
   "Support Facilities": "support",
   Athletic: "athletic",
 };
-/** Spec Section 5/7 landmark names first, then other recognizable main-campus lots (19 total). */
-const CAMPUS_LOTS = [
-  "Squires", "Coliseum West", "Bookstore", "Drillfield North", "Stanger St. ADA",
-  "Drillfield South", "Graduate Life Center West", "Owens", "Torgersen", "Stadium",
-  "Alumni Mall North", "Alumni Mall South", "Dietrick", "Ag Quad", "Engel",
-  "Durham", "Lower Stanger", "Upper Stanger", "Pamplin",
-];
+/** GIS entries that are driveways/loading docks, not a place a driver would park. */
+const EXCLUDED_LOTS = new Set([
+  "Cowgill Service Drive", "Career Services Service Drive", "Pritchard Service Drive",
+  "Litton Reaves Service Drive", "Hitt Hall Service and Loading Dock",
+]);
+/** Real VT lots, but miles from the walkable campus (see file header). */
+const REMOTE_LOTS = new Set(["Airport Hangar", "Airport Terminal", "Plantation Research"]);
 
 const read = <A>(f: string) =>
   (JSON.parse(readFileSync(new URL(`../data/raw/${f}`, import.meta.url), "utf8")) as { features: EsriFeature<A>[] }).features;
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-const titleCase = (s: string) =>
-  s.replace(/\w\S*/g, (w) => (/^[A-Z]{2,4}$/.test(w) && w !== w.toLowerCase() && w.length <= 3 ? w : w[0]!.toUpperCase() + w.slice(1).toLowerCase()));
 
 function footprintOf(fs: EsriFeature<unknown>[]): Footprint {
   return fs.flatMap((f) => f.geometry?.rings ?? []).map((r) => r.map(([x, y]) => [round(x), round(y)] as [number, number]));
@@ -106,13 +114,17 @@ garages.sort((a, b) => a.name.localeCompare(b.name));
 // --- lots ---
 const rawLots = read<LotAttrs>("parkinglots.raw.json").filter((f) => f.geometry && f.attributes.precinct === "Main Campus");
 const byName = groupBy(rawLots, (f) => f.attributes.lot_name ?? "");
-const lots: LotGeo[] = CAMPUS_LOTS.map((name) => {
-  const parts = byName.get(name);
-  if (!parts) throw new Error(`Lot not found in GIS data: ${name}`);
-  const fp = footprintOf(parts);
-  const a = parts[0]!.attributes;
-  return { id: `lot-${slug(name)}`, name: titleCase(name).replace(/\bAda\b/, "ADA"), number: a.lot_number, status: a.status ?? "Unknown", ...centroid(fp), footprint: fp };
-});
+const lots: LotGeo[] = [...byName.keys()]
+  .filter((name) => name && !EXCLUDED_LOTS.has(name) && !REMOTE_LOTS.has(name))
+  .map((name) => {
+    const parts = byName.get(name)!;
+    const fp = footprintOf(parts);
+    const a = parts[0]!.attributes;
+    const areaSqFt = parts.reduce((s, p) => s + p.attributes.Shape__Area, 0);
+    // VT's own lot_name is already correctly cased (McComas, CMMID/COHR, WARE Lab, ...); don't reprocess it.
+    return { id: `lot-${slug(name)}`, name, number: a.lot_number, status: a.status ?? "Unknown", ...centroid(fp), footprint: fp, areaSqFt: Math.round(areaSqFt) };
+  })
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 const out = (f: string, v: unknown) => writeFileSync(new URL(`../src/data/${f}`, import.meta.url), JSON.stringify(v));
 out("buildings.json", buildings);

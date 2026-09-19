@@ -35,7 +35,9 @@ interface Place {
 }
 
 const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-const STOP = new Set(["hall", "center", "centre", "student", "the", "of", "and", "building", "lot", "garage", "parking", "street", "st", "wing", "east", "north", "south", "west"]);
+// "visitor(s)" is stopped alongside "student" so a real lot name that happens to contain it (e.g.
+// "Old Visitors Center") doesn't hijack the generic "where can visitors park?" intent (see assistant.test.ts).
+const STOP = new Set(["hall", "center", "centre", "student", "visitor", "visitors", "the", "of", "and", "building", "lot", "garage", "parking", "street", "st", "wing", "east", "north", "south", "west"]);
 const sigTokens = (name: string) => norm(name).split(" ").filter((t) => t.length >= 3 && !STOP.has(t));
 
 /** Best place mentioned in the question: most matching distinctive name tokens wins; `prefer` breaks ties. */
@@ -76,7 +78,7 @@ const adaLevels = (g: Garage) =>
     .filter((l) => openAdaSpaces(l) > 0)
     .map((l) => `${l.label.split(" - ")[0]}: ${openAdaSpaces(l)}`)
     .join(", ");
-const lotNote = "Live space counts aren't tracked for lots, so this is permit and accessibility info only.";
+const lotNote = "Lot space counts are demo data too, not from live sensors.";
 const ref = (kind: SelectionKind, id: string, label: string): AnswerRef => ({ kind, id, label });
 
 function adaAnswer(place: Place | null): Answer {

@@ -124,15 +124,17 @@ test("a garage is usable when any single level is", () => {
 
 // --- The real data, checked against the printed map ---
 
-test("every lot carries at least one class, and inferred ones are flagged", () => {
-  assert.equal(LOTS.length, 19);
+test("all expanded lots are present; verified map lots carry classes and unknown ones are flagged", () => {
+  assert.equal(LOTS.length, 85);
   for (const l of LOTS) {
-    assert.ok(l.classes.length >= 1, `${l.id} has no permit class`);
     assert.equal(typeof l.needsConfirm, "boolean");
+    if (!l.classes.length) assert.equal(l.needsConfirm, true, `${l.id}: an unknown class must require confirmation`);
   }
-  // The four whose names aren't printed on VT's map.
-  const inferred = LOTS.filter((l) => l.needsConfirm).map((l) => l.id).sort();
-  assert.deepEqual(inferred, ["lot-bookstore", "lot-durham", "lot-pamplin", "lot-torgersen"]);
+  assert.equal(LOTS.filter((l) => l.classes.length > 0).length, 19);
+  assert.equal(LOTS.filter((l) => l.classes.length === 0).length, 66);
+  for (const id of ["lot-bookstore", "lot-durham", "lot-pamplin", "lot-torgersen"]) {
+    assert.equal(LOTS.find((l) => l.id === id)!.needsConfirm, true);
+  }
 });
 
 test("lots read off the map keep the category VT printed", () => {

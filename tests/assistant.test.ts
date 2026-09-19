@@ -38,8 +38,8 @@ test("ACCEPTANCE 2: accessible parking near Cassell Coliseum - names Coliseum We
   assert.match(t, /Coliseum West lot/);
   assert.ok(t.includes(`${lot.adaSpaces} designated accessible spaces`));
   assert.ok(a.refs.some((r) => r.id === "lot-coliseum-west"));
-  // must be honest that lots have no live counts
-  assert.match(t, /aren't tracked for lots/);
+  // must be honest that lot counts are demo data, not live sensors
+  assert.match(t, /demo data too, not from live sensors/);
 });
 
 test("ACCEPTANCE 3: which garage has the most open spots - picks the true maximum and lists both", () => {
@@ -55,7 +55,7 @@ test("garage status answer lists every level with the same counts the sheet show
   const perry = GARAGES.find((g) => g.id === "perry-street")!;
   const t = text("is Perry Street Garage full?");
   for (const l of perry.levels) assert.ok(t.includes(l.label), `missing ${l.label}`);
-  assert.match(t, /Level 1 - Commuter & graduate: 0 open of 120 \(Full\)/);
+  assert.match(t, /Level 1 - Commuter & graduate: 0 open of 250 \(Full\)/);
 });
 
 test("lot status answer includes permit and ADA flag", () => {

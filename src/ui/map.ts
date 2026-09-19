@@ -1,8 +1,8 @@
+import * as maplibregl from "maplibre-gl";
 import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
-import { DRILLFIELD, DRILLFIELD_CENTER } from "../data/drillfield.ts";
-import type { Footprint, Selection } from "../types.ts";
-import { footprintToPath, makeProjector, type Projector } from "../lib/projection.ts";
-import { centeredOn, clamp, easeInOutCubic, fitAspect, lerpBox, panBy, zoomAt, type ViewBox } from "../lib/viewport.ts";
+import { DRILLFIELD_CENTER } from "../data/drillfield.ts";
+import type { Building, Footprint, Garage, Lot, Selection } from "../types.ts";
+import { footprintBounds, footprintToGeoJSON } from "../lib/geojson.ts";
 import { garageStatus, garageTotals } from "../lib/occupancy.ts";
 import { classSummary, garageAccess, lotAccess, type PermitId } from "../lib/permits.ts";
 import { esc } from "./format.ts";
@@ -14,317 +14,294 @@ export interface MapController {
   reset(): void;
   /** Re-read garage counts (after a live update) and update the markers in place. */
   refreshGarages(): void;
-  /** Dim whatever the driver's permits don't cover. Empty permits = no dimming. */
+  /** Dim locations the driver's selected permits do not cover. */
   setPermits(permits: PermitId[], ada: boolean): void;
 }
 
+/** Free, no-API-key vector basemap (OpenFreeMap, openfreemap.org) rendered by MapLibre GL JS -
+ * a real, Google/Apple-Maps-style map underneath our own VT-specific data layers on top. */
+const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 /** Labeled at every zoom; chosen to be far enough apart not to collide at full-campus view. */
 const LANDMARKS = new Set(["Burruss Hall", "Squires Student Center", "Newman Library", "Lane Stadium", "Cassell Coliseum", "War Memorial Gymnasium"]);
-/** Screen-space room kept around the campus at full view so edge markers (100 px pill) are not clipped. */
-const EDGE_PAD_PX = 62;
-const MAX_ZOOM = 14;
-const FLY_MS = 450;
-const TAP_SLOP_PX = 6;
+/** Zoom level from which individual (non-ADA) lot pins appear; below it only garages + ADA lots show, decluttering the full-campus view. */
+const LOT_DECLUTTER_ZOOM = 16.3;
+/** The bottom sheet covers roughly this share of the map view when open. */
+const SHEET_FRACTION = 0.45;
+const MAX_FIT_ZOOM = 18.5;
+const LOAD_TIMEOUT_MS = 9000;
 
-interface Anchor {
-  x: number;
-  y: number;
-  /** Footprint width in meters; drives the fly-to zoom level. */
-  size: number;
+// Same tokens as styles.css's :root (kept in sync by hand - GL paint expressions can't read CSS custom properties).
+const CAT_COLOR: Record<Building["category"], string> = { academic: "#8b2346", residential: "#86aedb", support: "#cdb891", athletic: "#f4b48a" };
+const LOT_FILL = "#c9c3b7";
+const LOT_ADA_FILL = "#b9cdf2";
+const LOT_LINE = "#9c9384";
+const ADA_COLOR = "#0b4fd0";
+const GARAGE_FILL = "#3d3036";
+const ORANGE = "#e5751f";
+const MAROON = "#861f41";
+
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+const key = (kind: string, id: string) => `${kind}:${id}`;
+
+function unionBounds(all: [[number, number], [number, number]][]): [[number, number], [number, number]] {
+  const lons = all.flatMap((b) => [b[0][0], b[1][0]]);
+  const lats = all.flatMap((b) => [b[0][1], b[1][1]]);
+  return [
+    [Math.min(...lons), Math.min(...lats)],
+    [Math.max(...lons), Math.max(...lats)],
+  ];
 }
 
-const bounds = (pts: { x: number; y: number }[]) => {
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+function toFeatureCollection<T extends { id: string; footprint: Footprint }>(items: T[], props: (item: T) => Record<string, unknown>): GeoJSON.FeatureCollection {
+  return { type: "FeatureCollection", features: items.map((item) => ({ type: "Feature", geometry: footprintToGeoJSON(item.footprint), properties: { id: item.id, ...props(item) } })) };
+}
+
+const wheelchairIcon = (cls: string) => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-wheelchair"/></svg>`;
+
+const garageLabel = (g: Garage) => {
+  const t = garageTotals(g);
+  return `${g.name}: ${t.open} of ${t.capacity} spaces open, ${t.adaOpen} accessible open`;
 };
 
-const project = (fp: Footprint, p: Projector) => fp.flat().map(([lon, lat]) => p(lat, lon));
+function garageMarkerHtml(g: Garage): string {
+  const t = garageTotals(g);
+  const st = garageStatus(g);
+  const count = st === "full" ? "Full" : String(t.open);
+  return `<span class="m-pill"><span class="m-p">P</span><span class="m-count">${esc(count)}</span></span>
+    <span class="m-ada">${wheelchairIcon("m-ada-icon")}<span class="m-ada-count">${t.adaOpen}</span></span>`;
+}
 
-function wheelchairMini(x: number, y: number, size: number): string {
-  return `<use href="#i-wheelchair" x="${x}" y="${y}" width="${size}" height="${size}"/>`;
+function lotMarkerHtml(l: Lot): string {
+  return `<span class="m-dot">P</span>${l.hasADA ? wheelchairIcon("m-ada-dot") : ""}`;
+}
+
+/** No-op controller returned when the map can't be created at all (e.g. no WebGL2 support), so a
+ * broken map never crashes the rest of the app - main.ts keeps working with the list and assistant. */
+const NOOP_CONTROLLER: MapController = { setSelection() {}, zoom() {}, reset() {}, refreshGarages() {}, setPermits() {} };
+
+function showMapProblem(el: HTMLElement, message: string) {
+  el.innerHTML = `<div class="map-offline"><p>${esc(message)}</p><button type="button" data-retry>Try again</button></div>`;
+  el.querySelector("[data-retry]")?.addEventListener("click", () => location.reload());
 }
 
 export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): MapController {
-  const proj = makeProjector(DRILLFIELD_CENTER);
-  const anchors = new Map<string, Anchor>();
-  const key = (kind: string, id: string) => `${kind}:${id}`;
-  const allPts: { x: number; y: number }[] = [];
-
-  const register = (kind: string, id: string, lat: number, lon: number, fp: Footprint) => {
-    const pts = project(fp, proj);
-    allPts.push(...pts);
-    const b = bounds(pts);
-    const c = proj(lat, lon);
-    anchors.set(key(kind, id), { x: c.x, y: c.y, size: b.maxX - b.minX });
-    return c;
-  };
-
-  const lotsSvg = LOTS.map((l) => {
-    register("lot", l.id, l.lat, l.lon, l.footprint);
-    return `<path class="lot${l.hasADA ? " lot-ada" : ""}" data-kind="lot" data-id="${l.id}" d="${footprintToPath(l.footprint, proj)}"><title>${esc(l.name)} lot</title></path>`;
-  }).join("");
-
-  const buildingsSvg = BUILDINGS.map((b) => {
-    register("building", b.id, b.lat, b.lon, b.footprint);
-    return `<path class="bldg cat-${b.category}" data-kind="building" data-id="${b.id}" d="${footprintToPath(b.footprint, proj)}"><title>${esc(b.name)}</title></path>`;
-  }).join("");
-
-  const garagePathsSvg = GARAGES.map((g) => {
-    register("garage", g.id, g.lat, g.lon, g.footprint);
-    return `<path class="garage" data-kind="garage" data-id="${g.id}" d="${footprintToPath(g.footprint, proj)}"><title>${esc(g.name)}</title></path>`;
-  }).join("");
-
-  const labelsSvg = BUILDINGS.map((b) => {
-    const a = anchors.get(key("building", b.id))!;
-    return `<text class="bldg-label${LANDMARKS.has(b.name) ? " lm" : ""}" data-scale data-x="${a.x.toFixed(1)}" data-y="${a.y.toFixed(1)}" dy="22" text-anchor="middle">${esc(b.name)}</text>`;
-  }).join("");
-
-  const drillAnchor = proj(DRILLFIELD_CENTER.lat, DRILLFIELD_CENTER.lon);
-  allPts.push(...project(DRILLFIELD, proj));
-
-  const garageLabel = (g: (typeof GARAGES)[number]) => {
-    const t = garageTotals(g);
-    return `${g.name}: ${t.open} of ${t.capacity} spaces open, ${t.adaOpen} accessible open`;
-  };
-  const garageMarkers = GARAGES.map((g) => {
-    const a = anchors.get(key("garage", g.id))!;
-    const t = garageTotals(g);
-    const st = garageStatus(g);
-    const count = st === "full" ? "Full" : String(t.open);
-    return `<g class="marker marker-garage st-${st}" data-scale data-kind="garage" data-id="${g.id}" data-x="${a.x.toFixed(1)}" data-y="${a.y.toFixed(1)}" tabindex="0" role="button" aria-label="${esc(garageLabel(g))}">
-      <rect class="m-bg" x="-50" y="-15" width="100" height="30" rx="15"/>
-      <text class="m-p" x="-36" y="5" text-anchor="middle">P</text>
-      <text class="m-count" x="-8" y="5" text-anchor="middle">${count}</text>
-      <rect class="m-ada-bg" x="12" y="-13" width="36" height="26" rx="13"/>
-      ${wheelchairMini(15, -8, 16)}
-      <text class="m-ada-count" x="40" y="5" text-anchor="middle">${t.adaOpen}</text>
-    </g>`;
-  }).join("");
-
-  const lotMarkers = LOTS.map((l) => {
-    const a = anchors.get(key("lot", l.id))!;
-    const label = `${l.name} lot, ${classSummary(l.classes)}${l.hasADA ? ", accessible parking available" : ""}`;
-    return `<g class="marker marker-lot${l.hasADA ? " has-ada" : ""}" data-scale data-kind="lot" data-id="${l.id}" data-x="${a.x.toFixed(1)}" data-y="${a.y.toFixed(1)}" tabindex="0" role="button" aria-label="${esc(label)}">
-      <circle class="m-bg" r="10"/>
-      <text class="m-p" y="4.5" text-anchor="middle">P</text>
-      ${l.hasADA ? `<circle class="m-ada-dot" cx="10" cy="-10" r="8.5"/>${wheelchairMini(4.5, -15.5, 11)}` : ""}
-    </g>`;
-  }).join("");
-
-  // Full extent of all drawn geometry, padded so edge markers are not clipped.
-  const b = bounds(allPts);
-  const pad = Math.max(b.maxX - b.minX, b.maxY - b.minY) * 0.04;
-  const extent: ViewBox = { x: b.minX - pad, y: b.minY - pad, w: b.maxX - b.minX + pad * 2, h: b.maxY - b.minY + pad * 2 };
-
-  el.innerHTML = `<svg class="map-svg" xmlns="http://www.w3.org/2000/svg" viewBox="${extent.x} ${extent.y} ${extent.w} ${extent.h}" role="group" aria-label="Map of Virginia Tech campus parking. Use the List tab for a text alternative.">
-    <path class="drill" d="${footprintToPath(DRILLFIELD, proj)}"/>
-    <text class="drill-label" data-scale data-x="${drillAnchor.x.toFixed(1)}" data-y="${drillAnchor.y.toFixed(1)}" text-anchor="middle">The Drillfield</text>
-    <g>${lotsSvg}</g><g>${buildingsSvg}</g><g>${garagePathsSvg}</g>
-    <g class="labels">${labelsSvg}</g>
-    <g class="markers">${lotMarkers}${garageMarkers}</g>
-  </svg>`;
-  el.removeAttribute("aria-busy");
-
-  const svg = el.querySelector<SVGSVGElement>("svg")!;
-  const scaled = [...svg.querySelectorAll<SVGGraphicsElement>("[data-scale]")];
-
-  let home = extent;
-  let vb = extent;
-  let lastW = -1;
-  let raf = 0;
-  const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  const pxPerMeter = () => (el.clientWidth || 1) / vb.w;
-
-  function setView(next: ViewBox) {
-    vb = next;
-    svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
-    if (Math.abs(vb.w - lastW) > 1e-6) {
-      lastW = vb.w;
-      const s = 1 / pxPerMeter();
-      for (const n of scaled) n.setAttribute("transform", `translate(${n.dataset.x} ${n.dataset.y}) scale(${s.toFixed(4)})`);
-      svg.classList.toggle("show-all-labels", pxPerMeter() > 1.15);
-      // Overview shows only garages + ADA lots; the other lot markers appear once zoomed in (they stay tappable as polygons and in the List).
-      svg.classList.toggle("show-all-lots", pxPerMeter() > 0.6);
-    }
+  const homeBounds = unionBounds([...BUILDINGS, ...LOTS, ...GARAGES].map((x) => footprintBounds(x.footprint)));
+  // Only in the bundle if actually set up by scripts/build.ts; guarded so a non-bundled import (e.g. a future test) never throws.
+  if (typeof __MAPLIBRE_WORKER_SRC__ !== "undefined") {
+    maplibregl.setWorkerUrl(URL.createObjectURL(new Blob([__MAPLIBRE_WORKER_SRC__], { type: "text/javascript" })));
   }
 
-  function cancelFly() {
-    if (raf) cancelAnimationFrame(raf);
-    raf = 0;
+  let map: maplibregl.Map;
+  try {
+    map = new maplibregl.Map({
+      container: el,
+      style: STYLE_URL,
+      bounds: homeBounds,
+      fitBoundsOptions: { padding: 40 },
+      attributionControl: { compact: true },
+      dragRotate: false,
+      touchPitch: false,
+    });
+  } catch (err) {
+    console.warn("map could not be created", err);
+    showMapProblem(el, "This browser can't display the map (WebGL2 is required). Everything else still works.");
+    return NOOP_CONTROLLER;
   }
 
-  function flyTo(target: ViewBox) {
-    cancelFly();
-    if (reduceMotion()) return setView(target);
-    const from = vb;
-    const t0 = performance.now();
-    const step = (now: number) => {
-      const t = clamp((now - t0) / FLY_MS, 0, 1);
-      setView(lerpBox(from, target, easeInOutCubic(t)));
-      raf = t < 1 ? requestAnimationFrame(step) : 0;
-    };
-    raf = requestAnimationFrame(step);
-  }
+  // Read-only hook for scripts/smoke.mjs (the map has no other externally-inspectable state, since
+  // it renders to a single <canvas> rather than one DOM node per feature). Never written to.
+  (window as unknown as { __hokiepark_map?: maplibregl.Map }).__hokiepark_map = map;
 
-  /** View of `width` meters with the anchor placed 30% from the top, clear of the bottom sheet. */
-  const boxFor = (a: Anchor, width: number): ViewBox => {
-    const c = centeredOn(a.x, a.y, width, vb);
-    return { ...c, y: a.y - c.h * 0.3 };
-  };
+  const markerEls = new Map<string, HTMLElement>();
+  let activePermits: PermitId[] = [];
+  let activeAda = false;
+  let ready = false;
+  const pending: (() => void)[] = [];
+  const whenReady = (fn: () => void) => (ready ? fn() : void pending.push(fn));
 
-  // Keep the drawn aspect equal to the container so pointer math stays linear.
-  let sized = false;
-  new ResizeObserver(() => {
-    const w = el.clientWidth;
-    const h = el.clientHeight;
-    if (!w || !h) return; // hidden tab
-    const mPerPx = Math.max(extent.w / w, extent.h / h);
-    const pad = EDGE_PAD_PX * mPerPx;
-    home = fitAspect({ x: extent.x - pad, y: extent.y - pad, w: extent.w + pad * 2, h: extent.h + pad * 2 }, w / h);
-    lastW = -1; // force marker rescale: px-per-meter changed with the container width
-    setView(sized ? { ...vb, h: vb.w / (w / h) } : home);
-    sized = true;
-  }).observe(el);
+  const timeout = setTimeout(() => {
+    if (!ready) showMapProblem(el, "The map needs an internet connection to load.");
+  }, LOAD_TIMEOUT_MS);
 
-  // --- input: drag to pan, pinch/wheel to zoom, tap to select ---
-  const pointers = new Map<number, { x: number; y: number }>();
-  let downTarget: Element | null = null;
-  let moved = false;
-  let start = { x: 0, y: 0 };
-  let pinchDist = 0;
-
-  const selectFrom = (target: Element | null) => {
-    const hit = target?.closest<SVGElement>("[data-kind]");
-    onSelect(hit ? { kind: hit.dataset.kind as "garage" | "lot" | "building", id: hit.dataset.id! } : null);
-  };
-
-  svg.addEventListener("pointerdown", (e) => {
-    cancelFly();
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.size === 1) {
-      downTarget = e.target as Element;
-      moved = false;
-      start = { x: e.clientX, y: e.clientY };
-    } else {
-      moved = true;
-      const [a, c] = [...pointers.values()];
-      pinchDist = Math.hypot(a!.x - c!.x, a!.y - c!.y);
-    }
+  map.on("error", (e) => {
+    if (ready) return; // a stray tile/glyph error after the map is up is not fatal
+    clearTimeout(timeout);
+    console.warn("map failed to load", e.error);
+    showMapProblem(el, "The map needs an internet connection to load.");
   });
 
-  svg.addEventListener("pointermove", (e) => {
-    const prev = pointers.get(e.pointerId);
-    if (!prev) return;
-    const cur = { x: e.clientX, y: e.clientY };
-    pointers.set(e.pointerId, cur);
-    const rect = svg.getBoundingClientRect();
-    if (pointers.size === 1) {
-      if (!moved) {
-        if (Math.hypot(cur.x - start.x, cur.y - start.y) < TAP_SLOP_PX) return;
-        moved = true;
-        svg.setPointerCapture(e.pointerId);
-        svg.classList.add("dragging");
-      }
-      setView(panBy(vb, ((cur.x - prev.x) * vb.w) / rect.width, ((cur.y - prev.y) * vb.h) / rect.height, home));
-    } else if (pointers.size === 2) {
-      const [a, c] = [...pointers.values()];
-      const d = Math.hypot(a!.x - c!.x, a!.y - c!.y);
-      if (pinchDist > 0) {
-        const mx = (a!.x + c!.x) / 2;
-        const my = (a!.y + c!.y) / 2;
-        setView(zoomAt(vb, d / pinchDist, (mx - rect.left) / rect.width, (my - rect.top) / rect.height, home, MAX_ZOOM));
-      }
-      pinchDist = d;
-    }
-  });
-
-  const endPointer = (e: PointerEvent) => {
-    const wasTap = e.type === "pointerup" && pointers.size === 1 && !moved;
-    pointers.delete(e.pointerId);
-    if (pointers.size < 2) pinchDist = 0;
-    if (pointers.size === 0) svg.classList.remove("dragging");
-    if (wasTap) selectFrom(downTarget);
-  };
-  svg.addEventListener("pointerup", endPointer);
-  svg.addEventListener("pointercancel", endPointer);
-
-  svg.addEventListener(
-    "wheel",
-    (e) => {
+  function addMarker(kind: "garage" | "lot", id: string, lon: number, lat: number, className: string, html: string, ariaLabel: string, onClick: () => void): HTMLElement {
+    const div = document.createElement("div");
+    div.className = className;
+    div.innerHTML = html;
+    div.tabIndex = 0;
+    div.setAttribute("role", "button");
+    div.setAttribute("aria-label", ariaLabel);
+    div.dataset.kind = kind;
+    div.dataset.id = id;
+    // Marker elements sit inside MapLibre's canvas container, so a click here also bubbles into
+    // the map's own click handler below (which re-queries whatever's rendered at that pixel and
+    // can overwrite this exact selection, sometimes with null). Stop it here, at the source.
+    div.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    div.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
       e.preventDefault();
-      cancelFly();
-      const rect = svg.getBoundingClientRect();
-      const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));
-      setView(zoomAt(vb, factor, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height, home, MAX_ZOOM));
-    },
-    { passive: false },
-  );
+      e.stopPropagation();
+      onClick();
+    });
+    new maplibregl.Marker({ element: div, anchor: "center" }).setLngLat([lon, lat]).addTo(map);
+    markerEls.set(key(kind, id), div);
+    return div;
+  }
 
-  svg.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    const marker = (e.target as Element).closest("[data-kind]");
-    if (!marker) return;
-    e.preventDefault();
-    selectFrom(marker);
+  map.on("load", () => {
+    ready = true;
+    clearTimeout(timeout);
+    el.removeAttribute("aria-busy");
+
+    map.addSource("buildings", { type: "geojson", data: toFeatureCollection(BUILDINGS, (b) => ({ category: b.category })) });
+    map.addLayer({ id: "buildings-fill", type: "fill", source: "buildings", paint: { "fill-color": ["match", ["get", "category"], "academic", CAT_COLOR.academic, "residential", CAT_COLOR.residential, "support", CAT_COLOR.support, "athletic", CAT_COLOR.athletic, "#999"], "fill-opacity": 0.78 } });
+    map.addLayer({ id: "buildings-outline", type: "line", source: "buildings", paint: { "line-color": "rgba(0,0,0,0.35)", "line-width": 1 } });
+
+    map.addSource("lots", { type: "geojson", data: toFeatureCollection(LOTS, (l) => ({ hasADA: l.hasADA })) });
+    map.addLayer({ id: "lots-fill", type: "fill", source: "lots", paint: { "fill-color": ["case", ["get", "hasADA"], LOT_ADA_FILL, LOT_FILL], "fill-opacity": 0.85 } });
+    map.addLayer({ id: "lots-outline", type: "line", source: "lots", paint: { "line-color": ["case", ["get", "hasADA"], ADA_COLOR, LOT_LINE], "line-width": ["case", ["get", "hasADA"], 1.6, 1] } });
+
+    map.addSource("garages", { type: "geojson", data: toFeatureCollection(GARAGES, () => ({})) });
+    map.addLayer({ id: "garages-fill", type: "fill", source: "garages", paint: { "fill-color": GARAGE_FILL, "fill-opacity": 0.9 } });
+    map.addLayer({ id: "garages-outline", type: "line", source: "garages", paint: { "line-color": "#000", "line-width": 1 } });
+
+    map.addSource("selection", { type: "geojson", data: EMPTY_FC });
+    map.addLayer({ id: "selection-outline", type: "line", source: "selection", paint: { "line-color": ORANGE, "line-width": 4 } });
+
+    const labelPoints: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", geometry: { type: "Point", coordinates: [DRILLFIELD_CENTER.lon, DRILLFIELD_CENTER.lat] }, properties: { name: "The Drillfield" } },
+        ...BUILDINGS.filter((b) => LANDMARKS.has(b.name)).map((b): GeoJSON.Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: { name: b.name } })),
+      ],
+    };
+    map.addSource("labels", { type: "geojson", data: labelPoints });
+    map.addLayer({ id: "labels-text", type: "symbol", source: "labels", layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Bold"], "text-size": 12, "text-anchor": "top", "text-offset": [0, 0.4], "text-optional": true }, paint: { "text-color": MAROON, "text-halo-color": "#fff", "text-halo-width": 1.4 } });
+
+    const HIT_LAYERS = ["garages-fill", "buildings-fill", "lots-fill"];
+    const KIND_BY_LAYER: Record<string, NonNullable<Selection>["kind"]> = { "garages-fill": "garage", "buildings-fill": "building", "lots-fill": "lot" };
+    map.on("click", (e) => {
+      const hits = map.queryRenderedFeatures(e.point, { layers: HIT_LAYERS });
+      const f = hits[0];
+      onSelect(f ? { kind: KIND_BY_LAYER[f.layer.id]!, id: f.properties!.id as string } : null);
+    });
+    map.on("mousemove", (e) => {
+      const hits = map.queryRenderedFeatures(e.point, { layers: HIT_LAYERS });
+      map.getCanvas().style.cursor = hits.length ? "pointer" : "";
+    });
+
+    // Lots first, garages second: a garage's pill is much wider than a lot's dot, and at the
+    // fully-zoomed-out view a lot's fixed-size pin can sit within a nearby garage pill's bounds
+    // (both are constant screen size, so real distance shrinks to a few px when zoomed way out).
+    // Painting garages last keeps the two garages - fewer, and the more prominent target - on top.
+    for (const l of LOTS) {
+      const label = `${l.name} lot, ${classSummary(l.classes) || "permit type unknown"}${l.hasADA ? ", accessible parking available" : ""}`;
+      addMarker("lot", l.id, l.lon, l.lat, `marker marker-lot${l.hasADA ? " has-ada" : ""}`, lotMarkerHtml(l), label, () => onSelect({ kind: "lot", id: l.id }));
+    }
+    for (const g of GARAGES) {
+      addMarker("garage", g.id, g.lon, g.lat, `marker marker-garage st-${garageStatus(g)}`, garageMarkerHtml(g), garageLabel(g), () => onSelect({ kind: "garage", id: g.id }));
+    }
+
+    const applyDeclutter = () => el.classList.toggle("show-all-lots", map.getZoom() >= LOT_DECLUTTER_ZOOM);
+    applyDeclutter();
+    map.on("zoom", applyDeclutter);
+
+    for (const fn of pending.splice(0)) fn();
   });
+
+  function findFootprint(sel: NonNullable<Selection>): Footprint | undefined {
+    if (sel.kind === "garage") return GARAGES.find((g) => g.id === sel.id)?.footprint;
+    if (sel.kind === "lot") return LOTS.find((l) => l.id === sel.id)?.footprint;
+    return BUILDINGS.find((b) => b.id === sel.id)?.footprint;
+  }
+
+  function bottomPadding(): number {
+    // Leave at least 100px of vertical room above it - MapLibre warns (and skips fitting) if
+    // combined padding leaves no space, which can happen on a very short screen or container.
+    return Math.max(0, Math.min(Math.round(el.clientHeight * SHEET_FRACTION), el.clientHeight - 160));
+  }
 
   return {
     setPermits(permits, ada) {
-      const on = permits.length > 0 || ada;
-      svg.classList.toggle("filtering", on);
-      // Mark every lot polygon, lot marker and garage with the verdict; CSS does the dimming.
-      for (const l of LOTS) {
-        const v = on ? lotAccess(l, permits, { ada }).verdict : null;
-        for (const n of svg.querySelectorAll<SVGElement>(`[data-kind="lot"][data-id="${CSS.escape(l.id)}"]`)) {
-          n.classList.remove("acc-yes", "acc-no", "acc-check");
-          if (v) n.classList.add(`acc-${v}`);
-        }
-      }
-      for (const g of GARAGES) {
-        const v = on ? garageAccess(g.levels, permits, { ada }).verdict : null;
-        for (const n of svg.querySelectorAll<SVGElement>(`[data-kind="garage"][data-id="${CSS.escape(g.id)}"]`)) {
-          n.classList.remove("acc-yes", "acc-no", "acc-check");
-          if (v) n.classList.add(`acc-${v}`);
-        }
-      }
+      activePermits = permits;
+      activeAda = ada;
+      whenReady(() => {
+        const on = activePermits.length > 0 || activeAda;
+        el.classList.toggle("filtering", on);
+        const mark = (node: HTMLElement | undefined, verdict: string | null) => {
+          if (!node) return;
+          node.classList.remove("acc-yes", "acc-no", "acc-check");
+          if (verdict) node.classList.add(`acc-${verdict}`);
+        };
+        for (const l of LOTS) mark(markerEls.get(key("lot", l.id)), on ? lotAccess(l, activePermits, { ada: activeAda }).verdict : null);
+        for (const g of GARAGES) mark(markerEls.get(key("garage", g.id)), on ? garageAccess(g.levels, activePermits, { ada: activeAda }).verdict : null);
+
+        (map.getSource("lots") as maplibregl.GeoJSONSource | undefined)?.setData(toFeatureCollection(LOTS, (l) => ({
+          hasADA: l.hasADA,
+          access: on ? lotAccess(l, activePermits, { ada: activeAda }).verdict : "",
+        })));
+        (map.getSource("garages") as maplibregl.GeoJSONSource | undefined)?.setData(toFeatureCollection(GARAGES, (g) => ({
+          access: on ? garageAccess(g.levels, activePermits, { ada: activeAda }).verdict : "",
+        })));
+        map.setPaintProperty("lots-fill", "fill-opacity", on ? ["match", ["get", "access"], "no", 0.24, "check", 0.48, 0.85] : 0.85);
+        map.setPaintProperty("garages-fill", "fill-opacity", on ? ["match", ["get", "access"], "no", 0.24, "check", 0.48, 0.9] : 0.9);
+      });
     },
     setSelection(sel, { fly }) {
-      for (const n of svg.querySelectorAll(".is-selected")) n.classList.remove("is-selected");
-      if (!sel) return;
-      for (const n of svg.querySelectorAll<SVGElement>("[data-kind]")) {
-        if (n.dataset.kind === sel.kind && n.dataset.id === sel.id) n.classList.add("is-selected");
-      }
-      const a = anchors.get(key(sel.kind, sel.id));
-      if (!a) return;
-      // ~3x the footprint so the whole lot/garage plus some context fits; capped for huge lots.
-      const width = clamp(a.size * 3, 200, 520);
-      if (fly) return flyTo(boxFor(a, width));
-      // Tapped on the map: only move if the item is hidden behind the sheet or off-screen.
-      const fx = (a.x - vb.x) / vb.w;
-      const fy = (a.y - vb.y) / vb.h;
-      if (fy > 0.5 || fy < 0.05 || fx < 0.05 || fx > 0.95) flyTo(boxFor(a, Math.min(vb.w, Math.max(width, 260))));
+      whenReady(() => {
+        for (const n of markerEls.values()) n.classList.remove("is-selected");
+        if (!sel) {
+          (map.getSource("selection") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
+          return;
+        }
+        markerEls.get(key(sel.kind, sel.id))?.classList.add("is-selected");
+        const fp = findFootprint(sel);
+        if (!fp) return;
+        (map.getSource("selection") as maplibregl.GeoJSONSource | undefined)?.setData(footprintToGeoJSON(fp));
+        const bounds = footprintBounds(fp);
+        if (fly) {
+          map.fitBounds(bounds, { padding: { top: 60, left: 40, right: 40, bottom: bottomPadding() }, maxZoom: MAX_FIT_ZOOM, duration: 600 });
+          return;
+        }
+        // Tapped directly on the map: only reposition if the sheet is about to cover it.
+        const center = [(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2] as [number, number];
+        const p = map.project(center);
+        if (p.y > el.clientHeight * (1 - SHEET_FRACTION) - 30) {
+          map.easeTo({ center, padding: { top: 60, left: 40, right: 40, bottom: bottomPadding() }, duration: 400 });
+        }
+      });
     },
     zoom(factor) {
-      cancelFly();
-      setView(zoomAt(vb, factor, 0.5, 0.5, home, MAX_ZOOM));
+      whenReady(() => map.easeTo({ zoom: map.getZoom() + Math.log2(factor), duration: 200 }));
     },
     reset() {
-      flyTo(home);
+      whenReady(() => map.fitBounds(homeBounds, { padding: 40, duration: 600 }));
     },
     refreshGarages() {
-      for (const g of GARAGES) {
-        const el = svg.querySelector<SVGGElement>(`.marker-garage[data-id="${g.id}"]`);
-        if (!el) continue;
-        const t = garageTotals(g);
-        const st = garageStatus(g);
-        el.classList.remove("st-open", "st-limited", "st-full");
-        el.classList.add(`st-${st}`);
-        el.setAttribute("aria-label", garageLabel(g));
-        el.querySelector(".m-count")!.textContent = st === "full" ? "Full" : String(t.open);
-        el.querySelector(".m-ada-count")!.textContent = String(t.adaOpen);
-      }
+      whenReady(() => {
+        for (const g of GARAGES) {
+          const div = markerEls.get(key("garage", g.id));
+          if (!div) continue;
+          const t = garageTotals(g);
+          const st = garageStatus(g);
+          const selected = div.classList.contains("is-selected") ? " is-selected" : "";
+          const filtering = activePermits.length > 0 || activeAda;
+          const access = filtering ? ` acc-${garageAccess(g.levels, activePermits, { ada: activeAda }).verdict}` : "";
+          div.className = `marker marker-garage st-${st}${selected}${access}`;
+          div.setAttribute("aria-label", garageLabel(g));
+          div.innerHTML = garageMarkerHtml(g);
+        }
+      });
     },
   };
 }

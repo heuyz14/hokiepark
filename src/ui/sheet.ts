@@ -1,7 +1,7 @@
 import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
 import { GARAGE_NOTE } from "../data/garages.ts";
-import type { Garage, GarageLevel, Lot, Selection } from "../types.ts";
-import { availability, garageStatus, garageTotals, levelStatus, openAdaSpaces, openSpaces } from "../lib/occupancy.ts";
+import type { Garage, GarageLevel, Lot, PracticalInfo, Selection } from "../types.ts";
+import { availability, garageStatus, garageTotals, levelStatus, lotStatus, openAdaSpaces, openSpaces } from "../lib/occupancy.ts";
 import { nearest, walkMinutes } from "../lib/nearby.ts";
 import { classSummary, garageAccess, lotAccess, SIGNAGE_NOTE, VERDICT_LABEL, type Eligibility, type PermitId } from "../lib/permits.ts";
 import { adaBadge } from "./badge.ts";
@@ -54,6 +54,21 @@ function levelRow(l: GarageLevel, showAcc = true): string {
   </li>`;
 }
 
+/** Real facts sourced from VT's own parking pages (see PracticalInfo). Absent on most lots. */
+function infoSection(info: PracticalInfo | undefined): string {
+  if (!info) return "";
+  return `<h3>Good to know</h3>
+    <dl class="facts-stack">
+      <div><dt>Permit rules</dt><dd>${esc(info.permitDetail)}</dd></div>
+      <div><dt>Overnight</dt><dd>${esc(info.overnightParking)}</dd></div>
+      <div><dt>Payment</dt><dd>${esc(info.payment)}</dd></div>
+      <div><dt>Enforcement</dt><dd>${esc(info.enforcement)}</dd></div>
+      <div><dt>Location</dt><dd>${esc(info.location)}</dd></div>
+      ${info.eventNote ? `<div><dt>Events</dt><dd>${esc(info.eventNote)}</dd></div>` : ""}
+    </dl>
+    <p class="fine">Source: ${esc(info.source)}.</p>`;
+}
+
 function garageBody(g: Garage): string {
   const t = garageTotals(g);
   const st = garageStatus(g);
@@ -77,12 +92,15 @@ function garageBody(g: Garage): string {
       </div>
       <h3>By level</h3>
       <ul class="levels">${g.levels.map((l) => levelRow(l, perLevel)).join("")}</ul>
-      <p class="fine">Demo data &mdash; counts are simulated, not from live sensors.</p>
+      ${infoSection(g.info)}
+      <p class="fine">Demo data &mdash; level counts are simulated, not from live sensors. Total capacity is VT's official published figure.</p>
     </div>`
   );
 }
 
 function lotBody(l: Lot): string {
+  const open = openSpaces(l);
+  const st = lotStatus(l);
   const ada = l.hasADA
     ? `<div class="ada-note">${adaBadge({ label: "Accessible parking available" })}<p>${l.adaSpaces} designated accessible spaces (illustrative count).</p></div>`
     : `<p class="no-ada">No designated accessible spaces flagged in this lot.</p>`;
@@ -90,12 +108,17 @@ function lotBody(l: Lot): string {
     head(l.name, `Parking lot${l.number ? ` ${l.number}` : ""}`) +
     `<div class="sheet-body">
       ${held.length || heldAda ? verdictBanner(lotAccess(l, held, { ada: heldAda })) : ""}
+      <div class="summary">
+        <div><span class="big">${open}</span><span class="of"> / ${l.capacity} open</span></div>
+        ${statusPill(st)}
+      </div>
       <dl class="facts">
         <div><dt>Permit</dt><dd>${esc(classSummary(l.classes))}</dd></div>
         <div><dt>Status</dt><dd>${esc(l.status)}</dd></div>
       </dl>
       ${ada}
-      <p class="fine">Live space counts aren't tracked for lots in this demo.</p>
+      ${infoSection(l.info)}
+      <p class="fine">Demo data &mdash; space counts are simulated, not from live sensors.</p>
     </div>`
   );
 }

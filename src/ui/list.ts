@@ -1,6 +1,6 @@
 import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
 import type { Selection } from "../types.ts";
-import { garageStatus, garageTotals, lotSummary } from "../lib/occupancy.ts";
+import { garageStatus, garageTotals, lotStatus, lotSummary } from "../lib/occupancy.ts";
 import { filterByName } from "../lib/search.ts";
 import { sameSelection } from "../state.ts";
 import { adaBadge } from "./badge.ts";
@@ -61,7 +61,7 @@ export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selectio
     });
     const lRows = lots.map((l) => {
       const v = lotAccess(l, held, { ada: heldAda }).verdict;
-      return row("lot", l.id, l.name, esc(lotSummary(l)), `${filtering() ? accTag(v) : ""}${l.hasADA ? adaBadge({ label: "ADA" }) : ""}`, v);
+      return row("lot", l.id, l.name, lotSummary(l), `${filtering() ? accTag(v) : ""}${statusPill(lotStatus(l))}${l.hasADA ? adaBadge({ label: "ADA" }) : ""}`, v);
     });
     const bRows = buildings.map((b) => row("building", b.id, b.name, `${CATEGORY_LABEL[b.category]} &middot; Building ${esc(b.num)}`, ""));
     results.innerHTML =

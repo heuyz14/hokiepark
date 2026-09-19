@@ -2,15 +2,15 @@
 -- Re-running this file resets every level to the bundled sample counts.
 insert into public.garage_levels (garage_id, level_index, label, capacity, occupied, ada_capacity, ada_occupied)
 values
-  ('perry-street', 0, 'Level 1 - Commuter & graduate', 120, 120, 6, 6),
-  ('perry-street', 1, 'Level 2 - Faculty & staff', 140, 112, 6, 3),
-  ('perry-street', 2, 'Level 3 - Faculty & staff', 140, 131, 4, 4),
-  ('perry-street', 3, 'Level 4 - Faculty & staff', 140, 96, 4, 1),
-  ('perry-street', 4, 'Level 5 - Faculty & staff (roof)', 110, 58, 2, 2),
-  ('north-end-center', 0, 'Level 1 - Faculty, staff & visitor', 90, 82, 5, 5),
-  ('north-end-center', 1, 'Level 2 - Faculty, staff & visitor', 110, 79, 4, 2),
-  ('north-end-center', 2, 'Level 3 - Faculty, staff & visitor', 110, 44, 3, 3),
-  ('north-end-center', 3, 'Level 4 - Faculty, staff & visitor (roof)', 95, 21, 2, 2)
+  ('perry-street', 0, 'Level 1 - Commuter & graduate', 250, 250, 12, 12),
+  ('perry-street', 1, 'Level 2 - Faculty & staff', 300, 230, 12, 6),
+  ('perry-street', 2, 'Level 3 - Faculty & staff', 300, 270, 8, 8),
+  ('perry-street', 3, 'Level 4 - Faculty & staff', 300, 190, 8, 2),
+  ('perry-street', 4, 'Level 5 - Faculty & staff (roof)', 200, 100, 4, 4),
+  ('north-end-center', 0, 'Level 1 - Faculty, staff & visitor', 180, 165, 10, 10),
+  ('north-end-center', 1, 'Level 2 - Faculty, staff & visitor', 220, 150, 8, 3),
+  ('north-end-center', 2, 'Level 3 - Faculty, staff & visitor', 220, 90, 6, 6),
+  ('north-end-center', 3, 'Level 4 - Faculty, staff & visitor (roof)', 180, 40, 4, 4)
 on conflict (garage_id, level_index) do update set
   label = excluded.label,
   capacity = excluded.capacity,

@@ -64,7 +64,7 @@ The map is the heart of HokiePark. It's a 2D, top-down, schematic view of Virgin
 
 - **92 real campus buildings**, each shown as a shape positioned and sized to match its real footprint, colored by category using Virginia Tech's own real campus-map color legend: maroon for academic buildings, blue for residential & dining, tan for student-life/support buildings (admin, library, bookstore, chapel, student centers), and peach for athletic facilities.
 - **Parking garages** (Perry Street Garage and North End Center Garage) shown as distinct, tappable landmarks with live-feeling per-floor occupancy.
-- **19 parking lots**, each shown in its real position, tappable for details.
+- **85 parking lots** - every "Main Campus" lot in VT's own ParkingLots GIS layer, not a curated sample - each shown in its real position, tappable for details.
 - **The Drillfield**, VT's iconic central green space, shown as an open field rather than colored like a building, matching how it actually reads on VT's official map.
 - No road lines. An earlier version of the map included road geometry, but roads cluttered the view and weren't necessary for the core task (finding parking), so they were deliberately removed in favor of a cleaner, more "marketable" look that keeps the focus on buildings and parking.
 
@@ -141,7 +141,7 @@ This section explains, in accessible terms, how the current hackathon build work
 
 **The map itself is drawn with SVG** (Scalable Vector Graphics), a format for drawing shapes with code rather than pixels — which is why the map stays crisp at any zoom level and why buildings can be precisely positioned using real coordinate math (see Section 9) rather than a traced image.
 
-**Data model.** Three JavaScript data structures drive everything shown on the map: a `BUILDINGS` list (92 entries, each with a name, category, and position/size), a `LOTS` list (19 static parking lots, including which have ADA spaces), and a `GARAGES` list (the two parking garages, each with per-level capacity, current occupancy, and ADA counts). The map, the detail sheets, the list view, and the AI assistant all read from these same three lists, so everything the user sees stays consistent no matter which part of the app they're looking at.
+**Data model.** Three JavaScript data structures drive everything shown on the map: a `BUILDINGS` list (92 entries, each with a name, category, and position/size), a `LOTS` list (85 static parking lots, including which have ADA spaces), and a `GARAGES` list (the two parking garages, each with per-level capacity, current occupancy, and ADA counts). The map, the detail sheets, the list view, and the AI assistant all read from these same three lists, so everything the user sees stays consistent no matter which part of the app they're looking at.
 
 **Interactivity.** Panning, zooming, and the "fly-to" animation when selecting a garage or lot are handled with custom JavaScript operating directly on the SVG's coordinate system. The detail sheet is a sliding panel driven by the same underlying data objects. The AI assistant uses the Artifact platform's built-in AI-sampling capability (see Section 8) to answer natural-language questions using the app's own data as context.
 
