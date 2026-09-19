@@ -1,6 +1,6 @@
 # HokiePark - current state
 
-_Last updated: 2026-09-19 ~14:15 (Phases 1-5 substantially done and verified; hosting workflow prepared; committed and pushed)._
+_Last updated: 2026-09-19 ~14:35 (Phases 1-5 substantially done and verified; hosting workflow prepared; committed and pushed)._
 Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `../HOKIEPARK_SPEC.md`, `../HokiePark - 6-Hour Build Plan.md`.
 
 ## What this is
@@ -69,7 +69,13 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 2. Actions tab -> "Deploy to Pages" -> Run workflow. URL will be `https://<user>.github.io/terraceb/`.
 3. On the iPhone: open the URL in Safari -> Share -> Add to Home Screen.
 
+## Known cosmetic items (not blocking)
+- At overview zoom the five ADA lot markers can sit on top of a nearby landmark label (e.g. "Squires Student Center", "Newman Library").
+- Some lot polygons are thin slivers (Drillfield roads) and draw as stray blue lines when ADA-flagged; this is real GIS geometry.
+- Drillfield ellipse is an estimate; 102 vs the spec's 92 buildings.
+
 ## Work log
+- 14:15-14:35 Overview declutter (only garages + ADA lot markers until zoomed in), fallback screenshots in `docs/fallback/`.
 - 14:00-14:15 Cross-view number audit + contrast tests + ARCHITECTURE.md + README + Pages workflow.
 - 12:29-12:45 Read spec+plan; confirmed VT ArcGIS reachable; saved raw data; wrote flatten script; spot-checked landmarks.
 - 12:45-13:00 Libs + tests (projection/viewport/occupancy/search/nearby/Drillfield); map, sheet, list, badge, legend, CSS, build script.

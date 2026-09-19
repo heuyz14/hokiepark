@@ -137,6 +137,8 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
       const s = 1 / pxPerMeter();
       for (const n of scaled) n.setAttribute("transform", `translate(${n.dataset.x} ${n.dataset.y}) scale(${s.toFixed(4)})`);
       svg.classList.toggle("show-all-labels", pxPerMeter() > 1.15);
+      // Overview shows only garages + ADA lots; the other lot markers appear once zoomed in (they stay tappable as polygons and in the List).
+      svg.classList.toggle("show-all-lots", pxPerMeter() > 0.6);
     }
   }
 
