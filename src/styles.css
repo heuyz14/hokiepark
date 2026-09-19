@@ -52,7 +52,8 @@ h1, h2, h3, p { margin: 0; }
 .topbar { background: var(--maroon); color: #fff; padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px; border-bottom: 4px solid var(--orange); }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.brand-mark { width: 34px; height: 34px; border-radius: 9px; background: var(--orange); color: var(--maroon-dark); font-weight: 800; font-size: 20px; display: grid; place-items: center; }
+.brand-mark { flex: none; width: 34px; height: 34px; display: grid; place-items: center; }
+.brand-mark svg { display: block; filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.25)); }
 .brand h1 { font-size: 19px; line-height: 1.1; letter-spacing: 0.2px; }
 .brand p { font-size: 12.5px; opacity: 0.92; }
 
