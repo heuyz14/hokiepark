@@ -193,6 +193,30 @@ if (http) {
   check("PWA: app loads OFFLINE from cache", (await ev(`document.querySelectorAll('.bldg').length`)) >= 90);
   await shot("9-offline");
 }
+// ---- Phase 5: cross-view number audit. Marker, list row, sheet, level rows and assistant must agree. ----
+for (const [gid, gname] of [["perry-street", "Perry Street Garage"], ["north-end-center", "North End Center Garage"]]) {
+  await click('.tabbar [data-view="map"]');
+  const m = await ev(`(()=>{const l=document.querySelector('.marker-garage[data-id="${gid}"]').getAttribute('aria-label');const r=l.match(/(\\d+) of (\\d+) spaces open, (\\d+) accessible open/);return r?{open:+r[1],cap:+r[2],ada:+r[3]}:null})()`);
+  check(`audit ${gname}: marker label parsed`, !!m, JSON.stringify(m));
+  if (!m) continue;
+  // list row
+  await click('.tabbar [data-view="list"]');
+  const list = await ev(`(()=>{const b=document.querySelector('#list-results .row[data-id="${gid}"]');return {sub:b.querySelector('.sub').innerText,ada:b.querySelector('.ada').getAttribute('aria-label')}})()`);
+  check(`audit ${gname}: list row matches marker`, list.sub.includes(`${m.open} of ${m.cap} open`) && list.ada === `${m.ada} accessible spaces open`, JSON.stringify(list));
+  // sheet (open from the list, exactly like a user would)
+  await click(`#list-results .row[data-id="${gid}"]`); await sleep(700);
+  const sheet = await ev(`(()=>{const q=(s)=>document.querySelector('#sheet '+s);const lv=[...document.querySelectorAll('#sheet .level')].map(e=>({open:+e.querySelector('.level-bottom strong').innerText,ada:+e.querySelector('.ada').innerText.trim()}));return {big:+q('.big').innerText,of:q('.of').innerText,ada:q('.summary .ada').innerText.trim(),sumOpen:lv.reduce((a,b)=>a+b.open,0),sumAda:lv.reduce((a,b)=>a+b.ada,0)}})()`);
+  check(`audit ${gname}: sheet totals match marker`, sheet.big === m.open && sheet.of.includes(`/ ${m.cap} open`) && sheet.ada.startsWith(String(m.ada)), JSON.stringify(sheet));
+  check(`audit ${gname}: level rows sum to totals`, sheet.sumOpen === m.open && sheet.sumAda === m.ada);
+  // assistant
+  await click('.tabbar [data-view="ask"]');
+  await ev(`document.getElementById('chat-q').value=${JSON.stringify("is " + gname + " full?")}`);
+  await ev(`document.getElementById('chat-form').requestSubmit()`); await sleep(300);
+  const ans = await ev(`[...document.querySelectorAll('#chat-log .msg.bot')].pop().innerText`);
+  check(`audit ${gname}: assistant matches marker`, ans.includes(`${gname}: ${m.open} of ${m.cap} open`) && ans.includes(`${m.ada} accessible open`), JSON.stringify(ans.split("\n")[0]));
+}
+await click('.tabbar [data-view="map"]');
+
 // horizontal overflow check
 check("no horizontal page overflow", (await ev(`document.documentElement.scrollWidth <= window.innerWidth`)));
 

@@ -1,6 +1,6 @@
 # HokiePark - current state
 
-_Last updated: 2026-09-19 ~13:40 (Phases 1-4 + PWA built and browser-verified via CDP smoke run; committed and pushed)._
+_Last updated: 2026-09-19 ~14:15 (Phases 1-5 substantially done and verified; hosting workflow prepared; committed and pushed)._
 Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `../HOKIEPARK_SPEC.md`, `../HokiePark - 6-Hour Build Plan.md`.
 
 ## What this is
@@ -25,7 +25,7 @@ No backend, no database. (AGENTS.md's Supabase/Next.js stack is for the other re
 - Merge (not rebase) `origin/main` before pushing; on conflicts **keep the user's local code**.
 - If push fails with HTTP 400 / "remote end hung up": `git -c http.postBuffer=524288000 push` (large raw GIS JSON exceeds the default 1 MB buffer).
 - `dist/` and `node_modules/` are git-ignored. Never commit `.env` files.
-- **Teammate prototype:** commit `1bb0f36` (Jnhim) added a separate Leaflet-based prototype at the repo root (`index.html`, `parking.js`, `data.js`, `distance.js`, `parking.css`, tests). Different approach (Leaflet tiles from unpkg, permit filter, demo scenarios, 5 approximate lots). Does NOT overlap this build's files (`src/`, `dist/`). Team should decide which is the demo, or merge ideas (their permit-eligibility filter is a good feature).
+- **Teammate prototype:** commit `1bb0f36` (Jnhim) added a separate Leaflet-based prototype at the repo root (`index.html`, `parking.js`, `data.js`, `distance.js`, `parking.css`, tests). Different approach (Leaflet tiles from unpkg, permit filter, demo scenarios, 5 approximate lots). Does NOT overlap this build's files (`src/`, `dist/`). **Update:** the teammate deleted those files upstream in `f35285e` (7 "Delete ..." commits); merged cleanly. Their permit-eligibility filter idea remains a good candidate feature.
 
 ## Data
 - Raw VT ArcGIS pulls in `data/raw/` (WGS84). Refetch: `node scripts/fetch-gis.ts`; flatten: `npm run data`.
@@ -54,16 +54,23 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | 3 ADA + branding | DONE (single `adaBadge` in 5 places; VT maroon/orange; ADA blue distinct from residential blue). Daylight contrast still to check in Phase 5. |
 | 4 Assistant | DONE rule-based; 3 acceptance questions verified in unit tests AND in the browser; "Show on map" hand-off works. |
 | PWA (added) | DONE + verified over http: manifest, service worker, precache, loads OFFLINE. Manifest link is injected only over http(s) so file:// stays console-clean. Not yet tested on a real iPhone (needs HTTPS host). |
-| 5 QA pass | Partly: smoke covers core flows at 3 viewports. Still to do: contrast check, explicit cross-view number audit (marker/list/sheet/assistant). |
+| 5 QA pass | DONE for what can be automated: smoke at 3 viewports, cross-view number audit (marker = list = sheet = level sum = assistant, both garages), WCAG AA contrast tests (11 pairs), edge cases (full level, 0 ADA, no-match search). Remaining: a human pass on a real phone. |
 | 6 Rehearsal | Not started (needs team + real machine) |
 
 ## Verified so far
-- `npm run check`: `tsc --noEmit` clean, **33/33 tests pass**, build OK (`dist/index.html` ~322 KB).
+- `npm run check`: `tsc --noEmit` clean, **45/45 tests pass** (incl. contrast), build OK (`dist/index.html` ~322 KB).
 - `npm run build && npm run smoke -- <w> <h>` (CDP end-to-end, system Chrome, no deps): ALL PASS at 430x900, 375x667 and 1280x800; zero console errors; no horizontal overflow. (Note: in zsh pass width/height as literal args, not via a `$var` loop.)
 - Bug found by the 375x667 run and fixed: the bottom-sheet header scrolled away, hiding the close button on small screens; header is now sticky.
 - Not verified: real iOS Safari, contrast in sunlight.
 
+## Deploying (needs you)
+`.github/workflows/pages.yml` builds and publishes `dist/` to GitHub Pages (manual trigger). To use it:
+1. GitHub repo -> Settings -> Pages -> Source: **GitHub Actions** (Pages on a private repo needs a paid plan; otherwise make it public or use Netlify/Vercel drag-and-drop of `dist/`).
+2. Actions tab -> "Deploy to Pages" -> Run workflow. URL will be `https://<user>.github.io/terraceb/`.
+3. On the iPhone: open the URL in Safari -> Share -> Add to Home Screen.
+
 ## Work log
+- 14:00-14:15 Cross-view number audit + contrast tests + ARCHITECTURE.md + README + Pages workflow.
 - 12:29-12:45 Read spec+plan; confirmed VT ArcGIS reachable; saved raw data; wrote flatten script; spot-checked landmarks.
 - 12:45-13:00 Libs + tests (projection/viewport/occupancy/search/nearby/Drillfield); map, sheet, list, badge, legend, CSS, build script.
 - 13:40-14:00 Turned the driver into `scripts/smoke.mjs` (`npm run smoke`); found + fixed sticky-sheet-header bug at small sizes; label/fly-to polish.
@@ -75,8 +82,8 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | --- | --- |
 | ~~Browser verification (CDP smoke driver)~~ done: 27/27 checks + PWA/offline pass on phone width; polish findings below | done |
 | ~~Polish: label offset, fly-to zoom~~ applied; needs a visual re-check | 10 min |
-| `docs/ARCHITECTURE.md` + README + task split | 20 min |
-| Phase 5 QA: cross-view number consistency check, edge cases, phone + desktop widths, contrast | 30-40 min |
+| ~~ARCHITECTURE.md + README + task split~~ done | done |
+| ~~Phase 5 automated QA~~ done | done |
 | ~~E2E script~~ done: `scripts/smoke.mjs` | done |
 | Polish from QA (label density, marker overlap, Drillfield tune) | 30 min |
 | **User-only:** choose host + deploy over HTTPS (Vercel/Netlify/GitHub Pages), test on a real iPhone | 15-30 min |
