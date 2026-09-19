@@ -1,0 +1,81 @@
+[
+ {
+  "id": "north-end-center",
+  "name": "North End Center Garage",
+  "lat": 37.233607,
+  "lon": -80.420498,
+  "levels": [
+   {
+    "label": "Level 1 - Faculty, staff & visitor",
+    "classes": [
+     "fsv"
+    ],
+    "capacity": 90
+   },
+   {
+    "label": "Level 2 - Faculty, staff & visitor",
+    "classes": [
+     "fsv"
+    ],
+    "capacity": 110
+   },
+   {
+    "label": "Level 3 - Faculty, staff & visitor",
+    "classes": [
+     "fsv"
+    ],
+    "capacity": 110
+   },
+   {
+    "label": "Level 4 - Faculty, staff & visitor (roof)",
+    "classes": [
+     "fsv"
+    ],
+    "capacity": 95
+   }
+  ]
+ },
+ {
+  "id": "perry-street",
+  "name": "Perry Street Garage",
+  "lat": 37.231259,
+  "lon": -80.42622,
+  "levels": [
+   {
+    "label": "Level 1 - Commuter & graduate",
+    "classes": [
+     "perry-cg"
+    ],
+    "capacity": 120
+   },
+   {
+    "label": "Level 2 - Faculty & staff",
+    "classes": [
+     "perry-fs"
+    ],
+    "capacity": 140
+   },
+   {
+    "label": "Level 3 - Faculty & staff",
+    "classes": [
+     "perry-fs"
+    ],
+    "capacity": 140
+   },
+   {
+    "label": "Level 4 - Faculty & staff",
+    "classes": [
+     "perry-fs"
+    ],
+    "capacity": 140
+   },
+   {
+    "label": "Level 5 - Faculty & staff (roof)",
+    "classes": [
+     "perry-fs"
+    ],
+    "capacity": 110
+   }
+  ]
+ }
+]

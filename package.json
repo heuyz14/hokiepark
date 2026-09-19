@@ -14,6 +14,8 @@
     "smoke": "node scripts/smoke.mjs",
     "seed": "node scripts/gen-seed.ts",
     "curves": "node scripts/gen-curves.ts",
+    "databricks:inputs": "node scripts/export-databricks-inputs.ts",
+    "test:py": "python3 databricks/tests/test_parity.py",
     "timetable": "node scripts/fetch-timetable.ts",
     "smoke:live": "node scripts/smoke.mjs 430 900 --live",
     "check:supabase": "node --env-file-if-exists=.env.local scripts/check-supabase.ts"
