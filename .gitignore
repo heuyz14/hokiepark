@@ -38,3 +38,8 @@ next-env.d.ts
 # build output
 /dist
 /smoke-out
+
+# Python bytecode and local MLflow artifacts
+__pycache__/
+*.pyc
+mlruns/
