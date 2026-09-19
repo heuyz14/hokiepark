@@ -94,3 +94,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > check all my mirgations  /  it worked continue, also reset and reanalyze what needs to be implemented next, pull if necessary
 
 **Outcome:** Verified both migrations against the real project as far as the anon key allows (tables exist and are private; the tick moved counts at 19:12 UTC). Re-analysis found: site NOT deployed (Pages 404, no workflow runs, no Actions Variables); a sawtooth flaw in my curves (fixed by smoothing, regression test mutation-checked); wrote `docs/DEMO_RUNBOOK.md`. Coordinated file ownership with the parallel session (projectport-e7, works in its own worktree). Remaining priorities: deploy (user), pg_cron (user), rehearsal, Databricks Tier B scaffold, polish.
+
+## 14. 2026-09-19 - simulator works; label fix + permit-aware assistant, synced with the other agent
+
+> yes do this also sync with my other agent running so there are no problems
+
+**Outcome:** Coordinated with the other session (projectport-f5) over SendMessage before editing: agreed disjoint file lists, explicit-path staging only, fetch+merge before every push. Worked in an isolated git worktree (`terraceb-wt-e7`, branch `e7-labels-assistant`). Shipped (1) signage-is-code: level labels + permit classes always come from the app, the DB supplies only live counts, `check:supabase` warns on label drift, so re-running `seed.sql` is now optional; (2) the Ask assistant honors the permit chooser via lib/permits verdicts. Bugs found by testing my own work and fixed: multi-permit answers mislabeled a garage with 133 usable spaces as "no open spaces"; "Stanger St. ADA" was read as a generic accessible-parking request; two of my checks were vacuous and were tightened (mutation-verified).
