@@ -6,7 +6,7 @@ import { adaBadge } from "./badge.ts";
 import { CATEGORY_LABEL, esc, meters, statusPill } from "./format.ts";
 
 export interface SheetController {
-  render(sel: Selection): void;
+  render(sel: Selection, opts?: { preserveScroll?: boolean }): void;
 }
 
 const head = (title: string, sub: string, right = "") => `
@@ -110,7 +110,7 @@ export function createSheet(el: HTMLElement, handlers: { onClose: () => void; on
   });
 
   return {
-    render(sel) {
+    render(sel, opts) {
       if (!sel) {
         el.hidden = true;
         el.innerHTML = "";
@@ -128,8 +128,9 @@ export function createSheet(el: HTMLElement, handlers: { onClose: () => void; on
         el.hidden = true;
         return;
       }
+      const top = el.scrollTop;
       el.innerHTML = html;
-      el.scrollTop = 0;
+      el.scrollTop = opts?.preserveScroll ? top : 0;
       el.hidden = false;
     },
   };

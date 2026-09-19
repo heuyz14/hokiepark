@@ -6,6 +6,9 @@ import { createList } from "./ui/list.ts";
 import { renderLegend } from "./ui/legend.ts";
 import { createAssistant } from "./ui/assistant.ts";
 import { localAnswerer } from "./lib/assistant.ts";
+import { LIVE_CONFIG } from "./config.ts";
+import { startLive } from "./live.ts";
+import { createSyncChip } from "./ui/sync.ts";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -46,6 +49,20 @@ function boot() {
       document.getElementById("sheet-title")?.focus({ preventScroll: true });
     }
   });
+
+  // Live occupancy (optional). Without config the app just shows the bundled sample counts.
+  const chip = createSyncChip($("sync"), { state: LIVE_CONFIG ? "connecting" : "demo", lastSync: null, dataAsOf: null });
+  if (LIVE_CONFIG) {
+    startLive(LIVE_CONFIG, {
+      onStatus: chip.update,
+      onChange() {
+        map.refreshGarages();
+        list.refresh();
+        const s = store.get();
+        if (s.selection?.kind === "garage" && s.view === "map") sheet.render(s.selection, { preserveScroll: true });
+      },
+    });
+  }
 
   for (const t of tabs) t.addEventListener("click", () => store.set({ view: t.dataset.view as View }));
   $("zoom-in").addEventListener("click", () => map.zoom(1.6));

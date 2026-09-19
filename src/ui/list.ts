@@ -9,6 +9,8 @@ import { esc, statusPill } from "./format.ts";
 export interface ListController {
   setSelected(sel: Selection): void;
   setQuery(q: string): void;
+  /** Re-render after a live data update, keeping keyboard focus on the same row. */
+  refresh(): void;
 }
 
 export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selection) => void; onQuery: (q: string) => void }): ListController {
@@ -62,6 +64,11 @@ export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selectio
       selected = sel;
       render();
       results.querySelector(".is-selected")?.scrollIntoView({ block: "nearest" });
+    },
+    refresh() {
+      const focusedId = (document.activeElement as HTMLElement | null)?.closest?.("#list-results button[data-id]")?.getAttribute("data-id");
+      render();
+      if (focusedId) results.querySelector<HTMLElement>(`button[data-id="${focusedId}"]`)?.focus({ preventScroll: true });
     },
     setQuery(q) {
       if (input.value !== q) {

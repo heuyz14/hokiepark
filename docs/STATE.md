@@ -1,12 +1,13 @@
 # HokiePark - current state
 
-_Last updated: 2026-09-19 ~14:35 (Phases 1-5 substantially done and verified; hosting workflow prepared; committed and pushed)._
+_Last updated: 2026-09-19 ~15:10 (Phases 1-5 done; Supabase live-occupancy feature built and tested against a mock; waiting on the user for a real Supabase project)._
 Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `../HOKIEPARK_SPEC.md`, `../HokiePark - 6-Hour Build Plan.md`.
 
 ## What this is
 HokiePark: mobile-first VT campus parking map for VTHacks 14 (Deloitte x Databricks track). Ships as ONE self-contained
 `dist/index.html` (SVG map, `BUILDINGS`/`LOTS`/`GARAGES` arrays, phone-frame UI) plus PWA files next to it.
-No backend, no database. (AGENTS.md's Supabase/Next.js stack is for the other repos, not this one.)
+No backend required: by default it uses bundled sample counts. **Optional Supabase feed** (built, see `docs/SUPABASE.md`) makes garage counts live.
+(AGENTS.md's Next.js stack is for the other repos; only its Supabase/RLS/security rules are applied here.)
 
 ## Decisions (with why)
 | Decision | Why |
@@ -18,6 +19,10 @@ No backend, no database. (AGENTS.md's Supabase/Next.js stack is for the other re
 | **Assistant = rule-based, no LLM** | Artifact-platform AI sampling doesn't exist outside claude.ai; an LLM needs a paid backend proxy + API key (needs user approval). `Answerer` interface in `src/lib/assistant.ts` is the seam. |
 | Assistant reads only the three data arrays via `lib/occupancy.ts` | Same numbers as map/list/sheet (Phase 5 requirement). |
 | Nearest = distance to footprint vertex, not centroid | Centroids mislead for large multi-polygon lots. |
+| **Live occupancy = Supabase table, polled** (user go-ahead) | Live counts need a store someone can write to. Read-only for the browser via RLS; zero-dependency `fetch` client (no supabase-js); polling not Realtime (enough for a demo). |
+| Feed is optional and degrades to bundled counts | Unconfigured/offline/outage never breaks the demo; header chip shows the state. |
+| Only public URL + anon key embedded; build refuses service_role/secret | AGENTS.md: never expose service-role keys to the browser. Tested. |
+| Hand-written response validator instead of Zod | Keeps zero runtime deps; every field range-checked; all-or-nothing apply. |
 
 ## Git workflow (standing instruction from user)
 - Remote: `origin` = https://github.com/heuyz14/terraceb.git, branch `main`, upstream already set.
@@ -53,15 +58,23 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | 2 Garages/lots/sheet/list | DONE + browser-verified (marker tap, sheet, list search/empty state, list<->map selection sync, keyboard Enter/Escape). |
 | 3 ADA + branding | DONE (single `adaBadge` in 5 places; VT maroon/orange; ADA blue distinct from residential blue). Daylight contrast still to check in Phase 5. |
 | 4 Assistant | DONE rule-based; 3 acceptance questions verified in unit tests AND in the browser; "Show on map" hand-off works. |
+| Supabase live feed (added) | Built + tested: migration (RLS read-only, constraints, simulator), generated seed, poller with backoff/pause, header chip, in-place refresh of map/list/sheet, key guard, `check:supabase`. Verified against a MOCK (`smoke:live`: update, open-sheet update + scroll kept, outage, bad payload, recovery, audit). **Not yet run against a real project.** |
 | PWA (added) | DONE + verified over http: manifest, service worker, precache, loads OFFLINE. Manifest link is injected only over http(s) so file:// stays console-clean. Not yet tested on a real iPhone (needs HTTPS host). |
 | 5 QA pass | DONE for what can be automated: smoke at 3 viewports, cross-view number audit (marker = list = sheet = level sum = assistant, both garages), WCAG AA contrast tests (11 pairs), edge cases (full level, 0 ADA, no-match search). Remaining: a human pass on a real phone. |
 | 6 Rehearsal | Not started (needs team + real machine) |
 
 ## Verified so far
-- `npm run check`: `tsc --noEmit` clean, **45/45 tests pass** (incl. contrast), build OK (`dist/index.html` ~322 KB).
+- `npm run check`: `tsc --noEmit` clean, **64/64 tests pass** (incl. contrast, remote validation, key guard, seed sync)
+- `npm run smoke:live` ALL PASS at 430x900, 375x667, 1280x800 (mock Supabase; fake key)., build OK (`dist/index.html` ~322 KB).
 - `npm run build && npm run smoke -- <w> <h>` (CDP end-to-end, system Chrome, no deps): ALL PASS at 430x900, 375x667 and 1280x800; zero console errors; no horizontal overflow. (Note: in zsh pass width/height as literal args, not via a `$var` loop.)
 - Bug found by the 375x667 run and fixed: the bottom-sheet header scrolled away, hiding the close button on small screens; header is now sticky.
 - Not verified: real iOS Safari, contrast in sunlight.
+
+## Connecting a real Supabase project (needs you, ~10 min; see docs/SUPABASE.md)
+1. Create a free Supabase project. 2. SQL editor: run `supabase/migrations/20260919000000_garage_levels.sql`, then `supabase/seed.sql`.
+3. Copy the **Project URL** and **anon/publishable** key (NOT service_role) into `.env.local` (copy of `.env.example`).
+4. `npm run check:supabase` (tell me the result; it never prints the key), then `npm run build` -> "live feed: ON".
+5. For the deployed site add the same two values as GitHub Actions **Variables**, re-run "Deploy to Pages".
 
 ## Deploying (needs you)
 `.github/workflows/pages.yml` builds and publishes `dist/` to GitHub Pages (manual trigger). To use it:
@@ -75,6 +88,7 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 - Drillfield ellipse is an estimate; 102 vs the spec's 92 buildings.
 
 ## Work log
+- 14:35-15:10 Supabase feed: pure client + validators + tests, migration/seed/simulator SQL, poller + chip + in-place refresh, build guard, mock-Supabase e2e (`smoke:live`), `check:supabase`, docs.
 - 14:15-14:35 Overview declutter (only garages + ADA lot markers until zoomed in), fallback screenshots in `docs/fallback/`.
 - 14:00-14:15 Cross-view number audit + contrast tests + ARCHITECTURE.md + README + Pages workflow.
 - 12:29-12:45 Read spec+plan; confirmed VT ArcGIS reachable; saved raw data; wrote flatten script; spot-checked landmarks.
@@ -96,6 +110,7 @@ tests/    projection viewport occupancy search assistant drillfield           (3
 | **Team-only:** Phase 6 rehearsal x2, fallback screenshots on the demo machine, confirm ADA lot + demo numbers | 15-30 min |
 
 ## Open questions / needs from the user
+- **Supabase project** (see section above). Until then the app runs on bundled counts, chip says "Sample data".
 - Hosting choice for the HTTPS deploy (needed for iPhone install + service worker). Nothing to do until I finish QA.
 - Teammate to confirm the 5th ADA lot and demo garage numbers (spec header asks for team confirmation).
 - Optional later: LLM-backed assistant (needs API key + proxy) and Capacitor/Xcode wrapper.

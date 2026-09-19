@@ -28,7 +28,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # Public values only (project URL + anon key). Set them under Settings -> Secrets and variables -> Actions -> Variables.
+      # If unset, the site builds with the bundled sample counts (feed off).
       - run: npm run build
+        env:
+          HOKIEPARK_SUPABASE_URL: ${{ vars.HOKIEPARK_SUPABASE_URL }}
+          HOKIEPARK_SUPABASE_ANON_KEY: ${{ vars.HOKIEPARK_SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

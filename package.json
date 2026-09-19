@@ -6,12 +6,15 @@
   "description": "HokiePark - VTHacks 14 parking map for Virginia Tech (single-file build)",
   "scripts": {
     "data": "node scripts/build-data.ts",
-    "build": "node scripts/build.ts",
-    "dev": "node scripts/build.ts --watch",
+    "build": "node --env-file-if-exists=.env.local scripts/build.ts",
+    "dev": "node --env-file-if-exists=.env.local scripts/build.ts --watch",
     "test": "node --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "seed": "node scripts/gen-seed.ts",
+    "smoke:live": "node scripts/smoke.mjs 430 900 --live",
+    "check:supabase": "node --env-file-if-exists=.env.local scripts/check-supabase.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

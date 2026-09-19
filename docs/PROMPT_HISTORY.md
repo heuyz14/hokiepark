@@ -41,3 +41,13 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > make sure to periodically upload work to the current repo with commit and push check if upstream needs to be set, resolve any merge conflicts and prioritize current code from my user
 
 **Outcome:** Upstream was already set (`origin/main` -> github.com/heuyz14/terraceb). A teammate had pushed an independent Leaflet prototype at the repo root (no file overlap). Made 2 commits, merged `origin/main` with a normal merge (no conflicts), pushed. First push failed with HTTP 400 (payload > default 1 MB post buffer); fixed with `git -c http.postBuffer=524288000 push`. Standing routine: commit + push after each meaningful chunk; on conflict, keep the user's local code.
+
+## 7. 2026-09-19 - database questions and the Supabase build
+
+> where is the database for this
+
+> wouldnt u need the database if were implementing live occupancy
+
+> yes build the supabase version
+
+**Outcome:** Explained there is no database by design (client-side demo), then agreed live occupancy needs a data store. Built the optional Supabase feed: read-only RLS table `garage_levels`, generated seed, SQL simulator (+ optional pg_cron), zero-dependency polling client with strict validation and all-or-nothing apply, header sync chip, build-time guard against embedding a service-role key, `check:supabase` verifier, and a mocked-Supabase e2e (`smoke:live`). Needs from the user: a Supabase project + its public URL/anon key (see docs/SUPABASE.md).

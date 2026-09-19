@@ -26,7 +26,9 @@ Current status lives in [STATE.md](STATE.md).
               scripts/build.ts (esbuild)  =>  dist/index.html  (+ manifest, sw.js, icons)
 ```
 
-No backend and no database: the demo is client-side only (spec Section 11). Occupancy is hand-set demo data.
+By default there is no backend and no database: the demo is client-side only (spec Section 11) with hand-set sample counts.
+Optionally, garage counts come from a Supabase table (`docs/SUPABASE.md`): a read-only, RLS-protected `garage_levels` table polled
+by `src/live.ts` and applied onto the same `GARAGES` array, so every view stays consistent. Unconfigured or offline, the bundled counts are used.
 
 ## 2. Key rules (why the code is shaped this way)
 
@@ -37,7 +39,8 @@ No backend and no database: the demo is client-side only (spec Section 11). Occu
    answers) lives in `src/lib/` and has unit tests. `src/ui/` only renders.
 3. **ADA is first-class.** One component (`ui/badge.ts`) renders the wheelchair badge in garage level rows, lot sheets, list
    rows, map markers and the legend. ADA blue (`--ada`) is deliberately distinct from residential blue.
-4. **No network at runtime.** GIS data is fetched once into `data/raw/`; the app and its tests never call VT.
+4. **No VT network at runtime.** GIS data is fetched once into `data/raw/`; the app and its tests never call VT. The only
+   optional runtime request is the read-only Supabase occupancy poll, and the app degrades to bundled counts if it is off or fails.
 5. **Untrusted strings are escaped.** All dynamic text is interpolated through `esc()` in `ui/format.ts`.
 6. **Honest demo data.** Invented data is labelled in code and in the UI ("Demo data - counts are simulated").
 
@@ -50,6 +53,10 @@ No backend and no database: the demo is client-side only (spec Section 11). Occu
 | `lib/occupancy.ts` | open counts, totals, Open/Limited/Full thresholds, summaries | `occupancy.test.ts` (+ data invariants, edge cases) |
 | `lib/search.ts` | case/punctuation-insensitive token substring match | `search.test.ts` |
 | `lib/nearby.ts` | nearest items (footprint-edge distance), walk minutes, formatting | `search.test.ts` |
+| `lib/occupancy-remote.ts` | fetch + strictly validate `garage_levels` rows, all-or-nothing apply onto `GARAGES` | `occupancy-remote.test.ts` |
+| `lib/live-config.ts` | validate feed config; refuse service-role/secret keys | `live-config.test.ts` |
+| `live.ts` / `ui/sync.ts` | poller (no overlap, backoff, pause when hidden) and the header status chip | `smoke:live` |
+| `supabase/*` | migration (table, constraints, RLS, simulator), generated seed, optional cron | `seed.test.ts` |
 | `lib/assistant.ts` | intent + place resolution, deterministic answers, `Answerer` seam | `assistant.test.ts` (3 spec questions) |
 | `data/*` | typed arrays; `garages.ts`/`lots.ts` hold the hand-set fields | `occupancy.test.ts`, `drillfield.test.ts` |
 | `ui/map.ts` | SVG render, pointer pan/pinch, wheel zoom, fly-to, markers, selection highlight | `scripts/smoke.mjs` |
@@ -66,7 +73,8 @@ the item out from under the sheet.
 
 - **LLM assistant:** implement `Answerer` (`(question) => Promise<Answer>`) and pass it to `createAssistant` in `main.ts`.
   The key must live in a serverless proxy, never in this bundle. Requires user approval (paid service).
-- **Live occupancy:** replace `src/data/garages.ts` with a fetch that fills the same `Garage[]` shape; nothing else changes.
+- **Live occupancy:** implemented via Supabase (`docs/SUPABASE.md`). To use another source (e.g. Databricks behind an API), keep the
+  `OccupancyRow` shape or adapt `fetchOccupancy`; `applyOccupancy` and every view stay unchanged.
 - **Native iOS:** wrap `dist/` with Capacitor (needs Xcode + Apple ID). No code changes required.
 
 ## 5. Work breakdown (the plan's 4 lanes mapped to files)
@@ -82,8 +90,10 @@ the item out from under the sheet.
 
 ```
 npm install          # esbuild, typescript, @types/node (dev only)
-npm run check        # typecheck + 33 unit tests + build -> dist/index.html
+npm run check        # typecheck + unit tests + build -> dist/index.html
 npm run smoke -- 430 900   # end-to-end in system Chrome; also try 375 667 and 1280 800
+npm run smoke:live         # same + mocked Supabase feed (live update, outage, bad payload, recovery)
+npm run check:supabase     # verify a real Supabase project (reads .env.local, never prints the key)
 npm run dev          # rebuild on change
 ```
 

@@ -4,23 +4,36 @@
  * drives the real UI with mouse/keyboard events, and fails on any console error.
  *
  *   npm run build && npm run smoke -- [width] [height]     (default 430x900; try 375 667 and 1280 800)
+ *   npm run smoke:live                                     (adds --live: builds a feed-enabled bundle and mocks Supabase)
+ *
+ * --live builds a second bundle configured for https://smoke.supabase.co with a FAKE anon key, then answers those
+ * requests from an in-process mock via CDP Fetch interception. It exercises live updates, an open sheet updating,
+ * an outage, a malformed payload and recovery. No real Supabase project or key is ever involved.
  *
  * Screenshots land in smoke-out/ (git-ignored). Set CHROME=/path/to/chrome to override the macOS default.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 
-const [W = 430, H = 900] = process.argv.slice(2);
-const OUT = `${W}x${H}`;
+const LIVE = process.argv.includes("--live");
+const [W = 430, H = 900] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const OUT = `${W}x${H}${LIVE ? "-live" : ""}`;
 const ROOT = new URL("../", import.meta.url).pathname;
-const DIST = join(ROOT, "dist");
+const FAKE_B64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+const FAKE_ANON = `${FAKE_B64({ alg: "HS256", typ: "JWT" })}.${FAKE_B64({ role: "anon", iss: "smoke-test" })}.fake-signature`;
+let DIST = join(ROOT, "dist");
+if (LIVE) {
+  DIST = join(ROOT, "smoke-out", "dist-live");
+  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "https://smoke.supabase.co", HOKIEPARK_SUPABASE_ANON_KEY: FAKE_ANON, HOKIEPARK_POLL_MS: "1000" }, encoding: "utf8" });
+  if (r.status !== 0) throw new Error("live build failed: " + r.stderr + r.stdout);
+}
 const DIR = join(ROOT, "smoke-out") + "/";
 const CH = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const PORT = 9333;
-if (!existsSync(join(DIST, "index.html"))) throw new Error("dist/index.html missing - run `npm run build` first");
+if (!LIVE && !existsSync(join(DIST, "index.html"))) throw new Error("dist/index.html missing - run `npm run build` first");
 if (!existsSync(CH)) throw new Error(`Chrome not found at ${CH}; set CHROME=/path/to/chrome`);
 mkdirSync(DIR, { recursive: true });
 
@@ -44,14 +57,35 @@ for (let i = 0; i < 50; i++) {
 }
 const ws = new WebSocket(targets.find((t) => t.type === "page").webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));
-let id = 0; const pending = new Map(); const errors = []; const logs = [];
+let id = 0; const pending = new Map(); const errors = [];
+// During deliberate outage phases, failed requests to the mock host are expected browser noise (nothing else is).
+let expectFailures = false;
+const addErr = (text) => errors.push({ text, expected: expectFailures && /smoke\.supabase\.co/.test(text) });
 ws.onmessage = (m) => {
   const d = JSON.parse(m.data);
   if (d.id && pending.has(d.id)) { pending.get(d.id)(d); pending.delete(d.id); return; }
-  if (d.method === "Runtime.exceptionThrown") errors.push(d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text);
-  if (d.method === "Runtime.consoleAPICalled" && ["error", "warning"].includes(d.params.type)) errors.push(`console.${d.params.type}: ` + d.params.args.map((a) => a.value ?? a.description).join(" "));
-  if (d.method === "Log.entryAdded" && ["error", "warning"].includes(d.params.entry.level)) errors.push(`log.${d.params.entry.level}: ${d.params.entry.text} ${d.params.entry.url ?? ""}`);
+  if (d.method === "Runtime.exceptionThrown") addErr(d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text);
+  if (d.method === "Runtime.consoleAPICalled" && ["error", "warning"].includes(d.params.type)) addErr(`console.${d.params.type}: ` + d.params.args.map((a) => a.value ?? a.description).join(" "));
+  if (d.method === "Log.entryAdded" && ["error", "warning"].includes(d.params.entry.level)) addErr(`log.${d.params.entry.level}: ${d.params.entry.text} ${d.params.entry.url ?? ""}`);
+  if (d.method === "Fetch.requestPaused") void onPaused(d.params);
 };
+
+// ---- controllable mock of the Supabase REST endpoint (only used with --live) ----
+import { SEED_LEVELS } from "../src/data/garages.ts";
+const mock = {
+  mode: "ok", // ok | down (HTTP 503) | bad (200 with an out-of-range row)
+  requests: [],
+  rows: Object.entries(SEED_LEVELS).flatMap(([garage_id, ls]) => ls.map((l, i) => ({ garage_id, level_index: i, label: l.label, capacity: l.capacity, occupied: l.occupied, ada_capacity: l.adaCapacity, ada_occupied: l.adaOccupied, updated_at: new Date().toISOString() }))),
+};
+const CORS = [{ name: "access-control-allow-origin", value: "*" }, { name: "access-control-allow-headers", value: "apikey,authorization,accept,content-type" }, { name: "access-control-allow-methods", value: "GET,OPTIONS" }];
+async function onPaused({ requestId, request }) {
+  const fulfill = (responseCode, headers, body = "") => send("Fetch.fulfillRequest", { requestId, responseCode, responseHeaders: headers, body: Buffer.from(body).toString("base64") });
+  if (request.method === "OPTIONS") return fulfill(204, CORS);
+  mock.requests.push(request);
+  if (mock.mode === "down") return fulfill(503, CORS, "down");
+  const rows = mock.mode === "bad" ? [{ ...mock.rows[0], occupied: 99999 }] : mock.rows.map((r) => ({ ...r, updated_at: new Date().toISOString() }));
+  return fulfill(200, [...CORS, { name: "content-type", value: "application/json" }], JSON.stringify(rows));
+}
 const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 const ev = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails)); return r.result.result.value; };
 const shot = async (name) => { const r = await send("Page.captureScreenshot", { format: "png" }); writeFileSync(`${DIR}${OUT}-${name}.png`, Buffer.from(r.result.data, "base64")); };
@@ -62,6 +96,7 @@ const check = (label, cond, extra = "") => { if (!cond) failures++; console.log(
 
 await send("Runtime.enable"); await send("Log.enable"); await send("Page.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: +W, height: +H, deviceScaleFactor: 2, mobile: +W < 500 });
+if (LIVE) await send("Fetch.enable", { patterns: [{ urlPattern: "https://smoke.supabase.co/*" }] });
 const URL_ = APP;
 await send("Page.navigate", { url: URL_ });
 await sleep(1200);
@@ -194,33 +229,87 @@ if (http) {
   await shot("9-offline");
 }
 // ---- Phase 5: cross-view number audit. Marker, list row, sheet, level rows and assistant must agree. ----
+async function audit(tag) {
 for (const [gid, gname] of [["perry-street", "Perry Street Garage"], ["north-end-center", "North End Center Garage"]]) {
   await click('.tabbar [data-view="map"]');
   const m = await ev(`(()=>{const l=document.querySelector('.marker-garage[data-id="${gid}"]').getAttribute('aria-label');const r=l.match(/(\\d+) of (\\d+) spaces open, (\\d+) accessible open/);return r?{open:+r[1],cap:+r[2],ada:+r[3]}:null})()`);
-  check(`audit ${gname}: marker label parsed`, !!m, JSON.stringify(m));
+  check(`audit[${tag}] ${gname}: marker label parsed`, !!m, JSON.stringify(m));
   if (!m) continue;
   // list row
   await click('.tabbar [data-view="list"]');
   const list = await ev(`(()=>{const b=document.querySelector('#list-results .row[data-id="${gid}"]');return {sub:b.querySelector('.sub').innerText,ada:b.querySelector('.ada').getAttribute('aria-label')}})()`);
-  check(`audit ${gname}: list row matches marker`, list.sub.includes(`${m.open} of ${m.cap} open`) && list.ada === `${m.ada} accessible spaces open`, JSON.stringify(list));
+  check(`audit[${tag}] ${gname}: list row matches marker`, list.sub.includes(`${m.open} of ${m.cap} open`) && list.ada === `${m.ada} accessible spaces open`, JSON.stringify(list));
   // sheet (open from the list, exactly like a user would)
   await click(`#list-results .row[data-id="${gid}"]`); await sleep(700);
   const sheet = await ev(`(()=>{const q=(s)=>document.querySelector('#sheet '+s);const lv=[...document.querySelectorAll('#sheet .level')].map(e=>({open:+e.querySelector('.level-bottom strong').innerText,ada:+e.querySelector('.ada').innerText.trim()}));return {big:+q('.big').innerText,of:q('.of').innerText,ada:q('.summary .ada').innerText.trim(),sumOpen:lv.reduce((a,b)=>a+b.open,0),sumAda:lv.reduce((a,b)=>a+b.ada,0)}})()`);
-  check(`audit ${gname}: sheet totals match marker`, sheet.big === m.open && sheet.of.includes(`/ ${m.cap} open`) && sheet.ada.startsWith(String(m.ada)), JSON.stringify(sheet));
-  check(`audit ${gname}: level rows sum to totals`, sheet.sumOpen === m.open && sheet.sumAda === m.ada);
+  check(`audit[${tag}] ${gname}: sheet totals match marker`, sheet.big === m.open && sheet.of.includes(`/ ${m.cap} open`) && sheet.ada.startsWith(String(m.ada)), JSON.stringify(sheet));
+  check(`audit[${tag}] ${gname}: level rows sum to totals`, sheet.sumOpen === m.open && sheet.sumAda === m.ada);
   // assistant
   await click('.tabbar [data-view="ask"]');
   await ev(`document.getElementById('chat-q').value=${JSON.stringify("is " + gname + " full?")}`);
   await ev(`document.getElementById('chat-form').requestSubmit()`); await sleep(300);
   const ans = await ev(`[...document.querySelectorAll('#chat-log .msg.bot')].pop().innerText`);
-  check(`audit ${gname}: assistant matches marker`, ans.includes(`${gname}: ${m.open} of ${m.cap} open`) && ans.includes(`${m.ada} accessible open`), JSON.stringify(ans.split("\n")[0]));
+  check(`audit[${tag}] ${gname}: assistant matches marker`, ans.includes(`${gname}: ${m.open} of ${m.cap} open`) && ans.includes(`${m.ada} accessible open`), JSON.stringify(ans.split("\n")[0]));
 }
 await click('.tabbar [data-view="map"]');
+}
+await audit("initial");
+
+// ---- chip + live feed ----
+const chipText = () => ev(`document.getElementById('sync').textContent`);
+const waitFor = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await fn()) return true; await sleep(150); } return false; };
+const markerLabel = (gid) => ev(`document.querySelector('.marker-garage[data-id="${gid}"]').getAttribute('aria-label')`);
+const hdr = (req, name) => Object.entries(req.headers).find(([k]) => k.toLowerCase() === name)?.[1];
+if (!LIVE) {
+  check("chip says 'Sample data' when the feed is not configured", (await chipText()) === "Sample data", await chipText());
+} else {
+  check("live: chip reaches 'Live' after first sync", await waitFor(async () => /^Live/.test(await chipText())), await chipText());
+  check("live: requests hit /rest/v1/garage_levels with the anon key and no privileged key",
+    mock.requests.length > 0 && mock.requests.every((r) => /^https:\/\/smoke\.supabase\.co\/rest\/v1\/garage_levels\?/.test(r.url) && hdr(r, "apikey") === FAKE_ANON && !/service_role|sb_secret/.test(JSON.stringify(r.headers))),
+    `requests=${mock.requests.length}`);
+
+  // 1) a database change reaches map, list, sheet and assistant
+  mock.rows.find((r) => r.garage_id === "perry-street" && r.level_index === 1).occupied = 139; // 112 -> 139: Perry open 133 -> 106
+  check("live: DB change updates the map marker", await waitFor(async () => /106 of 650/.test(await markerLabel("perry-street"))), await markerLabel("perry-street"));
+  await audit("after live update");
+
+  // 2) an open sheet updates in place and keeps its scroll position
+  await click('#zoom-reset'); await sleep(700); // the audit leaves the map zoomed on the last garage; Perry's marker would be off-screen
+  await click('.marker-garage[data-id="perry-street"]'); await sleep(700);
+  const scrollable = await ev(`(()=>{const s=document.getElementById('sheet');return s.scrollHeight>s.clientHeight+40})()`);
+  if (scrollable) await ev(`document.getElementById('sheet').scrollTop = 120`);
+  const before = await ev(`document.getElementById('sheet').scrollTop`);
+  mock.rows.find((r) => r.garage_id === "perry-street" && r.level_index === 0).occupied = 100; // 120 -> 100: Perry open 106 -> 126
+  check("live: open sheet total updates without closing", await waitFor(async () => (await ev(`document.querySelector('#sheet .big')?.innerText`)) === "126"), await ev(`document.querySelector('#sheet .big')?.innerText`));
+  if (scrollable) check("live: sheet keeps its scroll position across an update", Math.abs((await ev(`document.getElementById('sheet').scrollTop`)) - before) < 4, `before=${before}`);
+  check("live: sheet is still open and titled", (await ev(`document.getElementById('sheet-title')?.textContent`)) === "Perry Street Garage");
+  await click('#sheet [data-close]');
+
+  // 3) outage: last known counts stay, chip warns, recovery is automatic
+  expectFailures = true;
+  mock.mode = "down";
+  check("outage: chip shows Offline", await waitFor(async () => (await chipText()) === "Offline"), await chipText());
+  check("outage: last known counts stay on screen", /126 of 650/.test(await markerLabel("perry-street")), await markerLabel("perry-street"));
+  await shot("10-offline-chip");
+  mock.mode = "ok";
+  check("outage: recovers to Live by itself (backoff)", await waitFor(async () => /^Live/.test(await chipText()), 20000), await chipText());
+
+  // 4) malformed payload is rejected wholesale
+  mock.mode = "bad";
+  check("bad payload: chip shows Offline (rejected)", await waitFor(async () => (await chipText()) === "Offline"), await chipText());
+  check("bad payload: counts unchanged (all-or-nothing)", /126 of 650/.test(await markerLabel("perry-street")), await markerLabel("perry-street"));
+  mock.mode = "ok";
+  check("bad payload: recovers to Live", await waitFor(async () => /^Live/.test(await chipText()), 20000), await chipText());
+  expectFailures = false;
+  await audit("after recovery");
+  await shot("11-live-recovered");
+}
 
 // horizontal overflow check
 check("no horizontal page overflow", (await ev(`document.documentElement.scrollWidth <= window.innerWidth`)));
 
-check("zero console errors/warnings", errors.length === 0, errors.join(" | "));
+const unexpected = errors.filter((e) => !e.expected);
+check("zero console errors/warnings", unexpected.length === 0, unexpected.map((e) => e.text).join(" | "));
 console.log(`\n${failures ? failures + " FAILED" : "ALL PASSED"} at ${OUT}`);
 ws.close(); proc.kill(); server.close();
 process.exit(failures ? 1 : 0);

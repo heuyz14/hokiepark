@@ -11,7 +11,8 @@ const L = (label: string, capacity: number, occupied: number, adaCapacity: numbe
   label, capacity, occupied, adaCapacity, adaOccupied,
 });
 
-const LEVELS: Record<string, GarageLevel[]> = {
+/** The bundled sample counts. Also the offline fallback and the source for supabase/seed.sql. */
+export const SEED_LEVELS: Record<string, GarageLevel[]> = {
   "perry-street": [
     L("Level 1 - Commuter & graduate", 120, 120, 6, 6),
     L("Level 2 - Faculty, staff & visitor", 140, 112, 6, 3),
@@ -28,7 +29,8 @@ const LEVELS: Record<string, GarageLevel[]> = {
 };
 
 export const GARAGES: Garage[] = (geo as GarageGeo[]).map((g) => {
-  const levels = LEVELS[g.id];
+  const levels = SEED_LEVELS[g.id];
   if (!levels) throw new Error(`No demo levels for garage ${g.id}`);
-  return { ...g, levels };
+  // copy: live updates mutate GARAGES, and SEED_LEVELS must stay pristine
+  return { ...g, levels: levels.map((l) => ({ ...l })) };
 });

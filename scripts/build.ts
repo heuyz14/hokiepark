@@ -4,11 +4,23 @@
  * is copied alongside for installability; the page itself never depends on those files. `--watch` rebuilds.
  */
 import { build } from "esbuild";
+import { parseLiveConfig, type LiveConfig } from "../src/lib/live-config.ts";
 import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
 
 const root = new URL("../", import.meta.url);
 const path = (p: string) => new URL(p, root).pathname;
+const outIdx = process.argv.indexOf("--out");
+const outDir = outIdx > 0 ? process.argv[outIdx + 1]! : path("dist");
+
+// Optional Supabase feed. Only the PUBLIC url + anon/publishable key are embedded; a service-role/secret key aborts the build.
+let liveConfig: LiveConfig | null;
+try {
+  liveConfig = parseLiveConfig(process.env.HOKIEPARK_SUPABASE_URL, process.env.HOKIEPARK_SUPABASE_ANON_KEY, process.env.HOKIEPARK_POLL_MS);
+} catch (err) {
+  console.error(`Build aborted: ${(err as Error).message}`);
+  process.exit(1);
+}
 
 async function bundle() {
   const t0 = performance.now();
@@ -20,6 +32,7 @@ async function bundle() {
     target: "es2022",
     minify: !process.argv.includes("--watch"),
     legalComments: "none",
+    define: { __LIVE_CONFIG__: JSON.stringify(liveConfig) },
     logLevel: "warning",
   });
   const script = js.outputFiles[0]!.text.replace(/<\/script/gi, "<\\/script");
@@ -27,13 +40,13 @@ async function bundle() {
   const html = readFileSync(path("src/index.template.html"), "utf8")
     .replace("/*__CSS__*/", () => css)
     .replace("/*__JS__*/", () => script);
-  mkdirSync(path("dist"), { recursive: true });
-  writeFileSync(path("dist/index.html"), html);
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(`${outDir}/index.html`, html);
   // PWA files (manifest, icons, service worker). The SW cache name is stamped with a hash of the page.
-  cpSync(path("public"), path("dist"), { recursive: true });
+  cpSync(path("public"), outDir, { recursive: true });
   const version = createHash("sha256").update(html).digest("hex").slice(0, 10);
-  writeFileSync(path("dist/sw.js"), readFileSync(path("public/sw.js"), "utf8").replace("__VERSION__", version));
-  console.log(`dist/index.html  ${(html.length / 1024).toFixed(0)} KB  sw=${version}  (${Math.round(performance.now() - t0)} ms)`);
+  writeFileSync(`${outDir}/sw.js`, readFileSync(path("public/sw.js"), "utf8").replace("__VERSION__", version));
+  console.log(`${outDir === path("dist") ? "dist" : outDir}/index.html  ${(html.length / 1024).toFixed(0)} KB  sw=${version}  live feed: ${liveConfig ? "ON (" + new URL(liveConfig.url).host + ")" : "OFF (sample counts)"}  (${Math.round(performance.now() - t0)} ms)`);
 }
 
 await bundle();

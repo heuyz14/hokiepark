@@ -11,6 +11,8 @@ export interface MapController {
   setSelection(sel: Selection, opts: { fly: boolean }): void;
   zoom(factor: number): void;
   reset(): void;
+  /** Re-read garage counts (after a live update) and update the markers in place. */
+  refreshGarages(): void;
 }
 
 /** Labeled at every zoom; chosen to be far enough apart not to collide at full-campus view. */
@@ -78,13 +80,16 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
   const drillAnchor = proj(DRILLFIELD_CENTER.lat, DRILLFIELD_CENTER.lon);
   allPts.push(...project(DRILLFIELD, proj));
 
+  const garageLabel = (g: (typeof GARAGES)[number]) => {
+    const t = garageTotals(g);
+    return `${g.name}: ${t.open} of ${t.capacity} spaces open, ${t.adaOpen} accessible open`;
+  };
   const garageMarkers = GARAGES.map((g) => {
     const a = anchors.get(key("garage", g.id))!;
     const t = garageTotals(g);
     const st = garageStatus(g);
     const count = st === "full" ? "Full" : String(t.open);
-    const label = `${g.name}: ${t.open} of ${t.capacity} spaces open, ${t.adaOpen} accessible open`;
-    return `<g class="marker marker-garage st-${st}" data-scale data-kind="garage" data-id="${g.id}" data-x="${a.x.toFixed(1)}" data-y="${a.y.toFixed(1)}" tabindex="0" role="button" aria-label="${esc(label)}">
+    return `<g class="marker marker-garage st-${st}" data-scale data-kind="garage" data-id="${g.id}" data-x="${a.x.toFixed(1)}" data-y="${a.y.toFixed(1)}" tabindex="0" role="button" aria-label="${esc(garageLabel(g))}">
       <rect class="m-bg" x="-50" y="-15" width="100" height="30" rx="15"/>
       <text class="m-p" x="-36" y="5" text-anchor="middle">P</text>
       <text class="m-count" x="-8" y="5" text-anchor="middle">${count}</text>
@@ -285,6 +290,19 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     },
     reset() {
       flyTo(home);
+    },
+    refreshGarages() {
+      for (const g of GARAGES) {
+        const el = svg.querySelector<SVGGElement>(`.marker-garage[data-id="${g.id}"]`);
+        if (!el) continue;
+        const t = garageTotals(g);
+        const st = garageStatus(g);
+        el.classList.remove("st-open", "st-limited", "st-full");
+        el.classList.add(`st-${st}`);
+        el.setAttribute("aria-label", garageLabel(g));
+        el.querySelector(".m-count")!.textContent = st === "full" ? "Full" : String(t.open);
+        el.querySelector(".m-ada-count")!.textContent = String(t.adaOpen);
+      }
     },
   };
 }

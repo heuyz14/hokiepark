@@ -50,7 +50,8 @@ h1, h2, h3, p { margin: 0; }
 }
 
 .topbar { background: var(--maroon); color: #fff; padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px; border-bottom: 4px solid var(--orange); }
-.brand { display: flex; align-items: center; gap: 10px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand-mark { width: 34px; height: 34px; border-radius: 9px; background: var(--orange); color: var(--maroon-dark); font-weight: 800; font-size: 20px; display: grid; place-items: center; }
 .brand h1 { font-size: 19px; line-height: 1.1; letter-spacing: 0.2px; }
 .brand p { font-size: 12.5px; opacity: 0.92; }
@@ -197,3 +198,10 @@ path.is-selected { stroke: var(--orange) !important; stroke-width: 3px !importan
 .chat-form input:focus { border-color: var(--maroon); outline: none; box-shadow: 0 0 0 3px rgb(229 117 31 / 0.4); }
 .send { height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--maroon); color: #fff; font-weight: 700; }
 .send:disabled { opacity: 0.55; }
+
+/* ---------- sync chip (header) ---------- */
+.sync { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: rgb(255 255 255 / 0.16); color: #fff; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #d7cfd2; }
+.sync-live::before { background: #6ee7a0; }
+.sync-warn::before { background: var(--orange); }
+@media (max-width: 400px) { .brand p { display: none; } }
