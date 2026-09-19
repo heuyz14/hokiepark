@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { BUCKETS, buildLevelCurves, coverage, haversineM, percentile, pull, staffShape, type GarageIn, type Placed } from "../src/lib/demand.ts";
+import { BUCKETS, buildLevelCurves, coverage, haversineM, percentile, pull, smooth, staffShape, type GarageIn, type Placed } from "../src/lib/demand.ts";
 import { renderCurvesSql } from "../src/lib/curves-sql.ts";
 import { GARAGES } from "../src/data/garages.ts";
 import type { MeetingGroup } from "../src/lib/timetable.ts";
@@ -88,6 +88,36 @@ test("faculty levels follow the staff workday even with no classes, and Friday i
 test("levels of one group fill bottom-up", () => {
   const curves = buildLevelCurves([], [garage]);
   for (let b = 0; b < BUCKETS; b++) assert.ok(at(curves, 1, 3)[b]! >= at(curves, 2, 3)[b]!, `bucket ${b}`);
+});
+
+test("smooth is a centered moving average with shrinking edge windows", () => {
+  assert.deepEqual(smooth([0, 0, 9, 0, 0], 1), [0, 3, 3, 3, 0]);
+  assert.deepEqual(smooth([4, 8], 5), [6, 6]);
+});
+
+test("real curves do not saw-tooth: a garage's total fill moves at most 15 points between adjacent quarter-hours", () => {
+  // (Per LEVEL jumps can be large by design: the morning ramp fills one middle level bottom-up. The total is what smoothing controls.)
+  const sql = read("supabase/curves.seed.sql");
+  const rows = [...sql.matchAll(/\('([a-z-]+)', (\d+), (\d), '\{([\d,]+)\}'\)/g)];
+  let worst = 0;
+  for (const g of GARAGES) {
+    const cap = g.levels.reduce((n, l) => n + l.capacity, 0);
+    for (const dow of ["1", "2", "3", "4", "5"]) {
+      const total = new Array<number>(BUCKETS).fill(0);
+      for (const m of rows.filter((r) => r[1] === g.id && r[3] === dow)) {
+        m[4]!.split(",").forEach((v, b) => (total[b]! += (Number(v) * g.levels[Number(m[2])]!.capacity) / 100));
+      }
+      for (let b = 1; b < BUCKETS; b++) worst = Math.max(worst, (100 * Math.abs(total[b]! - total[b - 1]!)) / cap);
+    }
+  }
+  assert.ok(worst <= 15, `largest one-bucket change in garage total is ${worst.toFixed(1)} points`);
+  // The commuter level (Perry L1) has no bottom-up cascade and is the class-driven one; it used to jump 95 -> 59 at every class change.
+  let cgWorst = 0;
+  for (const m of rows.filter((r) => r[1] === "perry-street" && r[2] === "0")) {
+    const a = m[4]!.split(",").map(Number);
+    for (let b = 1; b < a.length; b++) cgWorst = Math.max(cgWorst, Math.abs(a[b]! - a[b - 1]!));
+  }
+  assert.ok(cgWorst <= 25, `largest one-bucket change on the commuter level is ${cgWorst} points`);
 });
 
 test("coverage counts seat-meetings on known buildings", () => {

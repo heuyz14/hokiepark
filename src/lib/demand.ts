@@ -20,6 +20,8 @@ export const MODEL = {
   /** Cars show up this long before class starts and leave this long after it ends. */
   leadMin: 15,
   lagMin: 15,
+  /** Class activity is averaged over +/- this many 15-minute buckets, so back-to-back classes read as a plateau. */
+  smoothBuckets: 2,
   /** Occupancy fraction of a level at zero / peak activity. */
   floorFrac: 0.04,
   peakFrac: 0.95,
@@ -67,6 +69,17 @@ export function percentile(values: readonly number[], q: number): number {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))]!;
+}
+
+/** Centered moving average over +/- `radius` buckets (window shrinks at the edges of the day). */
+export function smooth(values: readonly number[], radius: number): number[] {
+  return values.map((_, i) => {
+    const from = Math.max(0, i - radius);
+    const to = Math.min(values.length - 1, i + radius);
+    let sum = 0;
+    for (let j = from; j <= to; j++) sum += values[j]!;
+    return sum / (to - from + 1);
+  });
 }
 
 export interface GarageIn {
@@ -118,7 +131,11 @@ export interface LevelCurve {
 export function buildLevelCurves(placed: readonly Placed[], garages: readonly GarageIn[]): LevelCurve[] {
   const curves: LevelCurve[] = [];
   for (const g of garages) {
-    const raw = rawActivity(placed, g);
+    // Without smoothing, a class change (one class in its 15-min "leaving" window, the next in its "arriving" window)
+    // double-counts and the curve saw-tooths between ~95% and ~60% every hour.
+    const rough = rawActivity(placed, g);
+    const raw: Record<number, number[]> = {};
+    for (const d of DOWS) raw[d] = smooth(rough[d]!, MODEL.smoothBuckets);
     // One scale across the week so days stay comparable: the 95th percentile of non-empty buckets, so a normal busy
     // period reads as "full" instead of being dwarfed by the single busiest quarter-hour (activity is clamped to 1 below).
     const peak = Math.max(1, percentile(DOWS.flatMap((d) => raw[d]!).filter((v) => v > 0), 0.95));
