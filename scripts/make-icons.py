@@ -1,24 +1,57 @@
-"""One-off: render the HokiePark app icons into public/icons/. Run: python3 scripts/make-icons.py
-Committed output; only rerun if the branding changes. Needs Pillow."""
-from PIL import Image, ImageDraw, ImageFont
+"""Render the HokiePark app icons from assets/icon-master.png into public/icons/.
 
-MAROON, ORANGE, WHITE = (134, 31, 65), (229, 117, 31), (255, 255, 255)
-FONT = "/System/Library/Fonts/Helvetica.ttc"
+    python3 scripts/make-icons.py        (needs Pillow: python3 -m pip install --user Pillow)
 
-def icon(size: int, maskable: bool) -> Image.Image:
-    # Maskable icons must keep content inside the central ~80% "safe zone"; other icons get rounded corners
-    # from the OS (iOS) so we ship a full-bleed square for apple-touch-icon.
-    img = Image.new("RGB", (size, size), MAROON)
-    d = ImageDraw.Draw(img)
-    scale = 0.62 if maskable else 0.78
-    band = int(size * 0.07)
-    d.rectangle([0, size - band * 2, size, size - band], fill=ORANGE)  # orange stripe, VT chrome echo
-    font = ImageFont.truetype(FONT, int(size * scale), index=1)  # index 1 = Helvetica Bold
-    bbox = d.textbbox((0, 0), "P", font=font)
-    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    d.text(((size - w) / 2 - bbox[0], (size - h) / 2 - bbox[1] - size * 0.03), "P", font=font, fill=WHITE)
-    return img
+Output is committed; rerun only when the artwork changes. The master lives in assets/ rather than
+public/ so the 1 MB original isn't copied into dist/ by the build.
 
-for name, size, maskable in [("apple-touch-icon.png", 180, False), ("icon-192.png", 192, False), ("icon-512.png", 512, False), ("icon-512-maskable.png", 512, True)]:
-    icon(size, maskable).save(f"public/icons/{name}", optimize=True)
-    print("wrote", name)
+Three shapes, because the platforms want different things:
+  * icon-192 / icon-512  - the artwork as drawn, transparent corners kept.
+  * apple-touch-icon     - opaque, full-bleed square: iOS applies its OWN rounded mask, and
+                           transparent corners composite to black outside it.
+  * icon-512-maskable    - Android may crop to a circle, so the artwork is inset into the central
+                           ~80% "safe zone" on a solid ground.
+"""
+
+from PIL import Image
+
+SRC = "assets/icon-master.png"
+OUT = "public/icons"
+# Sampled from the master: the deep maroon the artwork sits on.
+GROUND = (93, 9, 40)
+SAFE_ZONE = 0.80  # Android maskable spec: keep content within the central 80%
+
+
+def load() -> Image.Image:
+    return Image.open(SRC).convert("RGBA")
+
+
+def flatten(img: Image.Image) -> Image.Image:
+    """Composite onto the icon's own ground so no transparency survives."""
+    bg = Image.new("RGBA", img.size, (*GROUND, 255))
+    return Image.alpha_composite(bg, img).convert("RGB")
+
+
+def resize(img: Image.Image, size: int) -> Image.Image:
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def maskable(img: Image.Image, size: int) -> Image.Image:
+    inner = resize(img, int(size * SAFE_ZONE))
+    canvas = Image.new("RGBA", (size, size), (*GROUND, 255))
+    off = (size - inner.width) // 2
+    canvas.paste(inner, (off, off), inner)
+    return canvas.convert("RGB")
+
+
+def main() -> None:
+    master = load()
+    resize(master, 192).save(f"{OUT}/icon-192.png")
+    resize(master, 512).save(f"{OUT}/icon-512.png")
+    flatten(resize(master, 180)).save(f"{OUT}/apple-touch-icon.png")
+    maskable(master, 512).save(f"{OUT}/icon-512-maskable.png")
+    print("wrote icon-192, icon-512, apple-touch-icon, icon-512-maskable")
+
+
+if __name__ == "__main__":
+    main()
