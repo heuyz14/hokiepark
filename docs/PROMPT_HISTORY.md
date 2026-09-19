@@ -57,3 +57,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > also find out why im commiting from a different github profile than heuyz14 and fix that to set push from heuyz14 from our work
 
 **Outcome:** Root cause: global `~/.gitconfig` identity is `hle142025S <heuyz48@gmail.com>` (a different GitHub account whose display name is "heuyz14"), so commits were attributed to it. The push credential in the Keychain was already heuyz14 (account id 204778464). Fixed with a repo-local identity `heuyz14 <204778464+heuyz14@users.noreply.github.com>`; global config untouched; earlier commits not rewritten.
+
+## 9. 2026-09-19 - identity for the entire folder
+
+> change the identity for the entire folder
+
+**Outcome:** Read as "every repo under ~/ProjectPort". `laelaps` and `nqmate` already used `heuyz14 <heuyz14@yahoo.com>` (GitHub credits that email to heuyz14), so standardized on it: added an `includeIf "gitdir:/Users/bubba/ProjectPort/"` rule in `~/.gitconfig` pointing at `~/.gitconfig-projectport`, removed terraceb's repo-local override, and verified all four repos plus a fresh repo inside the folder; outside the folder the global identity is unchanged. Backup: `~/.gitconfig.bak-before-projectport`.
