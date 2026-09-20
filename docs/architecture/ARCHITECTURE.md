@@ -15,7 +15,7 @@ current status and decisions live in [`../STATE.md`](../STATE.md).
         v                               v
  src/data/*.json ----> BUILDINGS/LOTS/GARAGES        supabase/curves.seed.sql --> Supabase: garage_levels, garage_level_curves
         |                                                   pg_cron tick every minute steers counts toward the curve
-        v                                                                   |  read-only, polled every 15 s
+        v                                                                   |  read-only, polled every 60 s
    src/lib (pure logic)  <---------------------- src/live.ts <--------------+
    src/ui  (DOM views)                                                       
         |                                                                    

@@ -35,7 +35,7 @@ Circling for a space costs time, fuel, and patience, makes people late, and adds
 
 **4.6 Ask.** Two engines share one chat. A **rule-based assistant** answers the core questions ("where is the closest open parking to Squires Student Center", "is there accessible parking near Cassell Coliseum", "which garage has the most open spots") from the same data as the map, and understands plan-ahead phrasing ("2pm class in Hancock Hall"). An optional **AI advisor** handles messier requests and follow-ups ("when should I arrive at Hancock for a 10am class?", then "commuter"). The AI never supplies facts: it chooses among seven deterministic tools that run in the app on its own data and phrases their results; any number it writes that no tool returned, or any place no tool returned, causes the answer to be rejected and the built-in answer to be used, badged "Basic answer" with the reason. Answers take about 2-4 seconds and cost roughly a quarter of a cent.
 
-**4.7 Live counts.** Garage counts come from a Supabase table the app polls every 15 seconds (read-only), advanced every minute by a simulator that steers each level toward a target for the current time. A header chip shows `Live . 12s ago` or warns when data is stale or offline. With no configuration the app runs on bundled sample counts.
+**4.7 Live counts.** Garage counts come from a Supabase table the app polls once a minute (read-only), advanced every minute by a simulator that steers each level toward a target for the current time. A header chip shows `Live . 12s ago` or warns when data is stale or offline. With no configuration the app runs on bundled sample counts.
 
 ## 5. Data and accuracy
 

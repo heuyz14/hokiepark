@@ -13,7 +13,7 @@ test("unconfigured (both empty/undefined) means the feed is off, not an error", 
 test("valid config is normalized to the URL origin with the default poll interval", () => {
   const c = parseLiveConfig("https://abcd.supabase.co/", jwt("anon"))!;
   assert.equal(c.url, "https://abcd.supabase.co");
-  assert.equal(c.pollMs, 15000);
+  assert.equal(c.pollMs, 60000);
   assert.equal(parseLiveConfig("https://abcd.supabase.co", "sb_publishable_x", "2000")!.pollMs, 2000);
 });
 

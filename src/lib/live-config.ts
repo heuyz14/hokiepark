@@ -9,7 +9,7 @@ export interface LiveConfig {
   pollMs: number;
 }
 
-export const DEFAULT_POLL_MS = 15_000;
+export const DEFAULT_POLL_MS = 60_000; // one minute: the server-side simulator only advances once a minute, so polling faster just re-reads the same rows
 export const MIN_POLL_MS = 1_000;
 
 function jwtRole(key: string): string | null {

@@ -46,12 +46,12 @@ test("data older than 12 minutes warns with a readable age", () => {
 });
 
 test("the other states are unchanged: demo, connecting, offline (with and without a previous sync)", () => {
-  assert.deepEqual(describeSync({ state: "demo", lastSync: null, dataAsOf: null }, NOW), { text: "Sample data · no refresh", title: "Showing bundled sample counts. Automatic refresh is off because the live feed is not configured.", tone: "off" });
-  assert.equal(describeSync({ state: "connecting", lastSync: null, dataAsOf: null }, NOW, 15_000).text, "Connecting · refresh 15s");
+  assert.deepEqual(describeSync({ state: "demo", lastSync: null, dataAsOf: null }, NOW), { text: "Sample data", title: "Showing bundled sample counts. Automatic refresh is off because the live feed is not configured.", tone: "off" });
+  assert.equal(describeSync({ state: "connecting", lastSync: null, dataAsOf: null }, NOW, 15_000).text, "Connecting");
   const never = describeSync({ state: "offline", lastSync: null, dataAsOf: null }, NOW);
   const had = describeSync({ state: "offline", lastSync: NOW - 60_000, dataAsOf: NOW - 60_000 }, NOW, 15_000);
   assert.equal(never.text, "Offline");
-  assert.equal(had.text, "Offline · refresh 15s");
+  assert.equal(had.text, "Offline");
   assert.match(never.title, /bundled sample counts/);
   assert.match(had.title, /last known counts/);
   assert.equal(had.tone, "warn");
@@ -60,5 +60,5 @@ test("the other states are unchanged: demo, connecting, offline (with and withou
 test("a live status with no data timestamp yet shows Live (nothing to be stale about)", () => {
   const label = describeSync({ state: "live", lastSync: NOW - 2_000, dataAsOf: null }, NOW, 15_000);
   assert.equal(label.tone, "live");
-  assert.equal(label.text, "Live · just now · refresh 15s");
+  assert.equal(label.text, "Live · just now");
 });

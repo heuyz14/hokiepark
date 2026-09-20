@@ -456,7 +456,7 @@ const chipText = () => ev(`document.getElementById('sync').textContent`);
 const markerLabel = (gid) => ev(`document.querySelector('.marker-garage[data-id="${gid}"]').getAttribute('aria-label')`);
 const hdr = (req, name) => Object.entries(req.headers).find(([k]) => k.toLowerCase() === name)?.[1];
 if (!LIVE) {
-  check("chip says sample data does not refresh when the feed is not configured", (await chipText()) === "Sample data · no refresh", await chipText());
+  check("chip says sample data when the feed is not configured", (await chipText()) === "Sample data", await chipText());
 } else {
   check("live: chip reaches 'Live' after first sync", await waitFor(async () => /^Live/.test(await chipText())), await chipText());
   check("live: requests hit /rest/v1/garage_levels with the anon key and no privileged key",

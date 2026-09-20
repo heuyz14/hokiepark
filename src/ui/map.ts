@@ -5,7 +5,7 @@ import type { Building, Footprint, Garage, Lot, Selection } from "../types.ts";
 import { footprintBounds, footprintToGeoJSON } from "../lib/geojson.ts";
 import { garageStatus, garageTotals } from "../lib/occupancy.ts";
 import { classSummary, garageAccess, lotAccess, type LotClass, type PermitId } from "../lib/permits.ts";
-import { esc, CATEGORY_COLOR, withLibraryClasses } from "./format.ts";
+import { esc, CATEGORY_COLOR, withLibraryClasses, markerScale } from "./format.ts";
 
 export interface MapController {
   /** Highlight a selection. `fly` recenters/zooms on it; otherwise only nudges it out from under the sheet. */
@@ -38,10 +38,7 @@ const LOT_FILL = "#c9c3b7";
 const LOT_ADA_FILL = "#b9cdf2";
 const LOT_LINE = "#9c9384";
 const ADA_COLOR = "#0b4fd0";
-const GARAGE_FILL = "#861f41";
-const GARAGE_LINE = "#6a1833";
-const GARAGE_IDLE_OPACITY = 0.45;
-const GARAGE_IDLE_LINE = 2.5;
+const GARAGE_FILL = "#3d3036";
 const ORANGE = "#e5751f";
 const MAROON = "#861f41";
 // Permit-filter colors deliberately override the map's category colors so the answer is
@@ -97,13 +94,14 @@ function garageMarkerHtml(g: Garage): string {
   const st = garageStatus(g);
   const count = st === "full" ? "Full" : String(t.open);
   const classes = [...new Set(g.levels.flatMap((level) => level.classes))];
-  return `<span class="m-pill"><span class="m-p">P</span><span class="m-count">${esc(count)}</span></span>
+  // .m-inner is what scales with zoom; the pill alone defines the marker's box, so the pin's centre IS the pill's centre (the ADA badge hangs off its right edge)
+  return `<span class="m-inner"><span class="m-pill"><span class="m-p">P</span><span class="m-count">${esc(count)}</span></span>
     <span class="m-ada">${wheelchairIcon("m-ada-icon")}<span class="m-ada-count">${t.adaOpen}</span></span>
-    ${permitMarker(classes)}`;
+    ${permitMarker(classes)}</span>`;
 }
 
 function lotMarkerHtml(l: Lot): string {
-  return `<span class="m-dot">P</span>${l.hasADA ? wheelchairIcon("m-ada-dot") : ""}${permitMarker(l.classes)}`;
+  return `<span class="m-inner"><span class="m-dot">P</span>${l.hasADA ? wheelchairIcon("m-ada-dot") : ""}${permitMarker(l.classes)}</span>`;
 }
 
 /** No-op controller returned when the map can't be created at all (e.g. no WebGL2 support), so a
@@ -208,9 +206,8 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     map.addLayer({ id: "lots-outline", type: "line", source: "lots", layout: { visibility: "none" }, paint: { "line-color": ["case", ["get", "hasADA"], ADA_COLOR, LOT_LINE], "line-width": ["case", ["get", "hasADA"], 1.6, 1] } }, belowLabels);
 
     map.addSource("garages", { type: "geojson", data: toFeatureCollection(GARAGES, () => ({})) });
-    // Garage footprints are ALWAYS drawn (unlike lots): the pill on top is pinned to the footprint's centre, so the building must be visible under it.
-    map.addLayer({ id: "garages-fill", type: "fill", source: "garages", paint: { "fill-color": GARAGE_FILL, "fill-opacity": GARAGE_IDLE_OPACITY } }, belowLabels);
-    map.addLayer({ id: "garages-outline", type: "line", source: "garages", paint: { "line-color": GARAGE_LINE, "line-width": GARAGE_IDLE_LINE } }, belowLabels);
+    map.addLayer({ id: "garages-fill", type: "fill", source: "garages", layout: { visibility: "none" }, paint: { "fill-color": GARAGE_FILL, "fill-opacity": 0 } }, belowLabels);
+    map.addLayer({ id: "garages-outline", type: "line", source: "garages", layout: { visibility: "none" }, paint: { "line-color": "#000", "line-width": 1 } }, belowLabels);
 
     map.addSource("selection", { type: "geojson", data: EMPTY_FC });
     map.addLayer({ id: "selection-outline", type: "line", source: "selection", paint: { "line-color": ORANGE, "line-width": 4 } });
@@ -249,7 +246,12 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
       addMarker("garage", g.id, g.center.lon, g.center.lat, `marker marker-garage st-${garageStatus(g)}`, garageMarkerHtml(g), garageLabel(g), () => onSelect({ kind: "garage", id: g.id }));
     }
 
-    const applyDeclutter = () => el.classList.toggle("show-all-lots", map.getZoom() >= LOT_DECLUTTER_ZOOM);
+    const applyDeclutter = () => {
+      const z = map.getZoom();
+      el.classList.toggle("show-all-lots", z >= LOT_DECLUTTER_ZOOM);
+      // pins shrink when zoomed out (so they don't bury the buildings) and grow a little when zoomed in
+      el.style.setProperty("--marker-scale", String(markerScale(z)));
+    };
     applyDeclutter();
     map.on("zoom", applyDeclutter);
 
@@ -276,7 +278,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
         const on = activePermits.length > 0 || activeAda;
         el.classList.toggle("filtering", on);
         const visibility = on ? "visible" : "none";
-        for (const layer of ["lots-fill", "lots-outline"]) {
+        for (const layer of ["lots-fill", "lots-outline", "garages-fill", "garages-outline"]) {
           map.setLayoutProperty(layer, "visibility", visibility);
         }
         const mark = (node: HTMLElement | undefined, verdict: string | null) => {
@@ -306,11 +308,11 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
         map.setPaintProperty("garages-fill", "fill-color", on
           ? ["match", ["get", "access"], "yes", PERMIT_YES, "check", PERMIT_CHECK, PERMIT_NO]
           : GARAGE_FILL);
-        map.setPaintProperty("garages-fill", "fill-opacity", on ? ["match", ["get", "access"], "yes", 0.42, "check", 0.34, 0.12] : GARAGE_IDLE_OPACITY);
+        map.setPaintProperty("garages-fill", "fill-opacity", on ? ["match", ["get", "access"], "yes", 0.42, "check", 0.34, 0.02] : 0);
         map.setPaintProperty("garages-outline", "line-color", on
           ? ["match", ["get", "access"], "yes", "#005f3c", "check", "#9b6500", "#666b70"]
-          : GARAGE_LINE);
-        map.setPaintProperty("garages-outline", "line-width", on ? ["match", ["get", "access"], "yes", 4, "check", 3, 1.5] : GARAGE_IDLE_LINE);
+          : "#000");
+        map.setPaintProperty("garages-outline", "line-width", on ? ["match", ["get", "access"], "yes", 4, "check", 3, 0] : 0);
       });
     },
     setSelection(sel, { fly }) {

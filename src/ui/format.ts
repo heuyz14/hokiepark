@@ -37,3 +37,8 @@ export function withLibraryClasses(current: Iterable<string>, next: string): str
   const keep = [...current].filter((c) => c.startsWith("maplibregl-"));
   return [...keep, ...next.split(/\s+/).filter(Boolean)].join(" ");
 }
+
+/** Marker size at a map zoom: small when zoomed out (so pins don't bury the buildings), full size around zoom 16, a touch larger beyond. */
+export function markerScale(zoom: number): number {
+  return Math.round(Math.min(1.1, Math.max(0.68, 0.68 + (zoom - 14) * 0.15)) * 100) / 100;
+}

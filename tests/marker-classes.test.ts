@@ -27,3 +27,11 @@ test("each garage marker is centred on its own footprint, within the footprint's
     assert.ok(g.center.lat >= Math.min(...ys) && g.center.lat <= Math.max(...ys), `${g.id} lat inside footprint bounds`);
   }
 });
+
+test("marker scale: smaller zoomed out, full size near street level, capped both ways", async () => {
+  const { markerScale } = await import("../src/ui/format.ts");
+  assert.equal(markerScale(10), 0.68);
+  assert.ok(markerScale(15) > markerScale(14) && markerScale(16) > markerScale(15));
+  assert.ok(markerScale(16) >= 0.95 && markerScale(16) <= 1.05);
+  assert.equal(markerScale(20), 1.1);
+});

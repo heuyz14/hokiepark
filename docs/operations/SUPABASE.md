@@ -8,7 +8,7 @@ Counts are still **simulated demo data**; there are no real sensors (spec Sectio
 ```
 Supabase Postgres  public.garage_levels  (RLS: anon may only SELECT)
       ^ writes: SQL editor / pg_cron simulator / service role only
-      | GET /rest/v1/garage_levels   (apikey = public anon key, every 15 s)
+      | GET /rest/v1/garage_levels   (apikey = public anon key, every 60 s)
 browser  fetchOccupancy -> parseOccupancyRows (strict validation) -> applyOccupancy (all-or-nothing) -> GARAGES
       -> map.refreshGarages() + list.refresh() + sheet.render(preserveScroll)   (assistant reads GARAGES at ask time)
 ```
@@ -96,6 +96,6 @@ against the real clock. Re-pull the term with `npm run timetable`, then `npm run
 | No service role in the browser | build-time guard in `src/lib/live-config.ts`, tested |
 
 ## Limits and next steps
-- Polling every 15 s (`HOKIEPARK_POLL_MS`, min 1000). Supabase Realtime would push instead; not needed for a demo.
+- Polling every 60 s (`HOKIEPARK_POLL_MS`, min 1000). Supabase Realtime would push instead; not needed for a demo.
 - Lots still have no live counts (no per-lot data exists); only garages are live.
 - Production (spec Section 7): the same `garage_levels` shape would be served from Databricks/Unity Catalog behind an API.

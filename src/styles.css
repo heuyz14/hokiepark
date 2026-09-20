@@ -85,6 +85,9 @@ h1, h2, h3, p { margin: 0; }
 /* HTML markers (maplibregl.Marker) for garages and lots - kept as real, focusable DOM elements so
    they read out to assistive tech and stay a constant screen size at any zoom, same as before. */
 .marker { position: relative; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.m-inner { position: relative; display: flex; align-items: center; gap: 4px; scale: var(--marker-scale, 1); transform-origin: center; }
+/* the ADA badge hangs off the pill's right edge instead of widening the marker, so the pill (not pill+badge) is centred on the building */
+.marker-garage .m-ada { position: absolute; left: calc(100% + 4px); top: 50%; translate: 0 -50%; }
 .marker-lot { display: none; }
 .marker-lot.has-ada,
 .marker-lot.is-selected,
