@@ -1,4 +1,4 @@
-import timetableCodes from "../../data/timetable-building-codes.json" with { type: "json" };
+import timetableCodes from "../../data/reference/timetable-building-codes.json" with { type: "json" };
 
 /**
  * Official Virginia Tech Banner building abbreviations keyed by the GIS building number used by the map.

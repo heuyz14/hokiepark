@@ -2,7 +2,7 @@ import type { Footprint } from "../types.ts";
 
 /**
  * A `Footprint` is a flat list of rings; multi-part buildings/lots store each disjoint part as
- * its own ring (see scripts/build-data.ts), not as a hole in a single polygon. So each ring
+ * its own ring (see scripts/data/build-data.ts), not as a hole in a single polygon. So each ring
  * becomes its own one-ring GeoJSON Polygon inside the MultiPolygon, never a hole.
  */
 export function footprintToGeoJSON(fp: Footprint): GeoJSON.MultiPolygon {

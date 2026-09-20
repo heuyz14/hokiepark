@@ -4,15 +4,15 @@
  * Output is SIMULATED occupancy shaped by seat capacity, not measured data (see src/lib/demand.ts).
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { GARAGES } from "../src/data/garages.ts";
-import { buildLevelCurves, coverage, type Placed } from "../src/lib/demand.ts";
-import { renderCurvesSql } from "../src/lib/curves-sql.ts";
-import type { MeetingGroup } from "../src/lib/timetable.ts";
+import { GARAGES } from "../../src/data/garages.ts";
+import { buildLevelCurves, coverage, type Placed } from "../../src/lib/demand.ts";
+import { renderCurvesSql } from "../../src/lib/curves-sql.ts";
+import type { MeetingGroup } from "../../src/lib/timetable.ts";
 
 const read = (p: string) => JSON.parse(readFileSync(new URL(p, import.meta.url), "utf8"));
-const timetable = read("../data/raw/timetable.json") as { term: string; meetings: MeetingGroup[] };
-const codes = read("../data/timetable-building-codes.json") as Record<string, { num: string }>;
-const gis = read("../data/raw/buildings.raw.json").features as { attributes: { bldg_num: string; latitude: number; longitude: number } }[];
+const timetable = read("../../data/raw/timetable.json") as { term: string; meetings: MeetingGroup[] };
+const codes = read("../../data/reference/timetable-building-codes.json") as Record<string, { num: string }>;
+const gis = read("../../data/raw/buildings.raw.json").features as { attributes: { bldg_num: string; latitude: number; longitude: number } }[];
 
 const point = new Map<string, { lat: number; lon: number }>();
 for (const f of gis) {
@@ -30,7 +30,7 @@ const cov = coverage(timetable.meetings, (c) => Boolean(codes[c] && point.get(co
 console.log(`term ${timetable.term}: placed ${cov.placedSeats}/${cov.totalSeats} weekly seat-meetings (${((100 * cov.placedSeats) / cov.totalSeats).toFixed(1)}%)`);
 
 const curves = buildLevelCurves(placed, GARAGES.map((g) => ({ id: g.id, lat: g.lat, lon: g.lon, levels: g.levels })));
-writeFileSync(new URL("../supabase/curves.seed.sql", import.meta.url), renderCurvesSql(curves));
+writeFileSync(new URL("../../supabase/curves.seed.sql", import.meta.url), renderCurvesSql(curves));
 console.log(`wrote supabase/curves.seed.sql (${curves.length} curves)`);
 
 // Sanity report: hour of peak fill per garage on Tuesday

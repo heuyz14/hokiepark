@@ -3,32 +3,39 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "HokiePark - VTHacks 14 parking map for Virginia Tech (single-file build)",
+  "description": "HokiePark - VTHacks 14 parking map and advisor for Virginia Tech (single-file PWA)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heuyz14/terraceb.git"
+  },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "data": "node scripts/build-data.ts",
-    "build": "node --env-file-if-exists=.env.local scripts/build.ts",
-    "dev": "node --env-file-if-exists=.env.local scripts/build.ts --watch",
+    "data": "node scripts/data/build-data.ts",
+    "build": "node --env-file-if-exists=.env.local scripts/build/build.ts",
+    "dev": "node --env-file-if-exists=.env.local scripts/build/build.ts --watch",
     "test": "node --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
-    "smoke": "node scripts/smoke.mjs",
-    "seed": "node scripts/gen-seed.ts",
-    "curves": "node scripts/gen-curves.ts",
-    "databricks:inputs": "node scripts/export-databricks-inputs.ts",
-    "advisor:build": "node scripts/build-advisor.ts",
+    "smoke": "node scripts/verify/smoke.mjs",
+    "seed": "node scripts/data/gen-seed.ts",
+    "curves": "node scripts/data/gen-curves.ts",
+    "databricks:inputs": "node scripts/data/export-databricks-inputs.ts",
+    "advisor:build": "node scripts/build/build-advisor.ts",
     "test:py": "python3 databricks/tests/test_parity.py && python3 databricks/tests/test_sim.py && python3 databricks/tests/test_ml.py",
-    "timetable": "node scripts/fetch-timetable.ts",
-    "smoke:live": "node scripts/smoke.mjs 430 900 --live",
-    "check:advisor": "node --env-file-if-exists=.env.local scripts/check-advisor.ts",
-    "check:supabase": "node --env-file-if-exists=.env.local scripts/check-supabase.ts"
+    "timetable": "node scripts/data/fetch-timetable.ts",
+    "smoke:live": "node scripts/verify/smoke.mjs 430 900 --live",
+    "check:advisor": "node --env-file-if-exists=.env.local scripts/verify/check-advisor.ts",
+    "check:supabase": "node --env-file-if-exists=.env.local scripts/verify/check-supabase.ts"
+  },
+  "dependencies": {
+    "maplibre-gl": "^6.10.0"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",
     "@types/node": "^26.6.2",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "maplibre-gl": "^6.10.0"
   }
 }

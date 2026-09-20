@@ -1,6 +1,6 @@
 /**
  * One-time pull of VT's public ArcGIS layers into data/raw/ (WGS84). Run manually:
- *   node scripts/fetch-gis.ts
+ *   node scripts/data/fetch-gis.ts
  * After this, every other script reads the local files; the live endpoint is never called at runtime.
  */
 import { writeFileSync } from "node:fs";
@@ -15,6 +15,6 @@ for (const [layer, file] of Object.entries(LAYERS)) {
   const json = (await res.json()) as { features?: unknown[]; exceededTransferLimit?: boolean };
   if (!json.features?.length) throw new Error(`${layer}: no features returned`);
   if (json.exceededTransferLimit) throw new Error(`${layer}: result truncated, add paging`);
-  writeFileSync(new URL(`../data/raw/${file}`, import.meta.url), JSON.stringify(json));
+  writeFileSync(new URL(`../../data/raw/${file}`, import.meta.url), JSON.stringify(json));
   console.log(`${layer}: ${json.features.length} features -> data/raw/${file}`);
 }

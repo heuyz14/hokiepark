@@ -16,7 +16,7 @@ export interface Building {
   footprint: Footprint;
 }
 
-/** Shape written by scripts/build-data.ts (GIS-derived only, no hand-authored fields). */
+/** Shape written by scripts/data/build-data.ts (GIS-derived only, no hand-authored fields). */
 export interface LotGeo {
   id: string;
   name: string;
@@ -30,7 +30,7 @@ export interface LotGeo {
 }
 
 /**
- * Real facts sourced from VT's own parking pages (data/vt_parking_app_dataset.csv), not simulated.
+ * Real facts sourced from VT's own parking pages (data/reference/vt_parking_app_dataset.csv), not simulated.
  * Only present where that dataset actually names a matching garage or lot (spec/README caveat:
  * VT publishes this on parking.vt.edu/permits.html, a different list than the GIS ParkingLots layer).
  */

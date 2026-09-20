@@ -1,12 +1,12 @@
 # HokiePark - current state
 
 _Last updated: 2026-09-19 ~19:00 (Class-schedule occupancy Tier A built, awaiting user to run 2 SQL files; Phases 1-5 done; Supabase live feed verified against the REAL project; permit-eligibility filter built; iPhone (Wi-Fi) check passed by user; next: deploy + rehearsal)._
-Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `../HOKIEPARK_SPEC.md`, `../HokiePark - 6-Hour Build Plan.md`.
+Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `product/SPEC.md`, `product/BUILD_PLAN.md`.
 
 ## What this is
 HokiePark: mobile-first VT campus parking map for VTHacks 14 (Deloitte x Databricks track). Ships as ONE self-contained
 `dist/index.html` (SVG map, `BUILDINGS`/`LOTS`/`GARAGES` arrays, phone-frame UI) plus PWA files next to it.
-No backend required: by default it uses bundled sample counts. **Optional Supabase feed** (built, see `docs/SUPABASE.md`) makes garage counts live.
+No backend required: by default it uses bundled sample counts. **Optional Supabase feed** (built, see `docs/operations/SUPABASE.md`) makes garage counts live.
 (AGENTS.md's Next.js stack is for the other repos; only its Supabase/RLS/security rules are applied here.)
 
 ## Decisions (with why)
@@ -35,7 +35,7 @@ No backend required: by default it uses bundled sample counts. **Optional Supaba
 - **Teammate prototype:** commit `1bb0f36` (Jnhim) added a separate Leaflet-based prototype at the repo root (`index.html`, `parking.js`, `data.js`, `distance.js`, `parking.css`, tests). Different approach (Leaflet tiles from unpkg, permit filter, demo scenarios, 5 approximate lots). Does NOT overlap this build's files (`src/`, `dist/`). **Update:** the teammate deleted those files upstream in `f35285e` (7 "Delete ..." commits); merged cleanly. Their permit-eligibility filter idea remains a good candidate feature.
 
 ## Data
-- Raw VT ArcGIS pulls in `data/raw/` (WGS84). Refetch: `node scripts/fetch-gis.ts`; flatten: `npm run data`.
+- Raw VT ArcGIS pulls in `data/raw/` (WGS84). Refetch: `node scripts/data/fetch-gis.ts`; flatten: `npm run data`.
 - **102 buildings** (rule-based: 4 VT categories, existing, core-campus box, area >= 1000 sq ft, + Lane Stadium, Cassell). Spec says 92; its list isn't reproducible.
 - 19 curated lots, 2 garages (Perry Street, North End Center) from GIS footprints.
 - **Invented demo data (flag to team):** garage level counts (`src/data/garages.ts`); lot permit/ADA fields (`src/data/lots.ts`);
@@ -111,7 +111,7 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 - Fix: `ui/list.ts` now also searches `BUILDINGS` (only once the user types a query, so the default browse list
   stays exactly "every garage and lot" per spec Section 6) and renders a "Buildings" section; selecting one reuses
   the existing generic `Selection` plumbing (fly-to, `.is-selected` highlight, sheet) with no other changes needed.
-  Updated `scripts/smoke.mjs` to assert this path end-to-end (search "burruss" -> select from list -> sheet with 3
+  Updated `scripts/verify/smoke.mjs` to assert this path end-to-end (search "burruss" -> select from list -> sheet with 3
   nearest-parking rows) and to require Node 26 for native `.ts` execution (npm install/build/check/smoke all
   re-verified: 45/45 tests, typecheck clean, 41/41 smoke checks at 430x900/375x667/1280x800).
 - Environment note: this Mac had no Node/npm installed; installed Node v26.9.0 to `~/.local/node` (no sudo) and
@@ -126,11 +126,11 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 - 15:40-17:30 Built my own permit filter, then a teammate pushed a more rigorous, VT-sourced permits module touching the same files. Resolved the merge by ADOPTING THEIRS (user instruction: keep theirs if it works): took their side for all 9 conflicts, restored their template, dropped my permit code, rewrote the smoke permit scenarios to test their picker against their rules module (map/list/sheet verdicts, multi-select, ADA, persistence, hostile/corrupt storage, Clear all). Also kept: hermetic smoke (own feed-off/live builds), harness cleanup (no stale Chrome), click helper scrolls targets into view. 82 unit tests + 6 browser runs pass.
 - 15:10-15:40 Real Supabase project connected: first check failed with PGRST205 (migration not yet applied), user ran it, `check:supabase` passes; live build renders real rows.
 - 14:35-15:10 Supabase feed: pure client + validators + tests, migration/seed/simulator SQL, poller + chip + in-place refresh, build guard, mock-Supabase e2e (`smoke:live`), `check:supabase`, docs.
-- 14:15-14:35 Overview declutter (only garages + ADA lot markers until zoomed in), fallback screenshots in `docs/fallback/`.
+- 14:15-14:35 Overview declutter (only garages + ADA lot markers until zoomed in), fallback screenshots in `docs/operations/fallback/`.
 - 14:00-14:15 Cross-view number audit + contrast tests + ARCHITECTURE.md + README + Pages workflow.
 - 12:29-12:45 Read spec+plan; confirmed VT ArcGIS reachable; saved raw data; wrote flatten script; spot-checked landmarks.
 - 12:45-13:00 Libs + tests (projection/viewport/occupancy/search/nearby/Drillfield); map, sheet, list, badge, legend, CSS, build script.
-- 13:40-14:00 Turned the driver into `scripts/smoke.mjs` (`npm run smoke`); found + fixed sticky-sheet-header bug at small sizes; label/fly-to polish.
+- 13:40-14:00 Turned the driver into `scripts/verify/smoke.mjs` (`npm run smoke`); found + fixed sticky-sheet-header bug at small sizes; label/fly-to polish.
 - 13:15-13:40 CDP smoke run (27 checks pass, zero console errors), PWA verified over http incl. offline; fixed chip overflow + manifest-on-file:// error; first commits + merge with teammate prototype + push.
 - 13:00-13:15 Screenshot review + fixes; PWA files + icons; assistant logic (found+fixed 2 bugs: "life" false place match, centroid-distance ranking); chat UI.
 
@@ -141,20 +141,20 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 | ~~Polish: label offset, fly-to zoom~~ applied; needs a visual re-check | 10 min |
 | ~~ARCHITECTURE.md + README + task split~~ done | done |
 | ~~Phase 5 automated QA~~ done | done |
-| ~~E2E script~~ done: `scripts/smoke.mjs` | done |
+| ~~E2E script~~ done: `scripts/verify/smoke.mjs` | done |
 | Polish from QA (label density, marker overlap, Drillfield tune) | 30 min |
 | **User-only:** choose host + deploy over HTTPS (Vercel/Netlify/GitHub Pages), test on a real iPhone | 15-30 min |
 | **Team-only:** Phase 6 rehearsal x2, fallback screenshots on the demo machine, confirm ADA lot + demo numbers | 15-30 min |
 
 ## Open questions / needs from the user
-- **Class-schedule occupancy (Tier A BUILT + LIVE 2026-09-19):** both migrations and `curves.seed.sql` were run on the real Supabase project and the tick moves the counts (rows updated 19:12 UTC, matching Wednesday-afternoon targets). After the smoothing fix (below) re-run `supabase/curves.seed.sql` (idempotent upsert) so the DB gets the smoothed curves. Demo clock: `update public.sim_config set clock_override='08:50'`. See docs/SUPABASE.md and docs/DEMO_RUNBOOK.md. Tier B (Databricks) is SCAFFOLDED in `databricks/` (see the section below); not yet run on a workspace. Caveat to keep saying: simulated, capacity not enrollment, weak driver for F/S garages.
+- **Class-schedule occupancy (Tier A BUILT + LIVE 2026-09-19):** both migrations and `curves.seed.sql` were run on the real Supabase project and the tick moves the counts (rows updated 19:12 UTC, matching Wednesday-afternoon targets). After the smoothing fix (below) re-run `supabase/curves.seed.sql` (idempotent upsert) so the DB gets the smoothed curves. Demo clock: `update public.sim_config set clock_override='08:50'`. See docs/operations/SUPABASE.md and docs/operations/DEMO_RUNBOOK.md. Tier B (Databricks) is SCAFFOLDED in `databricks/` (see the section below); not yet run on a workspace. Caveat to keep saying: simulated, capacity not enrollment, weak driver for F/S garages.
 - Supabase project is connected locally (`.env.local`, git-ignored). For the DEPLOYED site the two public values must also be added as GitHub Actions Variables.
 - Hosting choice for the HTTPS deploy (needed for iPhone install + service worker). Nothing to do until I finish QA.
 - Teammate to confirm the 5th ADA lot and demo garage numbers (spec header asks for team confirmation).
 - Optional later: LLM-backed assistant (needs API key + proxy) and Capacitor/Xcode wrapper.
 
 ## Class-schedule occupancy (added)
-- `scripts/fetch-timetable.ts` (one-time, polite, POST selfservice.banner.vt.edu) -> `data/raw/timetable.json`; `data/timetable-building-codes.json` maps 71 codes to GIS `bldg_num` (99.1% of weekly seats); `src/lib/timetable.ts` (parser), `src/lib/demand.ts` (model, all assumptions in `MODEL`), `src/lib/curves-sql.ts`, `scripts/gen-curves.ts`.
+- `scripts/data/fetch-timetable.ts` (one-time, polite, POST selfservice.banner.vt.edu) -> `data/raw/timetable.json`; `data/reference/timetable-building-codes.json` maps 71 codes to GIS `bldg_num` (99.1% of weekly seats); `src/lib/timetable.ts` (parser), `src/lib/demand.ts` (model, all assumptions in `MODEL`), `src/lib/curves-sql.ts`, `scripts/data/gen-curves.ts`.
 - Verified: 101 tests, typecheck, build; SQL run on real Postgres via PGlite (convergence, invariants, fallback, anon blocked). NOT verified: against the real Supabase project (user must run the SQL), behavior during a live session.
 - Weekend: replays Wednesday (`sim_config.weekend_replay_dow = 3`).
 - **Smoothing fix (2026-09-19):** the first curves saw-toothed at class changes (Perry L1 95%->59% within 15 min, garage total jumped ~23 points) because the outgoing and incoming class windows double-counted. `MODEL.smoothBuckets = 2` averages activity over +/-30 min; a test now bounds the garage-total jump (<=15 points) and the commuter-level jump (<=25) and was mutation-checked (fails with smoothing off). Side effect: midday peaks are ~95% in BOTH garages, and the two garages look alike (staff shape dominates); tune `peakFrac`/`classWeight` in `src/lib/demand.ts` if the demo needs more contrast.
@@ -173,7 +173,7 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 - Finding for the pitch: the sweep (radius 600/900/1200 x commuter weight 0.7/0.9) moves curves < 0.5 pp on average; output is dominated by the staff-workday shape and fill cap. Two copies of the model (TS + Python) must stay in sync: `npm run test:py` fails if they drift.
 
 ## Databricks forecaster (added 2026-09-19, evening)
-- Explanation for teammates/judges: `docs/DATABRICKS_ML.md` (purpose, every data source real/assumed/generated, simulator, model, evaluation, limits, 30-second pitch).
+- Explanation for teammates/judges: `docs/databricks/ML_FORECASTER.md` (purpose, every data source real/assumed/generated, simulator, model, evaluation, limits, 30-second pitch).
 - Notebooks 05 (Monte Carlo labels), 06 (train + evaluate + register `hokiepark_occupancy_forecaster`), 07 (batch score -> `gold_predictions` + `predictions.json`); `databricks/src/hokiepark_sim.py`, `hokiepark_ml.py`; bundle has 7 tasks. Inputs now 5 files (adds `units.json`: 85 lots + 9 garage levels).
 - Verified locally end to end (fake spark, real sklearn + MLflow): 902,400 label rows; held-out days: model 2.45 ~ lookup 2.41 MAE (noise floor); held-out places: model 2.99 vs place-agnostic 7.30; ablation without class features 4.83; forecast vs live curves 1.6 pts MAE. 26 Python tests via `npm run test:py`. NOT yet run on the user's workspace.
 - DONE: the user ran 05-07 on the workspace (Free Edition, catalog `workspace`); `predictions.json` was downloaded and now ships in the app (see the Plan ahead section).
@@ -185,26 +185,32 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 - **Ranking:** score = walk minutes + fullness penalty (0 up to 70% full, +25 at 100%) + 30 if Risky. Labels: Risky <8% open or <5 spaces; Filling up <25% open. Distance = building point to nearest vertex of the place's footprint, straight-line, 80 m/min (no routing, no hills).
 - **Tests:** 21 new unit tests (`tests/planahead.test.ts`, `tests/planask.test.ts`), 148 total; smoke gained Plan + Ask-plan scenarios. Smoke passes at 430x900, 1280x800 and `smoke:live`. **Known, pre-existing, not mine:** at 375x667 three map-gesture checks fail (drag pans / drag opens sheet / wheel zoom) - reproduced on unmodified HEAD, from the teammates' map rewrite.
 - **Smoke note:** the non-live smoke needs a feed-OFF build: `HOKIEPARK_SUPABASE_URL= HOKIEPARK_SUPABASE_ANON_KEY= npm run build` first (with `.env.local` present a plain build is feed-ON and the chip check fails).
-- **Optional next:** `docs/GEMINI_NLP_SPEC.md` (LLM-assisted parsing via a Supabase Edge Function; not built). Deploy to GitHub Pages is still pending (needs the user's GitHub settings).
+- **Optional next:** `docs/advisor/ADVISOR.md` (LLM-assisted parsing via a Supabase Edge Function; not built). Deploy to GitHub Pages is still pending (needs the user's GitHub settings).
 
-## Smoke-test fixes pushed (session e7, 2026-09-19) - READ BEFORE EDITING scripts/smoke.mjs
-- **Disk-fill bug fixed:** every smoke run left a full Chrome profile (with MapLibre's tile cache) in `os.tmpdir()`. 99 leaked profiles = 5.6 GB filled the user's disk and broke all shells. `scripts/smoke.mjs` now `rmSync`s its profile in the exit handler (verified: a run leaves 0 profiles and 0 stray Chrome).
+## Smoke-test fixes pushed (session e7, 2026-09-19) - READ BEFORE EDITING scripts/verify/smoke.mjs
+- **Disk-fill bug fixed:** every smoke run left a full Chrome profile (with MapLibre's tile cache) in `os.tmpdir()`. 99 leaked profiles = 5.6 GB filled the user's disk and broke all shells. `scripts/verify/smoke.mjs` now `rmSync`s its profile in the exit handler (verified: a run leaves 0 profiles and 0 stray Chrome).
 - **Restored what teammate merge `a36ccfb` dropped:** hermetic feed-OFF build into `smoke-out/dist-off` (no more "run `npm run build` first"; never touches `.env.local`), and an OS-assigned Chrome debug port (`DevToolsActivePort`) instead of fixed `:9333`.
 - **The "3 gesture failures at 375x667" were a test artifact, not a map bug:** a bottom sheet left open by the earlier list step covers the map centre on small phones. The test now closes the sheet first and asserts it is closed and that the map centre really is the map.
-- **Pending merge (other session, uncommitted in the main worktree when it stopped):** Gemini advisor edits to `scripts/smoke.mjs` (HOKIEPARK_ADVISOR build env, POST in CORS, advisor mock, `botIdle()`, `if (!LIVE)` around the chip-based Q1-Q3 checks, a "Gemini advisor (mocked)" section) plus `src/lib/advisor*`, `supabase/functions/advisor/*`, `scripts/build-advisor.ts`, `src/ui/assistant.ts`, `src/main.ts`, `scripts/build.ts`, `src/config.ts`, `src/env.d.ts`, `src/styles.css`, `tests/advisor*.test.ts`, `.env.example`. Fetch, then merge those onto this version of smoke.mjs keeping the shared lines from here.
+- **Pending merge (other session, uncommitted in the main worktree when it stopped):** Gemini advisor edits to `scripts/verify/smoke.mjs` (HOKIEPARK_ADVISOR build env, POST in CORS, advisor mock, `botIdle()`, `if (!LIVE)` around the chip-based Q1-Q3 checks, a "Gemini advisor (mocked)" section) plus `src/lib/advisor*`, `supabase/functions/advisor/*`, `scripts/build/build-advisor.ts`, `src/ui/assistant.ts`, `src/main.ts`, `scripts/build/build.ts`, `src/config.ts`, `src/env.d.ts`, `src/styles.css`, `tests/advisor*.test.ts`, `.env.example`. Fetch, then merge those onto this version of smoke.mjs keeping the shared lines from here.
 - **Still to re-add (dropped by the same merge):** the permit-chooser list/sheet/persistence scenarios and the Ask-assistant permit scenarios (the assistant code itself, `answerQuestion(q, {permits, ada})`, is intact and unit-tested).
 
 ## Gemini parking advisor (built 2026-09-19, night)
-- **What:** Ask can become a tool-using parking advisor (opt-in `HOKIEPARK_ADVISOR=1`; off by default). The model picks tools and explains results; 5 deterministic tools run in the browser (`src/lib/advisor-tools.ts`); guards reject any number not in a tool result, unknown place ids, and any failure falls back visibly to the rule-based assistant ("Basic answer" badge). Full description, deploy steps, privacy and limits: `docs/GEMINI_NLP_SPEC.md`.
+- **What:** Ask can become a tool-using parking advisor (opt-in `HOKIEPARK_ADVISOR=1`; off by default). The model picks tools and explains results; 5 deterministic tools run in the browser (`src/lib/advisor-tools.ts`); guards reject any number not in a tool result, unknown place ids, and any failure falls back visibly to the rule-based assistant ("Basic answer" badge). Full description, deploy steps, privacy and limits: `docs/advisor/ADVISOR.md`.
 - **Code:** `src/lib/advisor-spec.ts` (tools + prompt, shared), `advisor-tools.ts`, `advisor.ts` (loop, guards, transport), `advisor-config.ts`; server relay `supabase/functions/advisor/{handler,main}.ts` bundled by `npm run advisor:build` into ONE pasteable `index.ts` (tests fail if stale); `npm run check:advisor` = live check of the deployed function. UI: badge + Google notice in `src/ui/assistant.ts`; wiring in `src/main.ts`; `pages.yml` passes `HOKIEPARK_ADVISOR`.
 - **Verified (no key):** 185 unit tests; smoke 430x900, 375x667, 1280x800 and `smoke:live` (which turns the advisor on and mocks it) all pass; guards mutation-checked. **NOT verified:** real Gemini, the deployed function, latency, quota. **User steps:** Gemini key, paste `index.ts` into Supabase Edge Functions as `advisor`, set secrets `GEMINI_API_KEY` / `GEMINI_MODEL` / `ALLOWED_ORIGINS`, `HOKIEPARK_ADVISOR=1`, `npm run check:advisor`.
-- **Incident 2026-09-19:** the Mac's disk filled up (ENOSPC) because `scripts/smoke.mjs` left a Chrome profile in `$TMPDIR` per run; fixed upstream in `b74fed0` (profile deleted on exit). Also, the 375x667 map-gesture "failures" were a test artifact (an open sheet covering the map), fixed in the same commit.
+- **Incident 2026-09-19:** the Mac's disk filled up (ENOSPC) because `scripts/verify/smoke.mjs` left a Chrome profile in `$TMPDIR` per run; fixed upstream in `b74fed0` (profile deleted on exit). Also, the 375x667 map-gesture "failures" were a test artifact (an open sheet covering the map), fixed in the same commit.
 
 ## Advisor migrated to OpenRouter (2026-09-19, night)
 - **Why:** real Gemini runs hit 429 (free-tier rate limit) and 503 ("high demand") on the tool-using questions; the user asked to switch to OpenRouter. **Premise check:** OpenRouter free models allow ~20 req/min but only **50 req/day until $10 of credits are bought, then 1,000/day**, so it is not larger by default; a one-time $10 top-up is what makes it worthwhile.
 - **What changed (transport only):** `supabase/functions/advisor/providers.ts` holds two providers behind the same client contract: OpenRouter (default when `OPENROUTER_API_KEY` is set; OpenAI chat-completions format, `OPENROUTER_MODEL` = 1-3 comma-separated ids using OpenRouter's fallback routing, default `openrouter/free`, `HTTP-Referer`/`X-Title` headers) and Gemini (unchanged). The client, agent loop, guards and system prompt are unchanged, except: 2 new tools (`garages_now`, `accessible_parking`) because the spec's questions "which garage has the most open spots" and "accessible parking near Cassell" had no tool, one tool-name mention added to prompt rule 2, the Ask greeting no longer says "Gemini", client timeout 12 s -> 25 s, and `httpTransport` now includes the relay's error reason.
 - **Verified locally:** 214 tests. The three spec questions through agent -> relay -> fake OpenRouter model -> real tools give the same garage / lot / accessible-space numbers as the rule-based assistant; error mapping (401, 402, 404 data-policy, 429, 5xx retry, 200-with-error, empty, malformed) and key redaction; translation layer mutation-checked (call-id matching, tool shape, no retry on 429, key redaction).
-- **NOT verified:** a real model via OpenRouter. Free-model tool-calling quality is unknown (`OPENROUTER_MODEL` suggestions came from the live catalogue: qwen/qwen3.8-27b:free, nvidia/nemotron-3-super-120b-a12b:free, google/gemma-4-31b-it:free). **User steps:** OpenRouter key, privacy setting for free models, paste new `index.ts`, secrets `OPENROUTER_API_KEY` / `OPENROUTER_MODEL`, then `npm run check:advisor`. Details: `docs/GEMINI_NLP_SPEC.md` (file name kept).
+- **NOT verified:** a real model via OpenRouter. Free-model tool-calling quality is unknown (`OPENROUTER_MODEL` suggestions came from the live catalogue: qwen/qwen3.8-27b:free, nvidia/nemotron-3-super-120b-a12b:free, google/gemma-4-31b-it:free). **User steps:** OpenRouter key, privacy setting for free models, paste new `index.ts`, secrets `OPENROUTER_API_KEY` / `OPENROUTER_MODEL`, then `npm run check:advisor`. Details: `docs/advisor/ADVISOR.md` (file name kept).
+
+## Repo restructure (branch chore/repo-structure, 2026-09-20)
+- Moved (git mv, history preserved): `HOKIEPARK_SPEC.md` + build plan -> `docs/product/{SPEC,BUILD_PLAN}.md`; docs into `docs/{architecture,operations,advisor,databricks,product}/` (`docs/STATE.md` and `docs/PROMPT_HISTORY.md` deliberately stay put); scripts into `scripts/{build,data,verify}/`; `data/timetable-building-codes.json` and `data/vt_parking_app_dataset.csv` -> `data/reference/`. npm script names are unchanged. `GEMINI_NLP_SPEC.md` became `docs/advisor/ADVISOR.md`.
+- Added: `.github/workflows/ci.yml` (typecheck + tests + build, plus the Python tests, on every push/PR), `.nvmrc` (24), `.editorconfig`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/README.md`, `scripts/README.md`, `data/README.md`, a rewritten `README.md` and `docs/architecture/ARCHITECTURE.md` (the old one described the removed SVG map), package.json `engines`/`repository`.
+- Verified on the branch: typecheck clean, 226 unit tests, 26 Python tests, build, every generator re-run (data, seed, curves, advisor:build, databricks:inputs) produces byte-identical output except path text in header comments, smoke at 430x900 / 375x667 and `smoke:live` all pass, and a link check over all 17 markdown files finds no broken links. No dead source modules were found.
+- NOT yet merged to main: waiting for the user's go-ahead and for teammates/other sessions to push pending work first.
 
 ## Repo restructure checklist (added by session e7, 2026-09-20, for the chore/repo-structure branch)
 The other session is moving `scripts/*` into `scripts/{build,data,verify}/`, `docs/*` into subfolders and reference data into `data/reference/`. These things depend on file POSITION and must be updated in the same change (all found by grep, all covered by `npm run check`, `npm run smoke -- 375 667`, `npm run smoke:live`, `npm run check:supabase`):

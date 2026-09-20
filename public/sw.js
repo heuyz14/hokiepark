@@ -1,4 +1,4 @@
-/* HokiePark service worker. __VERSION__ is stamped by scripts/build.ts (hash of index.html), so every
+/* HokiePark service worker. __VERSION__ is stamped by scripts/build/build.ts (hash of index.html), so every
  * new build gets a fresh cache and old ones are deleted on activate. The app is one HTML file, so
  * "offline" just means: once loaded, it opens and works with no network. */
 const CACHE = "hokiepark-__VERSION__";

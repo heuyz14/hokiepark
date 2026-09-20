@@ -114,7 +114,7 @@ function showMapProblem(el: HTMLElement, message: string) {
 
 export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): MapController {
   const homeBounds = unionBounds([...BUILDINGS, ...LOTS, ...GARAGES].map((x) => footprintBounds(x.footprint)));
-  // Only in the bundle if actually set up by scripts/build.ts; guarded so a non-bundled import (e.g. a future test) never throws.
+  // Only in the bundle if actually set up by scripts/build/build.ts; guarded so a non-bundled import (e.g. a future test) never throws.
   if (typeof __MAPLIBRE_WORKER_SRC__ !== "undefined") {
     maplibregl.setWorkerUrl(URL.createObjectURL(new Blob([__MAPLIBRE_WORKER_SRC__], { type: "text/javascript" })));
   }
@@ -136,7 +136,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     return NOOP_CONTROLLER;
   }
 
-  // Read-only hook for scripts/smoke.mjs (the map has no other externally-inspectable state, since
+  // Read-only hook for scripts/verify/smoke.mjs (the map has no other externally-inspectable state, since
   // it renders to a single <canvas> rather than one DOM node per feature). Never written to.
   (window as unknown as { __hokiepark_map?: maplibregl.Map }).__hokiepark_map = map;
 

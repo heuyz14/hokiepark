@@ -1,6 +1,6 @@
 /**
  * Phase 0: flatten the raw VT ArcGIS responses (data/raw/*.json, fetched once by
- * scripts/fetch-gis.ts) into the flat shapes the app consumes. Never hits the network.
+ * scripts/data/fetch-gis.ts) into the flat shapes the app consumes. Never hits the network.
  *
  * Selection is rule-based so it is reproducible, not the spec's hand-picked 92:
  *   buildings: four VT categories, existing, inside CORE_BOX, footprint >= MIN_AREA,
@@ -17,7 +17,7 @@
  *              derive a realistic capacity per lot instead of guessing dozens of numbers by hand.
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import type { Building, BuildingCategory, Footprint, GarageGeo, LotGeo, Ring } from "../src/types.ts";
+import type { Building, BuildingCategory, Footprint, GarageGeo, LotGeo, Ring } from "../../src/types.ts";
 
 interface EsriFeature<A> {
   attributes: A;
@@ -62,7 +62,7 @@ const EXCLUDED_LOTS = new Set([
 const REMOTE_LOTS = new Set(["Airport Hangar", "Airport Terminal", "Plantation Research"]);
 
 const read = <A>(f: string) =>
-  (JSON.parse(readFileSync(new URL(`../data/raw/${f}`, import.meta.url), "utf8")) as { features: EsriFeature<A>[] }).features;
+  (JSON.parse(readFileSync(new URL(`../../data/raw/${f}`, import.meta.url), "utf8")) as { features: EsriFeature<A>[] }).features;
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -126,7 +126,7 @@ const lots: LotGeo[] = [...byName.keys()]
   })
   .sort((a, b) => a.name.localeCompare(b.name));
 
-const out = (f: string, v: unknown) => writeFileSync(new URL(`../src/data/${f}`, import.meta.url), JSON.stringify(v));
+const out = (f: string, v: unknown) => writeFileSync(new URL(`../../src/data/${f}`, import.meta.url), JSON.stringify(v));
 out("buildings.json", buildings);
 out("lots.geo.json", lots);
 out("garages.geo.json", garages);

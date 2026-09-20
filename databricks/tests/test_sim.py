@@ -17,7 +17,7 @@ load = lambda p: json.loads((ROOT / p).read_text())  # noqa: E731
 class Sim(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        tt, codes, pts = load("data/raw/timetable.json"), load("data/timetable-building-codes.json"), load("databricks/data/building_points.json")
+        tt, codes, pts = load("data/raw/timetable.json"), load("data/reference/timetable-building-codes.json"), load("databricks/data/building_points.json")
         cls.units = load("databricks/data/units.json")
         cls.garages = load("databricks/data/garages.json")
         cls.placed = hd.place(tt["meetings"], codes, pts)

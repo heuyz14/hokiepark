@@ -43,7 +43,7 @@ function boot() {
   const askContext = () => ({ permits: store.get().permits, ada: store.get().ada });
   // Plan-ahead questions ("2pm class at Hancock") are answered from the Databricks forecast; everything else goes to the normal assistant.
   const rules = withPlanAhead(makeLocalAnswerer(askContext), askContext);
-  // Optional Gemini advisor (docs/GEMINI_NLP_SPEC.md): it only picks tools and explains their results; any failure falls back to `rules`.
+  // Optional Gemini advisor (docs/advisor/ADVISOR.md): it only picks tools and explains their results; any failure falls back to `rules`.
   const answer = ADVISOR_CONFIG
     ? withAdvisor(rules, createAdvisor({ transport: httpTransport(ADVISOR_CONFIG), getContext: () => ({ now: nowOf(), permits: store.get().permits, ada: store.get().ada }) }))
     : rules;

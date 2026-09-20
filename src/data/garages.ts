@@ -5,7 +5,7 @@ import geo from "./garages.geo.json" with { type: "json" };
 /**
  * Positions come from VT GIS. Per-level splits and current occupancy are HAND-SET DEMO DATA.
  * Each garage's total capacity is VT's officially published figure from
- * data/vt_parking_app_dataset.csv; the per-level split is scaled to that total.
+ * data/reference/vt_parking_app_dataset.csv; the per-level split is scaled to that total.
  * Level `classes` follow VT's official 2026-27 parking map and Quick Guide.
  */
 const L = (label: string, classes: LotClass[], capacity: number, occupied: number, adaCapacity: number, adaOccupied: number): GarageLevel => ({
@@ -29,7 +29,7 @@ export const SEED_LEVELS: Record<string, GarageLevel[]> = {
   ],
 };
 
-/** Practical info sourced from data/vt_parking_app_dataset.csv (VT's own parking pages). */
+/** Practical info sourced from data/reference/vt_parking_app_dataset.csv (VT's own parking pages). */
 const INFO: Record<string, PracticalInfo> = {
   "perry-street": {
     source: "parking.vt.edu",

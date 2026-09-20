@@ -7,10 +7,10 @@
  * rule-based assistant's answer next to it so you can compare numbers. A "basic" result means the app would have fallen back; the reason says why.
  * Budget: roughly 12-16 model requests. OpenRouter's free models allow 50 requests/day (1,000 after a one-time $10 credit purchase).
  */
-import { createAdvisor, httpTransport } from "../src/lib/advisor.ts";
-import { parseAdvisorConfig } from "../src/lib/advisor-config.ts";
-import { answerQuestion } from "../src/lib/assistant.ts";
-import { parseLiveConfig } from "../src/lib/live-config.ts";
+import { createAdvisor, httpTransport } from "../../src/lib/advisor.ts";
+import { parseAdvisorConfig } from "../../src/lib/advisor-config.ts";
+import { answerQuestion } from "../../src/lib/assistant.ts";
+import { parseLiveConfig } from "../../src/lib/live-config.ts";
 
 const die = (msg: string): never => {
   console.error(`FAIL  ${msg}`);

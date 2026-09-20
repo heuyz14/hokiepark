@@ -26,7 +26,7 @@ load = lambda p: json.loads((ROOT / p).read_text())  # noqa: E731
 class ML(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        tt, codes, pts = load("data/raw/timetable.json"), load("data/timetable-building-codes.json"), load("databricks/data/building_points.json")
+        tt, codes, pts = load("data/raw/timetable.json"), load("data/reference/timetable-building-codes.json"), load("databricks/data/building_points.json")
         cls.units = load("databricks/data/units.json")
         ctx = hs.build_context(hd.place(tt["meetings"], codes, pts), cls.units)
         ts = hs.simulate_training_set(ctx, days_per_dow=4, seed=11)

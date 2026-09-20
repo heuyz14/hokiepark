@@ -21,19 +21,19 @@ import { extname, join } from "node:path";
 const LIVE = process.argv.includes("--live");
 const [W = 430, H = 900] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const OUT = `${W}x${H}${LIVE ? "-live" : ""}`;
-const ROOT = new URL("../", import.meta.url).pathname;
+const ROOT = new URL("../../", import.meta.url).pathname;
 const FAKE_B64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const FAKE_ANON = `${FAKE_B64({ alg: "HS256", typ: "JWT" })}.${FAKE_B64({ role: "anon", iss: "smoke-test" })}.fake-signature`;
 let DIST = join(ROOT, "dist");
 if (LIVE) {
   DIST = join(ROOT, "smoke-out", "dist-live");
-  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "https://smoke.supabase.co", HOKIEPARK_SUPABASE_ANON_KEY: FAKE_ANON, HOKIEPARK_POLL_MS: "1000", HOKIEPARK_ADVISOR: "1" }, encoding: "utf8" });
+  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "https://smoke.supabase.co", HOKIEPARK_SUPABASE_ANON_KEY: FAKE_ANON, HOKIEPARK_POLL_MS: "1000", HOKIEPARK_ADVISOR: "1" }, encoding: "utf8" });
   if (r.status !== 0) throw new Error("live build failed: " + r.stderr + r.stdout);
 }
 else {
   // Feed OFF (bundled counts), built by THIS script so the run never depends on dist/ or on a real .env.local.
   DIST = join(ROOT, "smoke-out", "dist-off");
-  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "", HOKIEPARK_SUPABASE_ANON_KEY: "", HOKIEPARK_POLL_MS: "" }, encoding: "utf8" });
+  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "", HOKIEPARK_SUPABASE_ANON_KEY: "", HOKIEPARK_POLL_MS: "" }, encoding: "utf8" });
   if (r.status !== 0) throw new Error("feed-off build failed: " + r.stderr + r.stdout);
 }
 const DIR = join(ROOT, "smoke-out") + "/";
@@ -107,7 +107,7 @@ ws.onmessage = (m) => {
 };
 
 // ---- controllable mock of the Supabase REST endpoint (only used with --live) ----
-import { SEED_LEVELS } from "../src/data/garages.ts";
+import { SEED_LEVELS } from "../../src/data/garages.ts";
 const mock = {
   mode: "ok", // ok | down (HTTP 503) | bad (200 with an out-of-range row)
   requests: [],

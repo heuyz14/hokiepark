@@ -5,11 +5,11 @@
  *   2. the seed is present for every garage the app knows
  *   3. SECURITY: the anon key can NOT write (a no-op PATCH must be rejected by RLS/grants)
  */
-import { GARAGES } from "../src/data/index.ts";
-import { SEED_LEVELS } from "../src/data/garages.ts";
-import { parseLiveConfig } from "../src/lib/live-config.ts";
-import { fetchOccupancy, latestUpdate } from "../src/lib/occupancy-remote.ts";
-import { findSeedDrift } from "../src/lib/seed-drift.ts";
+import { GARAGES } from "../../src/data/index.ts";
+import { SEED_LEVELS } from "../../src/data/garages.ts";
+import { parseLiveConfig } from "../../src/lib/live-config.ts";
+import { fetchOccupancy, latestUpdate } from "../../src/lib/occupancy-remote.ts";
+import { findSeedDrift } from "../../src/lib/seed-drift.ts";
 
 const fail = (msg: string): never => {
   console.error(`FAIL  ${msg}`);

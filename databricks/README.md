@@ -70,7 +70,7 @@ A bug found by the local run and already fixed: MLflow 3.x could not infer the m
 the signature is declared explicitly.
 
 ## The forecaster (notebooks 05-07): purpose, data, evaluation
-See **`docs/DATABRICKS_ML.md`** for the full explanation (what it is for, every data source and whether it is real, assumed or generated, how the labels are
+See **`docs/databricks/ML_FORECASTER.md`** for the full explanation (what it is for, every data source and whether it is real, assumed or generated, how the labels are
 simulated, what the evaluation does and does not show). Short version: labels are **simulated** (there is no real occupancy data), generated from the real
 VT timetable with randomised driver behaviour; the model is judged on held-out days (it only matches a lookup there, the noise floor) and on **held-out
 places** (whole lots hidden: MAE 2.99 vs 7.30 for a place-agnostic average), and an ablation shows the class-schedule features matter within the simulation.

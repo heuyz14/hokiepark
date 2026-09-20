@@ -16,7 +16,7 @@ class Parity(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.timetable = load("data/raw/timetable.json")
-        cls.codes = load("data/timetable-building-codes.json")
+        cls.codes = load("data/reference/timetable-building-codes.json")
         cls.points = load("databricks/data/building_points.json")
         cls.garages = load("databricks/data/garages.json")
         cls.placed = hd.place(cls.timetable["meetings"], cls.codes, cls.points)

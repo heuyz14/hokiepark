@@ -1,7 +1,7 @@
 /**
  * Pure parsing of VT's public Timetable of Classes (Banner self-service, HZSKVTSC.P_ProcRequest).
  * The page exposes seat CAPACITY per section, not enrollment, and locations use building abbreviations
- * ("GBJ 104"). Nothing here touches the network; scripts/fetch-timetable.ts does the fetching.
+ * ("GBJ 104"). Nothing here touches the network; scripts/data/fetch-timetable.ts does the fetching.
  */
 
 export type Weekday = "M" | "T" | "W" | "R" | "F";
