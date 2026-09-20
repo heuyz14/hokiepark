@@ -2,9 +2,9 @@ import type { SyncStatus } from "../live.ts";
 
 /**
  * How stale the database counts may get before the header chip warns. The demo simulator runs from pg_cron
- * (supabase/optional/schedule_simulator.sql; every minute by default, '*/5' or '*/10' also fine), so a healthy feed
- * is never much older than its interval. 12 minutes tolerates the slowest listed cadence missing a tick, plus slack.
- * Raise it if the schedule is ever made slower than every 10 minutes.
+ * (supabase/optional/schedule_simulator.sql; every minute by default, every 5 or 10 minutes also fine), so a healthy
+ * feed is never much older than its interval. 12 minutes tolerates the slowest documented cadence missing a tick,
+ * plus slack. Raise it if the schedule is ever made slower than every 10 minutes.
  */
 export const STALE_DATA_MS = 12 * 60_000;
 
