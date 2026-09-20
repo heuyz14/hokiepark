@@ -1,91 +1,62 @@
-# Spec: LLM-assisted request parsing for Ask and Plan-ahead (Gemini)
+# Parking advisor (Gemini): what was built and how to turn it on
 
-Status: **proposed, not built.** Optional stretch after the plan-ahead recommender. Written 2026-09-19.
+Status: **built 2026-09-19, tested without a key, not yet run against real Gemini.** Off by default (`HOKIEPARK_ADVISOR=1` turns it on).
+This replaced the earlier "LLM parses the request" proposal with a tool-using advisor, because that gives the Ask tab a real purpose.
 
-## 1. Goal
-Let a driver type what they mean ("I've got a 2 o'clock in torgy tomorrow, commuter permit") and have the app work out the building, weekday, time and permit,
-instead of relying on exact-word matching. **The language model only extracts structure. Every number, distance, permit verdict and prediction still comes
-from the app's own code and data**, exactly as today.
+## 1. What it is for
+Ask stays the place for messy, real-life questions that a form cannot take:
+* "I have Torgersen at 2 then Goodwin at 3:30, commuter permit, I hate walking, what should I do?" (several tool calls, then one plan)
+* trade-offs in plain words ("Perry is closest but likely full then; the lot 12 minutes away is safer")
+* "when should I arrive to still get a spot?" (a question the Plan form cannot answer)
+* permit questions ("can I park at Squires with my permit, and what should I check?")
+The **Plan** tab remains the reliable structured path; Ask is the conversational one. Ask never depends on the advisor: any failure falls back to the rule-based assistant, visibly.
 
-Non-goals: the model never writes answer facts, never computes distances or availability, never decides permit eligibility, and is never required for the app to work.
-
-## 2. Why not a vector database or embeddings
-* The searchable universe is about 200 items (102 buildings, 94 parking places). A compact list of every name with its id is ~3-4k tokens: it fits in the prompt.
-* A model that sees the actual list resolves nicknames, typos and abbreviations ("torgy", "hancock") and returns an id we can validate. Embedding nearest-neighbour is weaker on exact identity.
-* If the list ever grows to thousands of items, add embeddings **for candidate retrieval only** (embed names offline into a JSON file, cosine-search in the browser, pass the top 20 to the model). pgvector in the existing Supabase project would also work. Neither is needed now.
+## 2. The rule that makes it safe: the model never supplies facts
+The model only **chooses tools and explains their results**. Five deterministic tools run in the browser on the app's own data:
+| Tool | What it returns |
+| --- | --- |
+| `find_place` | building / garage / lot candidates for a name, nickname or timetable code (TORG, MCB, GBJ) |
+| `plan_parking` | the Plan tab's ranked, permit-confirmed recommendations for a building, weekday and class time, plus unconfirmed nearby places |
+| `parking_now` | nearest places with the map's current counts |
+| `arrival_advice` | forecast by arrival time (up to 90 min before class) and the latest arrival that is not forecast risky |
+| `permit_check` | whether a permit is valid at a lot or garage (per level), with the reason |
+Guards, all enforced in code and mutation-tested:
+1. **Number guard:** every number in the answer must appear in a tool result, the driver's own message, or the context line (the current time). Otherwise the answer is discarded and the rule-based one is used.
+2. **Place guard:** the final `PLACES:` line may only name places a tool actually returned.
+3. **Disclaimers are added by code, not by the model:** forecasts are labelled simulated (with the Databricks model version); counts are labelled demo data; the posted-signage note is always appended.
+4. **Fallback:** network error, timeout (12 s), Gemini quota, malformed turn, oversized input or a guard failure all return the rule-based answer, tagged "Basic answer" with the reason on hover.
+5. Permit safety is inherited: the tools use the same permit rules as the map, so an unconfirmed place is never described as fine.
 
 ## 3. Architecture
 ```
-browser (Ask box / Plan form)
-   |  POST { text, today: {dow, minute} }           (text <= 200 chars)
-   v
-Supabase Edge Function `parse-request`  ── secret GEMINI_API_KEY (never in the browser)
-   |  Gemini generateContent, structured output (JSON schema, enums for ids)
-   v
-{ intent, building_id, place_id, dow, minute, permits[], ada, confidence, unresolved[] }
-   |  validated in the browser against the real id lists and ranges
-   v
-existing deterministic code: nearest / plan-ahead lookup / permit verdicts  -> answer
-   ^
-   └─ on timeout (2 s), error, quota, or invalid output: the current rule-based parser answers instead
+browser Ask tab ── agent loop (src/lib/advisor.ts) ── runs tools locally (src/lib/advisor-tools.ts, your real data + forecast)
+      │  POST { contents, context: {now, permits, ada} }  (no key, no system prompt, no tools)
+      ▼
+Supabase Edge Function `advisor` (supabase/functions/advisor)  ── secret GEMINI_API_KEY
+      │  adds the system prompt + tool declarations itself, validates and rate-limits, relays ONE model turn
+      ▼
+Gemini generateContent  ->  next model turn (text or function calls)  ->  back to the browser, which runs the tools and loops (max 4 rounds)
 ```
-The provider is behind one function, so it can be swapped (Databricks Foundation Model API, another vendor) without touching the app. Whether Databricks
-Foundation Model APIs are available on Free Edition is unconfirmed; check before promising it in the pitch.
+Why the loop runs in the browser: the tools need the app's data (buildings, lots, permit rules, forecast, live counts), so nothing is duplicated on the server. The model's turns are stored and re-sent verbatim, which also preserves any "thought signature" a newer Gemini model requires.
 
-## 4. Contract
-Request: `{ "text": string (<=200 chars), "today": { "dow": 1-7, "minute": 0-1439 } }`.
+The server is a thin, defensive relay (`handler.ts`): the key is a function secret and is never echoed; callers cannot change the system prompt, add tools, or pick the model; requests are validated (roles, tool names, sizes, permit ids) and size-limited; per-visitor (default 60 per 10 min) and daily (default 1,500) rate limits; CORS allow-list; upstream errors map to safe statuses (503 quota, 502 rejected, 504 timeout). The function bundles into ONE file (`npm run advisor:build`), so it can be pasted into the Supabase dashboard without the CLI.
 
-Response (all fields validated client-side; anything invalid is treated as "unresolved"):
-```json
-{
-  "intent": "plan_ahead | nearest | status | most_open | permit_info | accessible | unknown",
-  "building_id": "b0153 | null",
-  "place_id": "lot-squires | perry-street | null",
-  "dow": 1,
-  "minute": 840,
-  "permits": ["cg"],
-  "ada": false,
-  "unresolved": ["time"]
-}
-```
-Rules: ids must exist in the app's lists; `dow` 1-5 (weekends map to the replay day the app already uses, or ask); `minute` 0-1439; permits from the app's `PermitId` set;
-relative words ("tomorrow", "this afternoon") are resolved by the model using `today`, but the client re-validates the result. If anything needed for the intent is missing,
-the app asks one short follow-up in the UI rather than guessing.
+## 4. Turn it on (your steps, about 20 minutes)
+1. **Gemini key:** Google AI Studio -> Get API key -> Create. Look at the models list there and note a current "flash" model name (model ids change; the function defaults to `gemini-2.5-flash`).
+2. **Deploy the function:** Supabase dashboard -> Edge Functions -> Deploy a new function -> name it exactly `advisor` -> open the editor, paste the whole of `supabase/functions/advisor/index.ts` -> Deploy. Leave "Verify JWT" ON (the app sends the public anon key).
+3. **Secrets** (Edge Functions -> Secrets): `GEMINI_API_KEY` = your key; `GEMINI_MODEL` = the model name from step 1 (optional if the default still exists); `ALLOWED_ORIGINS` = `https://heuyz14.github.io,http://localhost:8080`.
+4. **Local:** add `HOKIEPARK_ADVISOR=1` to `.env.local`, then `npm run check:advisor`. It calls the deployed function through the real agent loop with 4 scenarios (including an off-topic one that should be declined) and tells you exactly what is wrong if anything fails. Then `npm run build` and open the Ask tab: the greeting names the advisor and answers carry an "AI advisor" badge.
+5. **Deployed site:** GitHub -> Settings -> Secrets and variables -> Actions -> Variables -> add `HOKIEPARK_ADVISOR` = `1`, then re-run "Deploy to Pages".
+6. **Switch it off any time:** remove the variable / `.env.local` line and rebuild; Ask reverts to the rule-based assistant. Deleting the function also just makes the app fall back.
 
-## 5. Prompt design
-System prompt states the task, gives the closed lists (`id | name | aliases` for buildings and places, the permit ids with plain descriptions), and requires the schema.
-User text is passed as data. Prefer the API's schema-constrained output / function calling with `enum`s over free-form JSON.
-No user identifiers, location, or permit history are sent; only the typed text and today's weekday and time.
+## 5. Privacy, cost, limits (say these out loud)
+* On Google's **free tier, inputs may be used to improve Google's products and can be human-reviewed**; paid tiers are not. The Ask greeting says typed questions are understood with Gemini and asks people not to type personal details. Only the typed text, the weekday/time, and the saved permit ids are sent; no location and no identifiers.
+* Free-tier quotas are on the order of 10-15 requests per minute and 250-1,000 per day by model (third-party summaries; confirm in AI Studio). One question uses 2-4 model calls (one per tool round), so a demo is fine and a crowd is not; the daily cap flips the app to the rule-based assistant.
+* Latency is roughly 2-6 seconds per answer (several sequential calls); the UI shows "Thinking it through...".
+* Gemini is off-platform for a Databricks track. The provider sits behind one function, so a Databricks-hosted model could replace it; whether Databricks Foundation Model APIs are available on Free Edition is unconfirmed.
+* Wrong parses are bounded: a mistaken building or time still yields a grounded answer for what was understood, shown with the tools' own words; the Plan form is the exact path.
 
-## 6. Safety, privacy, abuse
-* **Prompt injection:** output is schema- and enum-constrained and validated; the worst outcome is a wrong intent or "unknown". The model has no tools and no access to secrets or data.
-* **Key exposure:** the key lives only as a Supabase secret. The anon key is public, so it is **not** protection against abuse.
-* **Abuse and cost:** input cap 200 chars, per-visitor rate limit (for example 20 requests per 10 min, stored in a small table), CORS restricted to the deployed site, and a global daily cap that flips the function to "unavailable" (the app then uses the rule-based parser).
-* **Privacy:** on Google's free tier, inputs may be used to improve Google's products and can be human-reviewed; paid tiers do not. Show a one-line notice near the box ("Typed questions are processed by Google Gemini"), tell users not to enter personal details, and log nothing beyond counters.
-* **Quotas:** free-tier limits are on the order of 10-15 requests/minute and 250-1,000/day by model (third-party summaries; confirm in Google AI Studio). Ample for a demo; not for production.
-
-## 7. Reliability and UX
-* Hard timeout 2 s; on any failure fall back to the current rule-based parser with no error shown.
-* A small "AI-assisted" / "basic" indicator on each answer so behaviour is legible.
-* The structured form (building picker, day, time, permit) remains the primary, always-available path.
-
-## 8. Testing
-* Golden set of ~30 phrasings (typos, nicknames, relative times, no-permit, accessible, ambiguous) with expected structured output.
-* Mocked Gemini in unit tests (no network): valid output, invalid ids, out-of-range time, injection strings, timeout, quota error, malformed JSON.
-* Side-by-side report: rule-based parser vs model on the golden set, so the value is measured rather than assumed.
-* Never test against the live key in CI.
-
-## 9. Effort and setup
-| Piece | Estimate |
-| --- | --- |
-| Edge function, prompt, schema, validation, rate limit | ~1.5 h |
-| App integration through the existing `Answerer` seam, fallback, indicator | ~1 h |
-| Tests and golden set | ~1 h |
-| **Total** | **~3.5-4 h** (about 2 h without the golden-set comparison) |
-
-User steps (~20 min): create a Gemini API key in Google AI Studio; `supabase secrets set GEMINI_API_KEY=...`; deploy the function (Supabase CLI or the dashboard editor); add the function URL to `.env.local` and the GitHub Actions variables.
-
-## 10. Decisions still open
-1. Ship it at all? It depends on the plan-ahead recommender (its outputs are exactly that feature's inputs) and is optional for the demo.
-2. Provider: Gemini (free tier, privacy caveat) vs a Databricks-hosted model (better track story, availability unconfirmed).
-3. Privacy stance for a public demo: notice only, or keep the feature off by default behind a toggle.
+## 6. Verification status
+* **Tested locally, no key:** 40+ tests: tool behaviour and argument validation; the agent loop with a scripted model (grounded answer, thought signature round-trip, guard rejections, missing permit, prompt-injection attempt, rounds/timeout/transport failures, follow-up context); the server handler with a fake Gemini (key never leaks, caller cannot override prompt/tools/model, validation, rate limits, CORS, error mapping); a full-chain test (agent -> handler -> fake model); and a browser test through the smoke harness (AI badge, no-permit question, grounded answer, minimal request body, visible fallback).
+* **Deliberately broken to prove the tests bite:** the number guard, the place guard, thought-signature preservation, the tool-name check, the rate limit, the origin allow-list, and key leakage each make a specific test fail.
+* **NOT verified:** real Gemini behaviour (does the model pick tools sensibly, do its numbers pass the guard, latency, quota) and the deployed function. `npm run check:advisor` is the first real test. Expect some tuning of the system prompt (`src/lib/advisor-spec.ts`), then `npm run advisor:build` and re-paste.

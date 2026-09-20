@@ -34,6 +34,8 @@ jobs:
         env:
           HOKIEPARK_SUPABASE_URL: ${{ vars.HOKIEPARK_SUPABASE_URL }}
           HOKIEPARK_SUPABASE_ANON_KEY: ${{ vars.HOKIEPARK_SUPABASE_ANON_KEY }}
+          # Optional: set the Actions variable HOKIEPARK_ADVISOR=1 to turn on the Gemini advisor (needs the deployed `advisor` Edge Function).
+          HOKIEPARK_ADVISOR: ${{ vars.HOKIEPARK_ADVISOR }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

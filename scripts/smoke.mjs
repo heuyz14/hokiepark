@@ -27,7 +27,7 @@ const FAKE_ANON = `${FAKE_B64({ alg: "HS256", typ: "JWT" })}.${FAKE_B64({ role: 
 let DIST = join(ROOT, "dist");
 if (LIVE) {
   DIST = join(ROOT, "smoke-out", "dist-live");
-  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "https://smoke.supabase.co", HOKIEPARK_SUPABASE_ANON_KEY: FAKE_ANON, HOKIEPARK_POLL_MS: "1000" }, encoding: "utf8" });
+  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "https://smoke.supabase.co", HOKIEPARK_SUPABASE_ANON_KEY: FAKE_ANON, HOKIEPARK_POLL_MS: "1000", HOKIEPARK_ADVISOR: "1" }, encoding: "utf8" });
   if (r.status !== 0) throw new Error("live build failed: " + r.stderr + r.stdout);
 }
 else {
@@ -110,10 +110,30 @@ const mock = {
   requests: [],
   rows: Object.entries(SEED_LEVELS).flatMap(([garage_id, ls]) => ls.map((l, i) => ({ garage_id, level_index: i, label: l.label, capacity: l.capacity, occupied: l.occupied, ada_capacity: l.adaCapacity, ada_occupied: l.adaOccupied, updated_at: new Date().toISOString() }))),
 };
-const CORS = [{ name: "access-control-allow-origin", value: "*" }, { name: "access-control-allow-headers", value: "apikey,authorization,accept,content-type" }, { name: "access-control-allow-methods", value: "GET,OPTIONS" }];
+const CORS = [{ name: "access-control-allow-origin", value: "*" }, { name: "access-control-allow-headers", value: "apikey,authorization,accept,content-type" }, { name: "access-control-allow-methods", value: "GET,POST,OPTIONS" }];
+// A scripted stand-in for the advisor Edge Function (+ Gemini): it "chooses" tools from the conversation and writes advice from the
+// tool results it is shown, exactly like a well-behaved model. Only used with --live (the live build turns the advisor on).
+mock.advisorMode = "empty"; // empty (200, no text: the client falls back quietly) | ok (scripted model) | down (HTTP 503)
+mock.advisorRequests = [];
+function advisorTurn({ contents }) {
+  const result = (tool) => { for (const c of [...contents].reverse()) for (const p of c.parts) if (p.functionResponse?.name === tool) return p.functionResponse.response.result; return null; };
+  const plan = result("plan_parking"), found = result("find_place");
+  let parts;
+  if (plan && plan.ok === false) parts = [{ text: "Which permit do you hold, for example commuter or faculty?\nPLACES: none" }];
+  else if (plan) { const top = plan.recommended[0]; parts = [{ text: `Best bet: ${top.name}, a ${top.walk_minutes} minute walk. Forecast about ${top.forecast_open_spaces} of ${top.capacity} open (${top.forecast_percent_full}% full).\nPLACES: ${top.id}` }]; }
+  else if (found) parts = [{ functionCall: { name: "plan_parking", args: { building_id: found.candidates[0].id, day_of_week: 3, class_time: "14:00" } } }];
+  else parts = [{ functionCall: { name: "find_place", args: { query: "hancock" } } }];
+  return { content: { role: "model", parts } };
+}
 async function onPaused({ requestId, request }) {
   const fulfill = (responseCode, headers, body = "") => send("Fetch.fulfillRequest", { requestId, responseCode, responseHeaders: headers, body: Buffer.from(body).toString("base64") });
   if (request.method === "OPTIONS") return fulfill(204, CORS);
+  if (request.url.endsWith("/functions/v1/advisor")) {
+    mock.advisorRequests.push(request);
+    if (mock.advisorMode === "down") return fulfill(503, CORS, JSON.stringify({ error: "quota" }));
+    if (mock.advisorMode === "empty") return fulfill(200, [...CORS, { name: "content-type", value: "application/json" }], JSON.stringify({ content: { role: "model", parts: [{ text: "" }] } }));
+    return fulfill(200, [...CORS, { name: "content-type", value: "application/json" }], JSON.stringify(advisorTurn(JSON.parse(request.postData))));
+  }
   mock.requests.push(request);
   if (mock.mode === "down") return fulfill(503, CORS, "down");
   const rows = mock.mode === "bad" ? [{ ...mock.rows[0], occupied: 99999 }] : mock.rows.map((r) => ({ ...r, updated_at: new Date().toISOString() }));
@@ -249,21 +269,26 @@ check("Escape closes sheet", (await ev(`document.getElementById('sheet').hidden`
 // Ask tab: the three acceptance questions
 await click('.tabbar [data-view="ask"]'); await shot("8-ask");
 const botText = () => ev(`[...document.querySelectorAll('#chat-log .msg.bot')].pop()?.innerText`);
+// wait for the pending "Checking the data..." bubble to be replaced (the advisor path adds a network hop before the fallback answers)
+const botIdle = async () => { await sleep(120); await waitFor(async () => !(await ev(`!!document.querySelector('#chat-log .msg.pending')`)), 8000); };
 const chips = await ev(`document.querySelectorAll('.chip').length`);
 check("3 suggestion chips", chips === 3);
-await click('.chip:nth-child(3)'); await sleep(300);
-let t = await botText();
+let t;
+if (!LIVE) { // the live build turns the advisor on, which swaps in advisor-style suggestion chips; these three run in the advisor-off build
+await click('.chip:nth-child(3)'); await botIdle();
+t = await botText();
 check("Q3 most open garage = North End Center 355 of 800", /North End Center Garage has the most open spaces right now: 355 of 800/.test(t), JSON.stringify(t?.slice(0, 90)));
-await click('.chip:nth-child(1)'); await sleep(300);
+await click('.chip:nth-child(1)'); await botIdle();
 t = await botText();
 check("Q1 closest parking to Squires names a garage + lot", /Closest parking to Squires Student Center/.test(t) && /North End Center Garage: 355 of 800/.test(t) && /lot/.test(t), JSON.stringify(t?.slice(0, 120)));
-await click('.chip:nth-child(2)'); await sleep(300);
+await click('.chip:nth-child(2)'); await botIdle();
 t = await botText();
 check("Q2 ADA near Cassell mentions Coliseum West 12 spaces", /Coliseum West lot/.test(t) && /12 designated accessible spaces/.test(t), JSON.stringify(t?.slice(0, 120)));
 await shot("8b-ask-answers");
+}
 // typed question via input + form submit
 await ev(`(()=>{const i=document.getElementById('chat-q');i.value='is perry street garage full?';})()`);
-await ev(`document.getElementById('chat-form').requestSubmit()`); await sleep(300);
+await ev(`document.getElementById('chat-form').requestSubmit()`); await botIdle();
 t = await botText();
 check("typed question answered with level rows", /Level 1 - Commuter & graduate: 0 open of 250 \(Full\)/.test(t));
 // show on map hand-off
@@ -401,6 +426,34 @@ if (!LIVE) {
   expectFailures = false;
   await audit("after recovery");
   await shot("11-live-recovered");
+
+  // 5) the Gemini advisor (mocked): AI answers are badged, the browser runs the tools, a failure falls back visibly
+  mock.advisorMode = "ok";
+  await click('.tabbar [data-view="ask"]'); await sleep(200);
+  const say = async (q) => { await ev(`(()=>{const i=document.getElementById('chat-q');i.value=${JSON.stringify(q)};})()`); await ev(`document.getElementById('chat-form').requestSubmit()`); };
+  const lastBot = () => ev(`(()=>{const m=[...document.querySelectorAll('#chat-log .msg.bot')].pop();return m?{text:m.innerText,src:m.querySelector('.src')?.textContent||'',pending:m.classList.contains('pending'),refs:m.querySelectorAll('button.ref').length}:null})()`);
+  const settled = async () => { await waitFor(async () => !(await lastBot()).pending, 8000); return lastBot(); };
+  check("advisor: greeting names the advisor and the Google notice; 3 advisor suggestions", /parking advisor/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && /Gemini/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && (await ev(`document.querySelectorAll('.chip').length`)) === 3);
+  await say("2pm class at Hancock Hall on Wednesday, where do I park?");
+  let m = await settled();
+  check("advisor: with no permit it asks for one (tool error handled), badged AI advisor", m.src === "AI advisor" && /Which permit do you hold/.test(m.text), JSON.stringify(m).slice(0, 200));
+  await click('.tabbar [data-view="plan"]'); await click('#plan-permit-chips [data-permit="cg"]'); await click('.tabbar [data-view="ask"]');
+  await say("2pm class at Hancock Hall on Wednesday, where do I park?");
+  m = await settled();
+  check("advisor: with a permit the browser ran the tools and the answer is grounded and badged", m.src === "AI advisor" && /Best bet: .* minute walk\. Forecast about \d+ of \d+ open/.test(m.text) && /SIMULATED/.test(m.text) && m.refs >= 1, JSON.stringify(m).slice(0, 260));
+  const last = mock.advisorRequests.at(-1);
+  const sent = JSON.parse(last.postData);
+  check("advisor: requests carry only the conversation + context (no system prompt, no tools, no key)", !("systemInstruction" in sent) && !("tools" in sent) && Object.keys(sent).sort().join() === "contents,context" && !/AIza|GEMINI/.test(last.postData), Object.keys(sent).join());
+  check("advisor: context carries the saved permit", JSON.stringify(sent.context.permits) === '["cg"]', JSON.stringify(sent.context));
+  expectFailures = true;
+  mock.advisorMode = "down";
+  await say("2pm class at Hancock Hall on Wednesday, where do I park?");
+  m = await settled();
+  check("advisor down: falls back to the rule-based answer, visibly badged Basic answer", m.src === "Basic answer" && /Parking for a 2:00 PM Wednesday class at Hancock Hall/.test(m.text), JSON.stringify(m).slice(0, 220));
+  mock.advisorMode = "empty";
+  expectFailures = false;
+  await shot("12-advisor");
+  await click('.tabbar [data-view="plan"]'); await click('#plan-permit-chips [data-permit="cg"]'); await click('.tabbar [data-view="map"]');
 }
 
 // horizontal overflow check
