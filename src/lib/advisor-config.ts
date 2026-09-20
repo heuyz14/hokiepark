@@ -1,4 +1,4 @@
-import type { LiveConfig } from "./live-config.ts";
+import { assertPublicKey, type LiveConfig } from "./live-config.ts";
 
 /** Public config for the optional parking advisor, baked in at build time. Only PUBLIC values: a function URL and the Supabase anon key. */
 export interface AdvisorConfig {
@@ -11,9 +11,11 @@ const ON = new Set(["1", "true", "on", "yes"]);
 /**
  * The advisor is opt-in (`HOKIEPARK_ADVISOR=1`) and rides on the Supabase project: its function lives at
  * `<project url>/functions/v1/advisor`. `HOKIEPARK_ADVISOR_URL` overrides the URL (for a local mock or another host).
+ * Supabase Edge Functions now accept only the NEW key format (`sb_publishable_...`) at their gateway, while the occupancy feed may still use the legacy JWT
+ * anon key, so `HOKIEPARK_ADVISOR_KEY` optionally supplies a separate PUBLISHABLE key for the advisor (a secret key is refused).
  * Returns null when off. Throws on a configured-but-invalid value so a typo fails the build instead of silently shipping without it.
  */
-export function parseAdvisorConfig(flag: string | undefined, urlOverride: string | undefined, live: LiveConfig | null): AdvisorConfig | null {
+export function parseAdvisorConfig(flag: string | undefined, urlOverride: string | undefined, live: LiveConfig | null, keyOverride?: string): AdvisorConfig | null {
   const override = (urlOverride ?? "").trim();
   const on = ON.has((flag ?? "").trim().toLowerCase()) || override !== "";
   if (!on) return null;
@@ -27,5 +29,7 @@ export function parseAdvisorConfig(flag: string | undefined, urlOverride: string
   }
   const local = u.hostname === "localhost" || u.hostname === "127.0.0.1";
   if (u.protocol !== "https:" && !(local && u.protocol === "http:")) throw new Error("The advisor URL must be https (http only for localhost).");
-  return { url: u.toString(), anonKey: live.anonKey };
+  const key = (keyOverride ?? "").trim() || live.anonKey;
+  assertPublicKey(key);
+  return { url: u.toString(), anonKey: key };
 }

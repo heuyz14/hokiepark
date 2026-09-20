@@ -23,7 +23,7 @@ let liveConfig: LiveConfig | null;
 let advisorConfig: AdvisorConfig | null;
 try {
   liveConfig = parseLiveConfig(process.env.HOKIEPARK_SUPABASE_URL, process.env.HOKIEPARK_SUPABASE_ANON_KEY, process.env.HOKIEPARK_POLL_MS);
-  advisorConfig = parseAdvisorConfig(process.env.HOKIEPARK_ADVISOR, process.env.HOKIEPARK_ADVISOR_URL, liveConfig);
+  advisorConfig = parseAdvisorConfig(process.env.HOKIEPARK_ADVISOR, process.env.HOKIEPARK_ADVISOR_URL, liveConfig, process.env.HOKIEPARK_ADVISOR_KEY);
 } catch (err) {
   console.error(`Build aborted: ${(err as Error).message}`);
   process.exit(1);

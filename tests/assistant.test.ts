@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { answerQuestion, findPlace, localAnswerer, SUGGESTED_QUESTIONS } from "../src/lib/assistant.ts";
+import { answerQuestion, findPlace, followUpQuestions, localAnswerer, SUGGESTED_QUESTIONS } from "../src/lib/assistant.ts";
 import { BUILDINGS, GARAGES, LOTS } from "../src/data/index.ts";
 import { nearest } from "../src/lib/nearby.ts";
 import { garageTotals } from "../src/lib/occupancy.ts";
@@ -88,4 +88,23 @@ test("every answer ref points at a real item", () => {
       assert.ok(pool.some((x) => x.id === r.id), `${q}: bad ref ${r.id}`);
     }
   }
+});
+
+test("follow-up chips come from what the answer referenced, and never repeat a question", () => {
+  const a = answerQuestion(SUGGESTED_QUESTIONS[0]!); // closest parking to Squires
+  const ups = followUpQuestions(a, [SUGGESTED_QUESTIONS[0]!]);
+  assert.ok(ups.length > 0 && ups.length <= 3);
+  assert.ok(!ups.includes(SUGGESTED_QUESTIONS[0]!), "must not re-offer the question just asked");
+  // every referenced garage/lot should be reachable as a next question
+  const g = a.refs.find((r) => r.kind === "garage");
+  if (g) assert.ok(ups.some((q) => q.includes(g.label)), `expected a follow-up about ${g.label}`);
+  // and each suggestion must be something the assistant can actually answer
+  for (const q of ups) assert.ok(answerQuestion(q).lines.length > 0, `unanswerable follow-up: ${q}`);
+});
+
+test("with no refs, follow-ups fall back to the starter questions", () => {
+  const ups = followUpQuestions({ lines: ["nothing"], refs: [] }, []);
+  assert.deepEqual(ups, SUGGESTED_QUESTIONS.slice(0, 3));
+  // already-asked ones are filtered out
+  assert.ok(!followUpQuestions({ lines: [], refs: [] }, [SUGGESTED_QUESTIONS[1]!]).includes(SUGGESTED_QUESTIONS[1]!));
 });

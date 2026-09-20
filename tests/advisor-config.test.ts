@@ -28,3 +28,11 @@ test("misconfiguration fails loudly: needs Supabase, valid URL, https", () => {
   assert.throws(() => parseAdvisorConfig("1", "not a url", live), /not a valid URL/);
   assert.throws(() => parseAdvisorConfig("1", "http://example.com/fn", live), /must be https/);
 });
+
+test("a separate publishable key can be supplied for the advisor; the feed's key is untouched; a secret key is refused", () => {
+  const c = parseAdvisorConfig("1", undefined, live, "sb_publishable_advisor");
+  assert.deepEqual(c, { url: "https://abc.supabase.co/functions/v1/advisor", anonKey: "sb_publishable_advisor" });
+  assert.equal(live.anonKey, "sb_publishable_x");
+  assert.equal(parseAdvisorConfig("1", undefined, live, "  ")!.anonKey, "sb_publishable_x", "blank falls back to the feed key");
+  assert.throws(() => parseAdvisorConfig("1", undefined, live, "sb_secret_oops"), /SECRET key/);
+});
