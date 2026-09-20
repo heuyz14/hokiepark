@@ -16,7 +16,7 @@ const die = (msg: string): never => {
 let cfg;
 try {
   const live = parseLiveConfig(process.env.HOKIEPARK_SUPABASE_URL, process.env.HOKIEPARK_SUPABASE_ANON_KEY, process.env.HOKIEPARK_POLL_MS);
-  cfg = parseAdvisorConfig("1", process.env.HOKIEPARK_ADVISOR_URL, live);
+  cfg = parseAdvisorConfig("1", process.env.HOKIEPARK_ADVISOR_URL, live, process.env.HOKIEPARK_ADVISOR_KEY);
 } catch (e) {
   die((e as Error).message);
 }
@@ -32,7 +32,7 @@ const ping = await fetch(c.url, {
 }).catch((e) => die(`cannot reach the function: ${(e as Error).message}`));
 const pingRes = ping as Response;
 if (pingRes.status === 404) die("function not found (404). Deploy it: Supabase -> Edge Functions -> new function named 'advisor'.");
-if (pingRes.status === 401) die("401: the anon key was rejected by the function gateway.");
+if (pingRes.status === 401) die("401: the function gateway rejected the key. New Supabase functions accept only sb_publishable_... keys: set HOKIEPARK_ADVISOR_KEY in .env.local to the Publishable key from Project Settings -> API Keys.");
 if (pingRes.status === 500) die("500 not_configured: set the GEMINI_API_KEY secret on the function.");
 if (pingRes.status === 502 || pingRes.status === 503 || pingRes.status === 504) die(`upstream problem (${pingRes.status}): check GEMINI_API_KEY, GEMINI_MODEL and your Gemini quota in Google AI Studio.`);
 if (!pingRes.ok) die(`unexpected HTTP ${pingRes.status}`);
