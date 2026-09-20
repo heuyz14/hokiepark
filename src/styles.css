@@ -232,7 +232,7 @@ h1, h2, h3, p { margin: 0; }
 .agent-event.ok { color: #176b48; }
 .agent-event.error { color: #8d1b16; }
 .speech-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.speech-controls button { min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--maroon); padding: 4px 9px; font-weight: 700; }
+.speech-controls button { min-height: 32px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--maroon); padding: 3px 8px; font-size: 12.5px; font-weight: 700; }
 .speech-active { display: inline-flex; gap: 6px; }
 .ref, .chip { min-height: 44px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--maroon); background: #fff; color: var(--maroon); font-weight: 600; font-size: 13.5px; text-align: left; }
 .ref:active, .chip:active { background: #f6ecef; }
@@ -250,7 +250,7 @@ h1, h2, h3, p { margin: 0; }
 .composer-actions { position: absolute; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
 .mic { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--maroon); font-size: 18px; }
 .mic.is-recording { border-color: var(--bad); background: var(--bad-bg); color: var(--bad); box-shadow: inset 0 0 0 2px currentColor; }
-.send { min-width: 62px; height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--maroon); color: #fff; font-weight: 700; }
+.send { min-width: 56px; height: 44px; padding: 0 10px; border: 0; border-radius: 10px; background: var(--maroon); color: #fff; font-size: 13px; font-weight: 700; }
 .accessibility-settings { margin: 0 14px 12px; color: var(--muted); font-size: 13px; }
 .accessibility-settings summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--maroon); font-weight: 700; }
 .accessibility-settings summary::marker { content: ""; }
