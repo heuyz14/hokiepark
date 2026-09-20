@@ -8,12 +8,12 @@
  * itself never depends on those files. `--watch` rebuilds.
  */
 import { build } from "esbuild";
-import { parseLiveConfig, type LiveConfig } from "../src/lib/live-config.ts";
-import { parseAdvisorConfig, type AdvisorConfig } from "../src/lib/advisor-config.ts";
+import { parseLiveConfig, type LiveConfig } from "../../src/lib/live-config.ts";
+import { parseAdvisorConfig, type AdvisorConfig } from "../../src/lib/advisor-config.ts";
 import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
 
-const root = new URL("../", import.meta.url);
+const root = new URL("../../", import.meta.url);
 const path = (p: string) => new URL(p, root).pathname;
 const outIdx = process.argv.indexOf("--out");
 const outDir = outIdx > 0 ? process.argv[outIdx + 1]! : path("dist");

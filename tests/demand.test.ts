@@ -133,7 +133,7 @@ const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "u
 
 test("supabase/curves.seed.sql is in sync with the timetable data (run `npm run curves` if this fails)", () => {
   const timetable = JSON.parse(read("data/raw/timetable.json")) as { meetings: MeetingGroup[] };
-  const codes = JSON.parse(read("data/timetable-building-codes.json")) as Record<string, { num: string }>;
+  const codes = JSON.parse(read("data/reference/timetable-building-codes.json")) as Record<string, { num: string }>;
   const gis = JSON.parse(read("data/raw/buildings.raw.json")).features as { attributes: { bldg_num: string; latitude: number; longitude: number } }[];
   const point = new Map<string, { lat: number; lon: number }>();
   for (const f of gis) if (f.attributes.bldg_num && !point.has(f.attributes.bldg_num)) point.set(f.attributes.bldg_num, { lat: f.attributes.latitude, lon: f.attributes.longitude });
@@ -150,7 +150,7 @@ test("supabase/curves.seed.sql is in sync with the timetable data (run `npm run 
 
 test("building-code map points only at real GIS buildings and covers >= 98% of timetable seats", () => {
   const timetable = JSON.parse(read("data/raw/timetable.json")) as { meetings: MeetingGroup[] };
-  const codes = JSON.parse(read("data/timetable-building-codes.json")) as Record<string, { num: string }>;
+  const codes = JSON.parse(read("data/reference/timetable-building-codes.json")) as Record<string, { num: string }>;
   const nums = new Set((JSON.parse(read("data/raw/buildings.raw.json")).features as { attributes: { bldg_num: string } }[]).map((f) => f.attributes.bldg_num));
   for (const [code, v] of Object.entries(codes)) assert.ok(nums.has(v.num), `${code} -> ${v.num} is not in the GIS data`);
   const { placedSeats, totalSeats } = coverage(timetable.meetings, (c) => c in codes);

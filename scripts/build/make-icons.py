@@ -1,6 +1,6 @@
 """Render the HokiePark app icons from assets/icon-master.png into public/icons/.
 
-    python3 scripts/make-icons.py        (needs Pillow: python3 -m pip install --user Pillow)
+    python3 scripts/build/make-icons.py        (needs Pillow: python3 -m pip install --user Pillow)
 
 Output is committed; rerun only when the artwork changes. The master lives in assets/ rather than
 public/ so the 1 MB original isn't copied into dist/ by the build.

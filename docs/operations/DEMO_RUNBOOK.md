@@ -18,7 +18,7 @@ Updated 2026-09-20. Live site: **https://heuyz14.github.io/terraceb/** (GitHub P
 3. **Clock:** `update public.sim_config set clock_override = null;` (real clock; weekends replay a typical Wednesday).
 4. **Advisor:** `npm run check:advisor` -> `6/6 questions answered by the advisor` (each answer 2-4 s). It costs about a quarter of a cent per question. If it says `basic`, read the reason (table below) before presenting.
 5. **OpenRouter credits:** confirm the balance is not empty (a paid model runs first, a free model is the last fallback).
-6. **Fallback screenshots:** `docs/fallback/` is from an OLDER build (before the Plan tab, advisor and the new map). Retake them on the demo machine from the live site.
+6. **Fallback screenshots:** `docs/operations/fallback/` is from an OLDER build (before the Plan tab, advisor and the new map). Retake them on the demo machine from the live site.
 7. **Network backup:** keep a phone hotspot ready. The map tiles and the advisor need internet; the rest of the app degrades gracefully.
 8. **Install test:** iPhone Safari -> Share -> Add to Home Screen, then open it from the home screen once.
 
@@ -35,7 +35,7 @@ Updated 2026-09-20. Live site: **https://heuyz14.github.io/terraceb/** (GitHub P
    | "When should I arrive at Hancock Hall for a 10am class to still find a spot?" | It asks which permit you hold. Reply just "commuter": it completes the SAME question and names an arrival time |
 
    Point at the **AI advisor** badge. Say: "The model only chooses tools and phrases the result. If it writes a number the tools did not return, the answer is rejected and you get the built-in answer, badged Basic."
-5. **Databricks (30 s).** "The forecast behind Plan comes from a pipeline on Databricks: the public class timetable into Delta tables in Unity Catalog, a Monte Carlo simulator for training labels because no real occupancy history exists, a gradient-boosted model tracked and registered in MLflow, batch-scored into a lookup the app reads with no live dependency." Show the MLflow experiment and the registered model if you have the workspace open. Full story and a 30-second version: `docs/DATABRICKS_ML.md`.
+5. **Databricks (30 s).** "The forecast behind Plan comes from a pipeline on Databricks: the public class timetable into Delta tables in Unity Catalog, a Monte Carlo simulator for training labels because no real occupancy history exists, a gradient-boosted model tracked and registered in MLflow, batch-scored into a lookup the app reads with no live dependency." Show the MLflow experiment and the registered model if you have the workspace open. Full story and a 30-second version: `docs/databricks/ML_FORECASTER.md`.
 6. **Honesty line (10 s).** "Occupancy here is simulated; the model recovers that simulation, it is not validated against sensors. With real sensor history the same pipeline becomes a real forecast."
 
 ## Moments to jump to (live counts)

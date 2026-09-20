@@ -1,11 +1,11 @@
 /**
  * One-time pull of VT's public Timetable of Classes (Blacksburg, one term) into data/raw/timetable.json.
- * Run: node scripts/fetch-timetable.ts [termyear=202609]
+ * Run: node scripts/data/fetch-timetable.ts [termyear=202609]
  * Politeness: one request per subject, ~1 s apart, User-Agent says who we are. Do this once, not per demo.
  * The page gives seat CAPACITY per section (not enrollment) and building ABBREVIATIONS (see src/data/building-codes.ts).
  */
 import { writeFileSync, mkdirSync } from "node:fs";
-import { groupMeetings, parseSubjects, parseTimetableHtml, type Meeting } from "../src/lib/timetable.ts";
+import { groupMeetings, parseSubjects, parseTimetableHtml, type Meeting } from "../../src/lib/timetable.ts";
 
 const BASE = "https://selfservice.banner.vt.edu/ssb/HZSKVTSC.P_ProcRequest";
 const TERM = process.argv[2] ?? "202609";
@@ -43,9 +43,9 @@ for (const [i, s] of subjects.entries()) {
 }
 
 const groups = groupMeetings(meetings);
-mkdirSync(new URL("../data/raw/", import.meta.url), { recursive: true });
+mkdirSync(new URL("../../data/raw/", import.meta.url), { recursive: true });
 writeFileSync(
-  new URL("../data/raw/timetable.json", import.meta.url),
+  new URL("../../data/raw/timetable.json", import.meta.url),
   JSON.stringify({ term: TERM, campus: "Blacksburg", fetchedAt: new Date().toISOString(), note: "capacity = seat cap, NOT enrollment", meetings: groups }) + "\n",
 );
 console.log(`wrote data/raw/timetable.json: ${meetings.length} meetings -> ${groups.length} groups, ${new Set(meetings.map((m) => m.building)).size} building codes`);

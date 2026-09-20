@@ -4,7 +4,7 @@ import geo from "./lots.geo.json" with { type: "json" };
 
 /**
  * Lot names, positions, status and `areaSqFt` come from VT's own ParkingLots GIS layer (every
- * "Main Campus" lot, minus a handful of driveways/loading docks - see scripts/build-data.ts).
+ * "Main Campus" lot, minus a handful of driveways/loading docks - see scripts/data/build-data.ts).
  * VT's public layer has NO permit-type, ADA, or occupancy fields. Occupancy is simulated
  * (spec Section 14, same treatment as garages.ts), while permit classes below come from VT's
  * official parking map when a lot can be matched confidently. Unmatched lots keep an empty class
@@ -16,7 +16,7 @@ import geo from "./lots.geo.json" with { type: "json" };
  * `occupied` is a deterministic (stable across builds), lot-specific fraction of that capacity -
  * still simulated, but no two unrelated lots share a coincidentally identical number.
  *
- * data/vt_parking_app_dataset.csv (VT's own parking.vt.edu/permits.html listing) is a SEPARATE
+ * data/reference/vt_parking_app_dataset.csv (VT's own parking.vt.edu/permits.html listing) is a SEPARATE
  * naming system from the GIS ParkingLots layer and does not line up lot-for-lot with it - it
  * never publishes a capacity for any surface lot (`capacity_status: not_publicly_verified` on
  * every row) and uses different names for some of the same places. Exactly three lots can be

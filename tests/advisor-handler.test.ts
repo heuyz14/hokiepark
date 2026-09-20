@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createLimiter, handle, sanitizeModelParts, validateBody, type Deps, type Env } from "../supabase/functions/advisor/handler.ts";
 import { TOOL_DECLARATIONS } from "../src/lib/advisor-spec.ts";
-import { bundle, OUT } from "../scripts/build-advisor.ts";
+import { bundle, OUT } from "../scripts/build/build-advisor.ts";
 import { readFileSync } from "node:fs";
 
 const KEY = "AIza-test-secret-key-DO-NOT-LEAK";

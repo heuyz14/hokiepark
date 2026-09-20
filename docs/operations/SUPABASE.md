@@ -48,7 +48,7 @@ Instead of a random walk, `simulate_occupancy_tick()` can steer every level towa
 
 ```
 Timetable of Classes (Banner, public)  --npm run timetable-->  data/raw/timetable.json   (5,317 meetings, 80 building codes)
-data/timetable-building-codes.json     (code -> GIS building, from VT's official P_DispBldgList; 99.1% of weekly seats placed)
+data/reference/timetable-building-codes.json     (code -> GIS building, from VT's official P_DispBldgList; 99.1% of weekly seats placed)
       --npm run curves-->  src/lib/demand.ts  -->  supabase/curves.seed.sql   (45 rows: level x Mon..Fri x 96 fifteen-minute buckets)
 Supabase  garage_level_curves + sim_config   <-- simulate_occupancy_tick() steps every level toward "now"'s target
 ```

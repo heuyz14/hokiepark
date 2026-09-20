@@ -1,0 +1,48 @@
+# Continuous integration: every push to main and every pull request must typecheck, pass the unit tests, and build.
+# (Deploying is separate and manual: .github/workflows/pages.yml.)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # No secrets in CI: this builds the bundled-sample-data variant (feed and advisor off).
+      - run: npm run build
+      - name: The single-file bundle exists and is not empty
+        run: test -s dist/index.html
+
+  python:
+    name: Databricks model (Python) tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas scikit-learn numpy
+      - run: python databricks/tests/test_parity.py
+      - run: python databricks/tests/test_sim.py
+      - run: python databricks/tests/test_ml.py
