@@ -54,6 +54,17 @@ export function checkNumbers(text: string, allowed: Set<number>): number[] {
   return [...new Set(numbersIn(cleaned).filter((n) => !allowed.has(n)))];
 }
 
+/** Models sometimes print internal ids in the prose, e.g. "Squires lot (lot-squires)". Remove them; ids belong only on the PLACES line. */
+export function stripIds(text: string, ids: Iterable<string>): string {
+  let out = text;
+  for (const id of [...ids].sort((a, b) => b.length - a.length)) {
+    // "(id)", "[id]" and "`id`" (with the space before them) disappear; a bare id becomes the place's name
+    for (const [l, r] of [["(", ")"], ["[", "]"], ["`", "`"]] as const) out = out.split(` ${l}${id}${r}`).join("").split(`${l}${id}${r}`).join("");
+    if (out.includes(id)) out = out.split(id).join(placeRef(id)?.name ?? "");
+  }
+  return out;
+}
+
 const PLACES_LINE = /^\s*PLACES:\s*(.*)$/im;
 
 export function splitPlaces(text: string): { body: string; ids: string[] } {
@@ -104,13 +115,15 @@ export function createAdvisor(opts: AdvisorOptions) {
       if (final === null) return { ok: false, reason: "rounds" };
       if (!final) return { ok: false, reason: "empty" };
 
-      const { body, ids } = splitPlaces(final);
+      const split = splitPlaces(final);
+      const body = stripIds(split.body, idsIn(results)).replace(/[ \t]+([.,;:!?])/g, "$1").trim();
+      const ids = split.ids;
       if (!body) return { ok: false, reason: "empty" };
 
       // Guard 1: no number the tools/driver/context did not supply.
       const allowed = new Set<number>([...numbersIn(JSON.stringify(results)), ...numbersIn(q), ...numbersIn(contextLine(ctx)), ...history.flatMap((h) => numbersIn(textOf(h)))]);
       const bad = checkNumbers(body, allowed);
-      if (bad.length) return { ok: false, reason: "guard", detail: `unsupported numbers: ${bad.join(", ")}` };
+      if (bad.length) return { ok: false, reason: "guard", detail: `unsupported numbers: ${bad.join(", ")} in: ${body.replace(/\s+/g, " ").slice(0, 200)}` };
 
       // Guard 2: PLACES may only name places a tool returned.
       const seen = idsIn(results);

@@ -258,3 +258,25 @@ test("SPEC Q1 'closest open parking to Squires Student Center': parking_now list
   for (const g of named.filter((n) => GARAGES.some((x) => x.name === n.name))) assert.ok(rule.includes(`${g.name}: ${g.current_open_spaces} of`), g.name);
   assert.ok(named.every((n) => n.current_open_spaces > 0), "only places with open spaces");
 });
+
+// ---------- answer hygiene ----------
+import { stripIds } from "../src/lib/advisor.ts";
+
+test("stripIds removes ids the model printed in prose: parenthesised, bracketed, backticked (with the space), and bare ones become names", () => {
+  assert.equal(stripIds("Try Squires lot (lot-squires) first.", ["lot-squires"]), "Try Squires lot first.");
+  assert.equal(stripIds("Try `lot-squires` or [perry-street].", ["lot-squires", "perry-street"]), "Try or.");
+  assert.equal(stripIds("Go to perry-street now.", ["perry-street"]), "Go to Perry Street Garage now.");
+  assert.equal(stripIds("Nothing to strip.", ["lot-squires"]), "Nothing to strip.");
+});
+
+test("ids in the model's prose are stripped from the shown answer, and a GUARD failure reports what the model wrote", async () => {
+  const top = plan().recommended[0]!;
+  const { t } = script(call("plan_parking", { building_id: torg, day_of_week: 3, class_time: "14:00" }), say(`Park at ${top.name} (${top.id}), about ${top.walk_minutes} minutes away.\nPLACES: ${top.id}`));
+  const r = await advisorFor(t).ask("2pm class at torgersen wed");
+  assert.ok(r.ok);
+  assert.ok(!r.lines.join(" ").includes(top.id), r.lines.join(" | "));
+  const { t: t2 } = script(say("Perry has 1 garage with 120 spots.\nPLACES: none"));
+  const g = await advisorFor(t2).ask("which garage has the most open spots?");
+  assert.ok(!g.ok && g.reason === "guard");
+  assert.match(g.detail ?? "", /unsupported numbers: 1, 120 in: Perry has 1 garage/);
+});

@@ -199,54 +199,81 @@ export function fromOpenAiMessage(msg: unknown): Record<string, unknown>[] {
   return sanitizeModelParts(parts);
 }
 
+const TRANSIENT = new Set([408, 500, 502, 503, 504]);
+const rotate = <T>(xs: T[], n: number): T[] => xs.map((_, i) => xs[(i + n) % xs.length]!);
+
 export async function callOpenRouter(input: ProviderInput, env: ProviderEnv, deps: ProviderDeps): Promise<Upstream> {
   const key = env.OPENROUTER_API_KEY!;
   const models = parseModels(env.OPENROUTER_MODEL, OPENROUTER_DEFAULT);
-  const payload = JSON.stringify({
-    // several ids use OpenRouter's own fallback routing (one request, tried in order); one id is the plain form
-    ...(models.length > 1 ? { models } : { model: models[0] }),
-    messages: toOpenAiMessages(input.contents, input.context),
-    tools: toOpenAiTools(),
-    tool_choice: "auto",
-    temperature: 0.3,
-    max_tokens: 800,
-  });
+  const messages = toOpenAiMessages(input.contents, input.context);
+  const tools = toOpenAiTools();
   const headers = {
     authorization: `Bearer ${key}`,
     "content-type": "application/json",
     "http-referer": env.OPENROUTER_REFERER?.trim() || "https://heuyz14.github.io/terraceb/",
     "x-title": "HokiePark",
   };
-  let res: Response | null = null;
+  const fail = (status: number, error: string, detail: Record<string, unknown> = {}): Upstream => ({ ok: false, status, error, detail: { upstream_model: models.join(","), ...detail } });
+
+  // Free hosted models are often briefly overloaded. A transient failure (HTTP 5xx, or an error inside a 200 body) gets ONE retry that
+  // starts from a different model (rotated list). A rate limit (429), bad key (401) or missing credits (402) is final: retrying would
+  // only burn more of the daily request budget.
+  let last: Upstream | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
+    const order = rotate(models, attempt);
+    const payload = JSON.stringify({
+      // several ids use OpenRouter's own fallback routing (one request, tried in order); one id is the plain form
+      ...(order.length > 1 ? { models: order } : { model: order[0] }),
+      messages,
+      tools,
+      tool_choice: "auto",
+      temperature: 0.3,
+      max_tokens: 800,
+    });
+    let res: Response;
     try {
       res = await deps.fetch(OPENROUTER_URL, { method: "POST", headers, body: payload, signal: AbortSignal.timeout(20_000) });
     } catch {
       return { ok: false, status: 504, error: "upstream_timeout" };
     }
-    if ((res.status === 502 || res.status === 503) && attempt === 0) {
-      await deps.sleep(700);
+    if (!res.ok) {
+      const detail = await upstreamDetail(res, key);
+      const hint = res.status === 402 ? { hint: "OpenRouter says the account has insufficient credits for this request." } : res.status === 404 ? { hint: "No provider matched: check OPENROUTER_MODEL and OpenRouter's privacy settings for free models." } : {};
+      last = fail(res.status === 429 ? 503 : 502, res.status === 429 ? "quota" : "upstream_rejected", { ...detail, ...hint });
+      if (TRANSIENT.has(res.status) && attempt === 0) {
+        await deps.sleep(900);
+        continue;
+      }
+      return last;
+    }
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      return { ok: false, status: 502, error: "upstream_bad_json" };
+    }
+    // OpenRouter can return HTTP 200 with an error body (a provider failed mid-request)
+    const bodyError = isObj(data) && isObj(data.error) ? data : isObj(data) && Array.isArray(data.choices) && isObj(data.choices[0]) && isObj((data.choices[0] as Record<string, unknown>).error) ? { error: (data.choices[0] as Record<string, unknown>).error } : null;
+    if (bodyError) {
+      const detail = detailFromBody(bodyError, key, 200);
+      last = fail(502, "upstream_rejected", detail);
+      const code = Number(detail.upstream_code);
+      if ((TRANSIENT.has(code) || code === 429 && false) && attempt === 0) {
+        await deps.sleep(900);
+        continue;
+      }
+      return last;
+    }
+    const choice = isObj(data) && Array.isArray(data.choices) ? data.choices[0] : null;
+    const parts = fromOpenAiMessage(isObj(choice) ? choice.message : null);
+    const model = isObj(data) && typeof data.model === "string" ? data.model.slice(0, 80) : order[0];
+    if (parts.length) return { ok: true, parts, ...(model ? { model } : {}) };
+    last = fail(502, "no_content", { upstream_model: model ?? "" });
+    if (attempt === 0) {
+      await deps.sleep(900);
       continue;
     }
-    break;
+    return last;
   }
-  if (!res) return { ok: false, status: 504, error: "upstream_timeout" };
-  if (!res.ok) {
-    const detail = await upstreamDetail(res, key);
-    const hint = res.status === 402 ? { hint: "OpenRouter says the account has insufficient credits for this request." } : res.status === 404 ? { hint: "No provider matched: check OPENROUTER_MODEL and OpenRouter's privacy settings for free models." } : {};
-    return { ok: false, status: res.status === 429 ? 503 : 502, error: res.status === 429 ? "quota" : "upstream_rejected", detail: { upstream_model: models.join(","), ...detail, ...hint } };
-  }
-  let data: unknown;
-  try {
-    data = await res.json();
-  } catch {
-    return { ok: false, status: 502, error: "upstream_bad_json" };
-  }
-  // OpenRouter can return HTTP 200 with an error body (a provider failed mid-request)
-  if (isObj(data) && isObj(data.error)) return { ok: false, status: 502, error: "upstream_rejected", detail: { upstream_model: models.join(","), ...detailFromBody(data, key, 200) } };
-  const choice = isObj(data) && Array.isArray(data.choices) ? data.choices[0] : null;
-  if (isObj(choice) && isObj(choice.error)) return { ok: false, status: 502, error: "upstream_rejected", detail: { upstream_model: models.join(","), ...detailFromBody({ error: choice.error }, key, 200) } };
-  const parts = fromOpenAiMessage(isObj(choice) ? choice.message : null);
-  const model = isObj(data) && typeof data.model === "string" ? data.model.slice(0, 80) : models[0];
-  return parts.length ? { ok: true, parts, ...(model ? { model } : {}) } : { ok: false, status: 502, error: "no_content", detail: { upstream_model: model ?? "" } };
+  return last ?? { ok: false, status: 502, error: "upstream_rejected" };
 }

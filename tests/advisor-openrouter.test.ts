@@ -219,3 +219,27 @@ test("failure paths degrade to the rule-based answer: rate limit, credits, timeo
   }
   assert.ok(searchPlaces("cassell").length > 0);
 });
+
+test("RETRY: an overload hidden inside a 200 body (e.g. 'Upstream error from Nvidia') is retried ONCE, starting from a different model", async () => {
+  const overloaded = () => Response.json({ error: { code: 503, message: "Upstream error from Nvidia: Service temporarily overloaded" } });
+  const { d, sent } = deps((n) => (n === 1 ? overloaded() : ok({ role: "assistant", content: "recovered" })));
+  const res = await handle(post(good), { ...env, OPENROUTER_MODEL: "a:free,b:free,c:free" }, d);
+  assert.equal(res.status, 200);
+  assert.deepEqual([sent.length, sent[0]!.body.models, sent[1]!.body.models], [2, ["a:free", "b:free", "c:free"], ["b:free", "c:free", "a:free"]]);
+  const twice = deps(() => overloaded());
+  const r2 = await handle(post(good), env, twice.d);
+  assert.deepEqual([r2.status, twice.sent.length], [502, 2], "retried once, then reported");
+  assert.match(((await r2.json()) as any).upstream_message, /Nvidia/);
+});
+
+test("RETRY: final errors are NOT retried (bad key, no credits, rate limit inside a 200 body); an empty reply is retried once", async () => {
+  for (const code of [401, 402, 429]) {
+    const { d, sent } = deps(() => Response.json({ error: { code, message: "final" } }));
+    const res = await handle(post(good), env, d);
+    assert.equal(sent.length, 1, `code ${code} must not be retried`);
+    assert.equal(res.status, 502);
+  }
+  const empty = deps((n) => (n === 1 ? ok({ role: "assistant", content: "" }) : ok({ role: "assistant", content: "now it answers" })));
+  assert.equal((await handle(post(good), env, empty.d)).status, 200);
+  assert.equal(empty.sent.length, 2);
+});
