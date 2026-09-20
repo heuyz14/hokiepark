@@ -13,11 +13,13 @@ export interface MapController {
   zoom(factor: number): void;
   reset(): void;
   /** Ask for the device location, place it on the map, and center the view there. */
-  locate(): void;
+  locate(): Promise<boolean>;
   /** Re-read garage counts (after a live update) and update the markers in place. */
   refreshGarages(): void;
   /** Dim locations the driver's selected permits do not cover. */
   setPermits(permits: PermitId[], ada: boolean): void;
+  /** Render a route/estimate supplied by deterministic application code, never model JavaScript. */
+  showRoute(geometry: { lat: number; lon: number }[], routeType: "walk_graph" | "straight_line_estimate"): void;
 }
 
 /** Free, no-API-key vector basemap (OpenFreeMap, openfreemap.org) rendered by MapLibre GL JS -
@@ -106,14 +108,14 @@ function lotMarkerHtml(l: Lot): string {
 
 /** No-op controller returned when the map can't be created at all (e.g. no WebGL2 support), so a
  * broken map never crashes the rest of the app - main.ts keeps working with the list and assistant. */
-const NOOP_CONTROLLER: MapController = { setSelection() {}, zoom() {}, reset() {}, locate() {}, refreshGarages() {}, setPermits() {} };
+const NOOP_CONTROLLER: MapController = { setSelection() {}, zoom() {}, reset() {}, async locate() { return false; }, refreshGarages() {}, setPermits() {}, showRoute() {} };
 
 function showMapProblem(el: HTMLElement, message: string) {
   el.innerHTML = `<div class="map-offline"><p>${esc(message)}</p><button type="button" data-retry>Try again</button></div>`;
   el.querySelector("[data-retry]")?.addEventListener("click", () => location.reload());
 }
 
-export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): MapController {
+export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void, options: { onLocation?: (location: { lat: number; lon: number; accuracyMeters?: number }) => void } = {}): MapController {
   const homeBounds = unionBounds([...BUILDINGS, ...LOTS, ...GARAGES].map((x) => footprintBounds(x.footprint)));
   // Only in the bundle if actually set up by scripts/build/build.ts; guarded so a non-bundled import (e.g. a future test) never throws.
   if (typeof __MAPLIBRE_WORKER_SRC__ !== "undefined") {
@@ -211,6 +213,8 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
 
     map.addSource("selection", { type: "geojson", data: EMPTY_FC });
     map.addLayer({ id: "selection-outline", type: "line", source: "selection", paint: { "line-color": ORANGE, "line-width": 4 } });
+    map.addSource("advisor-route", { type: "geojson", data: EMPTY_FC });
+    map.addLayer({ id: "advisor-route-line", type: "line", source: "advisor-route", paint: { "line-color": "#0b4fd0", "line-width": 4, "line-dasharray": [2, 1] } });
 
     const labelPoints: GeoJSON.FeatureCollection = {
       type: "FeatureCollection",
@@ -355,7 +359,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
       });
     },
     locate() {
-      whenReady(() => {
+      return new Promise<boolean>((resolve) => whenReady(() => {
         const button = document.getElementById("locate-me");
         const announce = (message: string, state?: "error") => {
           let status = el.querySelector<HTMLElement>(".location-status");
@@ -376,6 +380,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
         };
         if (!navigator.geolocation) {
           announce("Location is not available in this browser.", "error");
+          resolve(false);
           return;
         }
         button?.classList.add("is-locating");
@@ -393,16 +398,19 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
               locationMarker.setLngLat(point);
             }
             map.easeTo({ center: point, zoom: Math.max(map.getZoom(), 16), duration: 700 });
+            options.onLocation?.({ lat: coords.latitude, lon: coords.longitude, accuracyMeters: Math.round(coords.accuracy) });
             announce(`Location found within about ${Math.round(coords.accuracy)} meters.`);
+            resolve(true);
           },
           () => {
             button?.classList.remove("is-locating");
             button?.classList.add("has-error");
             announce("Location access was unavailable. Check your browser permission.", "error");
+            resolve(false);
           },
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
         );
-      });
+      }));
     },
     refreshGarages() {
       whenReady(() => {
@@ -418,6 +426,19 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
           div.setAttribute("aria-label", garageLabel(g));
           div.innerHTML = garageMarkerHtml(g);
         }
+      });
+    },
+    showRoute(geometry, routeType) {
+      if (geometry.length < 2) return;
+      whenReady(() => {
+        const route: GeoJSON.FeatureCollection = {
+          type: "FeatureCollection",
+          features: [{ type: "Feature", geometry: { type: "LineString", coordinates: geometry.map((point) => [point.lon, point.lat]) }, properties: { routeType } }],
+        };
+        (map.getSource("advisor-route") as maplibregl.GeoJSONSource).setData(route);
+        const lons = geometry.map((point) => point.lon);
+        const lats = geometry.map((point) => point.lat);
+        map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: { top: 80, left: 50, right: 50, bottom: bottomPadding() }, maxZoom: 17.5, duration: 500 });
       });
     },
   };

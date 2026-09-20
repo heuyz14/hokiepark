@@ -10,6 +10,8 @@ export interface AssistantOptions {
   onSelect: (sel: Selection) => void;
   /** True when the Gemini-backed advisor is wired in: changes the greeting, suggestions and answer badges. */
   advisor?: boolean;
+  /** Permission is still requested by the normal map/browser flow; no coordinates reach this component. */
+  ensureCurrentLocation?: () => Promise<boolean>;
 }
 
 const bubbleLines = (lines: string[]) =>
@@ -45,7 +47,7 @@ const speechControls = () =>
     ? `<div class="speech-controls"><button type="button" class="speech-read" aria-label="Read this response aloud">Read aloud</button><button type="button" class="speech-pause" aria-label="Pause spoken response">Pause</button><button type="button" class="speech-resume" aria-label="Resume spoken response">Resume</button><button type="button" class="speech-stop" aria-label="Stop spoken response">Stop</button></div>`
     : "";
 
-export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = false }: AssistantOptions): void {
+export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = false, ensureCurrentLocation }: AssistantOptions): void {
   const suggestions = advisor ? ADVISOR_SUGGESTIONS : SUGGESTED_QUESTIONS;
   el.innerHTML = `
     <div class="chat">
@@ -95,8 +97,10 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     // under the latest answer instead, where they scroll away rather than eat the composer.
     suggest.hidden = true;
     add("me", esc(q));
-    const pending = add("bot pending", `<span class="ln">${advisor ? "Thinking it through&hellip;" : "Checking the data&hellip;"}</span>`);
+    const requestedLocation = /\b(current location|my location|where i am)\b/i.test(q);
+    const pending = add("bot pending", `<span class="ln">${requestedLocation ? "Requesting your location&hellip;" : advisor ? "Thinking it through&hellip;" : "Checking the data&hellip;"}</span>`);
     try {
+      if (requestedLocation && ensureCurrentLocation) await ensureCurrentLocation();
       const a: Answer = await answer(q);
       pending.className = "msg bot";
       // Only the newest answer carries chips; older ones would pile up into the same clutter.

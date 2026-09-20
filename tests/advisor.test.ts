@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BUILDINGS, GARAGES, LOTS } from "../src/data/index.ts";
-import { checkNumbers, createAdvisor, splitPlaces, withAdvisor, type Content, type Part, type Transport } from "../src/lib/advisor.ts";
+import { checkNumbers, createAdvisor, httpTransport, splitPlaces, withAdvisor, type Content, type Part, type Transport } from "../src/lib/advisor.ts";
 import { TOOL_DECLARATIONS, TOOL_NAMES, systemPrompt, type AdvisorContext } from "../src/lib/advisor-spec.ts";
 import { idsIn, runTool as realRunTool, searchPlaces } from "../src/lib/advisor-tools.ts";
 import { planAhead } from "../src/lib/planahead.ts";
@@ -68,17 +68,45 @@ test("tool arguments are validated (bad ids, times, days, permits are errors, ne
   assert.equal(runTool("delete_everything", {}, ctx).ok, false);
 });
 
-test("route and comparison tools stay deterministic and label the current routing limitation", () => {
-  const route = runTool("calculate_walk_route", { origin_id: "lot-torgersen", destination_id: bid("torgersen") }, ctx) as { ok: true; route_type: string; distance_meters: number; duration_seconds: number };
+test("route and comparison tools stay deterministic and return VT walkway geometry when connected", () => {
+  const route = runTool("calculate_walk_route", { origin_id: "lot-torgersen", destination_id: bid("torgersen") }, ctx) as { ok: true; route_type: string; distance_meters: number; duration_seconds: number; geometry?: unknown[] };
   assert.ok(route.ok);
-  assert.equal(route.route_type, "straight_line_estimate");
-  assert.equal(route.duration_seconds, Math.round(route.distance_meters / 1.3));
+  assert.equal(route.route_type, "walk_graph");
+  assert.ok(route.geometry && route.geometry.length >= 2);
+  assert.ok(Math.abs(route.duration_seconds - Math.round(route.distance_meters / 1.3)) <= 1);
   assert.equal(runTool("calculate_walk_route", { origin_id: "nope", destination_id: bid("torgersen") }, ctx).ok, false);
 
   const comparison = runTool("compare_parking_options", { building_id: bid("torgersen"), day_of_week: 3, class_time: "14:00" }, ctx) as { ok: true; options: { rank: number }[]; forecast_is_simulated: boolean };
   assert.ok(comparison.ok && comparison.options.length > 0);
   assert.deepEqual(comparison.options.map((option) => option.rank), comparison.options.map((_, index) => index + 1));
   assert.equal(comparison.forecast_is_simulated, true);
+});
+
+test("current location is available only to local route tools and is never required as a model-generated coordinate", () => {
+  const withLocation: AdvisorContext = { ...ctx, currentLocation: { lat: 37.229, lon: -80.424, accuracyMeters: 12 } };
+  const route = runTool("calculate_walk_route", { origin_id: "current_location", destination_id: bid("torgersen") }, withLocation) as { ok: true; origin: { name: string }; route_type: string };
+  assert.ok(route.ok);
+  assert.equal(route.origin.name, "Your current location");
+  assert.equal(route.route_type, "walk_graph");
+  assert.equal(runTool("calculate_walk_route", { origin_id: "current_location", destination_id: bid("torgersen") }, ctx).ok, false);
+});
+
+test("transport removes browser coordinates before posting the advisor context", async () => {
+  let requestBody = "";
+  const transport = httpTransport({ url: "https://example.test/advisor", anonKey: "public" }, (async (_url, init) => {
+    requestBody = String(init?.body);
+    return new Response(JSON.stringify({ content: { role: "model", parts: [{ text: "ok" }] } }), { status: 200 });
+  }) as typeof fetch);
+  await transport({ contents: [{ role: "user", parts: [{ text: "Use my current location" }] }], context: { ...ctx, currentLocation: { lat: 37.2, lon: -80.4, accuracyMeters: 10 } } }, new AbortController().signal);
+  assert.doesNotMatch(requestBody, /37\.2|80\.4|currentLocation/);
+});
+
+test("arrival-plan tool returns structured timing and discloses the missing driving estimate", () => {
+  const plan = runTool("build_arrival_plan", { building_id: bid("torgersen"), day_of_week: 3, class_time: "14:00" }, ctx) as { ok: true; recommended_lot_id: string; lot_arrival_time: string; steps: unknown[]; assumptions: string[] };
+  assert.ok(plan.ok);
+  assert.ok(plan.recommended_lot_id);
+  assert.equal(plan.steps.length, 3);
+  assert.match(plan.assumptions.join(" "), /does not estimate driving/i);
 });
 
 test("arrival_advice: rows are consistent with labels and the latest non-risky arrival is truly non-risky", () => {

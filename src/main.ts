@@ -1,5 +1,7 @@
 import { createStore, sameSelection, type State, type View } from "./state.ts";
 import type { Selection } from "./types.ts";
+import { BUILDINGS, GARAGES, LOTS } from "./data/index.ts";
+import { calculateCampusWalkingRoute } from "./lib/walk-network.ts";
 import { createMap } from "./ui/map.ts";
 import { createSheet } from "./ui/sheet.ts";
 import { createList } from "./ui/list.ts";
@@ -18,10 +20,11 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 function boot() {
   const store = createStore({ view: "map", selection: null, source: null, query: "", permits: [], ada: false });
+  let currentLocation: { lat: number; lon: number; accuracyMeters?: number } | undefined;
   const select = (selection: Selection, source: NonNullable<State["source"]>, view?: View) =>
     store.set({ selection, source, ...(view ? { view } : {}) });
 
-  const map = createMap($("map"), (sel) => select(sel, "map"));
+  const map = createMap($("map"), (sel) => select(sel, "map"), { onLocation: (location) => { currentLocation = location; } });
   const sheet = createSheet($("sheet"), {
     onClose: () => select(null, "sheet"),
     onSelect: (sel) => select(sel, "sheet"),
@@ -45,9 +48,9 @@ function boot() {
   const rules = withPlanAhead(makeLocalAnswerer(askContext), askContext);
   // Optional Gemini advisor (docs/advisor/ADVISOR.md): it only picks tools and explains their results; any failure falls back to `rules`.
   const answer = ADVISOR_CONFIG
-    ? withAdvisor(rules, createAdvisor({ transport: httpTransport(ADVISOR_CONFIG), getContext: () => ({ now: nowOf(), permits: store.get().permits, ada: store.get().ada }) }))
+    ? withAdvisor(rules, createAdvisor({ transport: httpTransport(ADVISOR_CONFIG), getContext: () => ({ now: nowOf(), permits: store.get().permits, ada: store.get().ada, currentLocation }) }))
     : rules;
-  createAssistant($("view-ask"), { answer, onSelect: (sel) => select(sel, "assistant", "map"), advisor: ADVISOR_CONFIG !== null });
+  createAssistant($("view-ask"), { answer, onSelect: (sel) => select(sel, "assistant", "map"), advisor: ADVISOR_CONFIG !== null, ensureCurrentLocation: () => map.locate() });
   const plan = createPlanView($("view-plan"), {
     getPermits: () => ({ permits: store.get().permits, ada: store.get().ada }),
     onPermits: (permits, ada) => {
@@ -55,6 +58,14 @@ function boot() {
       store.set({ permits, ada });
     },
     onSelect: (sel) => select(sel, "assistant", "map"),
+    onShowRoute: (origin, destination) => {
+      const from = origin.kind === "garage" ? GARAGES.find((place) => place.id === origin.id) : LOTS.find((place) => place.id === origin.id);
+      const to = BUILDINGS.find((place) => place.id === destination.id);
+      if (!from || !to) return;
+      const route = calculateCampusWalkingRoute(from, to);
+      map.showRoute(route?.geometry ?? [{ lat: from.lat, lon: from.lon }, { lat: to.lat, lon: to.lon }], route ? "walk_graph" : "straight_line_estimate");
+      store.set({ view: "map", selection: origin, source: "assistant" });
+    },
   });
 
   store.subscribe((s, prev) => {
@@ -97,7 +108,7 @@ function boot() {
   for (const t of tabs) t.addEventListener("click", () => store.set({ view: t.dataset.view as View }));
   $("zoom-in").addEventListener("click", () => map.zoom(1.6));
   $("zoom-out").addEventListener("click", () => map.zoom(1 / 1.6));
-  $("locate-me").addEventListener("click", () => map.locate());
+  $("locate-me").addEventListener("click", () => void map.locate());
   $("zoom-reset").addEventListener("click", () => {
     map.reset();
     if (store.get().selection) select(null, "sheet");

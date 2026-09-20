@@ -1,18 +1,21 @@
 import { buildingCodes } from "../data/building-abbreviations.ts";
 import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
 import { forecastSource, planAhead, type PlanOption, type PlanResult } from "../lib/planahead.ts";
+import { buildArrivalPlan } from "../lib/arrival-plan.ts";
 import { DAY_NAME, formatMinute } from "../lib/planask.ts";
 import { formatMeters } from "../lib/nearby.ts";
 import { PERMITS, SIGNAGE_NOTE, type PermitId } from "../lib/permits.ts";
 import { filterBuildings, resolveBuilding as findBuilding } from "../lib/search.ts";
 import type { Building, Selection } from "../types.ts";
 import { esc } from "./format.ts";
+import { isSpeechSupported, speak, stopSpeech } from "../lib/speech.ts";
 
 export interface PlanViewOptions {
   getPermits: () => { permits: PermitId[]; ada: boolean };
   /** The driver toggled a permit here; the host persists it and keeps every other view in sync. */
   onPermits: (permits: PermitId[], ada: boolean) => void;
   onSelect: (sel: Selection) => void;
+  onShowRoute?: (origin: NonNullable<Selection>, destination: NonNullable<Selection>) => void;
   now?: () => Date;
 }
 export interface PlanViewController {
@@ -40,7 +43,7 @@ const card = (o: PlanOption, n: number | null): string => {
         (o.adaOpenEstimate !== undefined ? `<p class="plan-sub">About ${o.adaOpenEstimate} accessible spaces open</p>` : "") +
         `<p class="plan-sub">Right now on the map: ${o.nowOpen} open</p>`
       : `<p class="plan-sub">${esc(o.note ?? "We can't confirm your permit here - check the posted sign.")}</p>`;
-  return `<li class="plan-card">${head}${where}${body}<button type="button" class="ref" data-kind="${o.kind}" data-id="${esc(o.id)}">Show on map</button></li>`;
+  return `<li class="plan-card">${head}${where}${body}<button type="button" class="ref" data-kind="${o.kind}" data-id="${esc(o.id)}">Show on map</button><button type="button" class="ref" data-route-kind="${o.kind}" data-route-id="${esc(o.id)}">Show walk estimate</button></li>`;
 };
 
 export function renderPlanResult(r: PlanResult, input: { building: string; minute: number }): string {
@@ -50,10 +53,22 @@ export function renderPlanResult(r: PlanResult, input: { building: string; minut
   const recs = r.recommended.length
     ? `<ol class="plan-list">${r.recommended.map((o, i) => card(o, i + 1)).join("")}</ol>`
     : `<p class="plan-empty">No place I can confirm for your permit within a 25-minute walk of ${esc(input.building)} at that time.</p>`;
+  const arrival = r.recommended[0]
+    ? (() => {
+        const plan = buildArrivalPlan({ destinationName: input.building, targetMinute: input.minute, recommendedLot: r.recommended[0]! });
+        return `<section class="arrival-plan" aria-label="Your arrival plan"><h3 class="plan-h">Your arrival plan</h3>
+          <p class="plan-main"><strong>${esc(plan.recommendedLotName)}</strong> is the recommended parking option.</p>
+          <ol class="arrival-steps">${plan.steps.map((step) => `<li><time>${esc(formatMinute(step.minute))}</time><span>${esc(step.label)}${step.durationMinutes ? ` · about ${step.durationMinutes} min` : ""}</span></li>`).join("")}
+          <li><time>${esc(formatMinute(plan.targetMinute))}</time><span>Arrive at ${esc(plan.destinationName)}</span></li></ol>
+          <p class="fine">${esc(plan.assumptions.join(" "))}</p>
+          ${isSpeechSupported() ? `<button type="button" class="ref" data-read-plan>Read plan aloud</button><button type="button" class="ref" data-stop-plan>Stop reading</button>` : ""}
+        </section>`;
+      })()
+    : "";
   const check = r.checkSign.length
     ? `<h3 class="plan-h">Nearby, but I can't confirm your permit</h3><ul class="plan-list">${r.checkSign.map((o) => card(o, null)).join("")}</ul>`
     : "";
-  return `<h2 class="plan-title">${esc(input.building)}</h2><p class="plan-when">${when}</p>${recs}${check}
+  return `<h2 class="plan-title">${esc(input.building)}</h2><p class="plan-when">${when}</p>${arrival}${recs}${check}
     <p class="fine">Forecast from a Databricks-trained model (${esc(src.model)}, ${esc(src.generated)}) on <strong>simulated</strong> demand shaped by VT's class timetable. It is not measured occupancy and has not been validated against real sensors.</p>
     <p class="fine">${esc(SIGNAGE_NOTE)}</p>`;
 }
@@ -108,6 +123,7 @@ export function createPlanView(el: HTMLElement, opts: PlanViewOptions): PlanView
   const out = el.querySelector<HTMLElement>("#plan-out")!;
   const err = el.querySelector<HTMLElement>("#plan-error")!;
   let searched = false;
+  let latestBuilding: Building | null = null;
 
   function renderChips() {
     const { permits, ada } = opts.getPermits();
@@ -214,6 +230,7 @@ export function createPlanView(el: HTMLElement, opts: PlanViewOptions): PlanView
     const minute = h * 60 + m;
     const { permits, ada } = opts.getPermits();
     const r = planAhead({ building: b, dow: Number(day.value), minute, permits, ada }, { garages: GARAGES, lots: LOTS });
+    latestBuilding = b;
     out.innerHTML = renderPlanResult(r, { building: b.name, minute });
     searched = true;
   }
@@ -238,6 +255,10 @@ export function createPlanView(el: HTMLElement, opts: PlanViewOptions): PlanView
   out.addEventListener("click", (e) => {
     const b = (e.target as Element).closest<HTMLElement>("button.ref");
     if (b) opts.onSelect({ kind: b.dataset.kind as "garage" | "lot", id: b.dataset.id! });
+    const route = (e.target as Element).closest<HTMLElement>("[data-route-id]");
+    if (route && latestBuilding) opts.onShowRoute?.({ kind: route.dataset.routeKind as "garage" | "lot", id: route.dataset.routeId! }, { kind: "building", id: latestBuilding.id });
+    if ((e.target as Element).closest("[data-read-plan]")) speak(out.textContent ?? "");
+    if ((e.target as Element).closest("[data-stop-plan]")) stopSpeech();
   });
 
   renderChips();

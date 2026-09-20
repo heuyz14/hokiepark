@@ -43,6 +43,7 @@ export const ADVISOR_TOOL_LABELS: Record<string, string> = {
   accessible_parking: "Checked accessible parking",
   calculate_walk_route: "Calculated walking estimate",
   compare_parking_options: "Compared parking options",
+  build_arrival_plan: "Built arrival plan",
 };
 
 export interface AdvisorOptions {
@@ -197,10 +198,13 @@ export function withAdvisor(fallback: Answerer, advisor: { ask(q: string): Promi
 /** Browser transport: POST the turn to the Supabase function and return the model's next content. */
 export function httpTransport(cfg: { url: string; anonKey: string }, fetchFn: typeof fetch = fetch): Transport {
   return async (req, signal) => {
+    // Exact location is trusted application context for local tools only. The relay/model gets
+    // the ordinary parking context but never coordinates, even when it requested a route.
+    const { currentLocation: _privateLocation, ...publicContext } = req.context;
     const res = await fetchFn(cfg.url, {
       method: "POST",
       headers: { "content-type": "application/json", apikey: cfg.anonKey, authorization: `Bearer ${cfg.anonKey}` },
-      body: JSON.stringify(req),
+      body: JSON.stringify({ contents: req.contents, context: publicContext }),
       signal,
     });
     if (!res.ok) {

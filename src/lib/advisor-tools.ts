@@ -9,6 +9,8 @@ import { nearest } from "./nearby.ts";
 import { ARRIVE_BEFORE_MIN, FORECAST, forecastSource, planAhead, type PlanOption } from "./planahead.ts";
 import { classSummary, garageAccess, lotAccess, PERMIT_LABEL, type PermitId } from "./permits.ts";
 import { formatMinute, DAY_NAME } from "./planask.ts";
+import { buildArrivalPlan } from "./arrival-plan.ts";
+import { calculateCampusWalkingRoute } from "./walk-network.ts";
 
 /**
  * The advisor's tools. Deterministic, run in the browser on the same data as the map, and the ONLY source of facts the model may use.
@@ -304,20 +306,25 @@ function accessibleTool(a: Args): ToolResult {
 
 /** There is no vetted campus pedestrian network in this data bundle yet. This deliberately
  * returns a labelled estimate instead of drawing a route through buildings or inventing turns. */
-function walkRouteTool(a: Args): ToolResult {
+function walkRouteTool(a: Args, ctx: AdvisorContext): ToolResult {
   const origin = byId.get(String(a.origin_id));
   const destination = byId.get(String(a.destination_id));
-  if (!origin || !destination) return fail("unknown_place", "Use place ids returned by find_place.");
-  const distance = Math.round(haversineMeters(origin, destination));
+  if (!destination) return fail("unknown_place", "Use place ids returned by find_place.");
+  const current = a.origin_id === "current_location" ? ctx.currentLocation : undefined;
+  if (a.origin_id === "current_location" && !current) return fail("location_unavailable", "Ask the driver to use the map's location button, then try again.");
+  if (!origin && !current) return fail("unknown_place", "Use place ids returned by find_place.");
+  const source: Located = current ?? origin!;
+  const routed = calculateCampusWalkingRoute(source, destination);
+  const distance = routed?.distanceMeters ?? Math.round(haversineMeters(source, destination));
   return {
     ok: true,
-    origin: { id: origin.id, name: origin.name },
+    origin: current ? { name: "Your current location" } : { id: origin!.id, name: origin!.name },
     destination: { id: destination.id, name: destination.name },
     distance_meters: distance,
-    duration_seconds: Math.round(distance / 1.3),
-    walking_minutes: Math.max(1, Math.ceil(distance / (1.3 * 60))),
-    route_type: "straight_line_estimate",
-    note: "No vetted campus walkway graph is bundled yet; this is a straight-line walking estimate, not turn-by-turn navigation.",
+    duration_seconds: routed?.durationSeconds ?? Math.round(distance / 1.3),
+    walking_minutes: Math.max(1, Math.ceil((routed?.durationSeconds ?? Math.round(distance / 1.3)) / 60)),
+    route_type: routed ? "walk_graph" : "straight_line_estimate",
+    ...(routed ? { geometry: routed.geometry.filter((_, index, all) => index % Math.ceil(all.length / 100) === 0 || index === all.length - 1).map((point) => ({ latitude: point.lat, longitude: point.lon })), source: "VT Facilities Sidewalks and Pathways" } : { note: "No connected campus walkway route was found; this is a straight-line walking estimate, not turn-by-turn navigation." }),
   };
 }
 
@@ -345,6 +352,32 @@ function compareParkingTool(a: Args, ctx: AdvisorContext): ToolResult {
   };
 }
 
+function buildArrivalPlanTool(a: Args, ctx: AdvisorContext): ToolResult {
+  const b = BUILDINGS.find((x) => x.id === a.building_id);
+  if (!b) return fail("unknown_building", "Use a building id from find_place.");
+  const day = parseDay(a.day_of_week);
+  const minute = parseTime(a.class_time);
+  if (day === null || minute === null) return fail("invalid_time", "Use ISO weekday 1-7 and 24-hour HH:MM.");
+  if (a.buffer_minutes !== undefined && (!Number.isInteger(a.buffer_minutes) || (a.buffer_minutes as number) < 0 || (a.buffer_minutes as number) > 30)) return fail("invalid_buffer_minutes");
+  const w = who(a, ctx);
+  if ("err" in w) return w.err;
+  if (!w.permits.length && !w.ada) return fail("no_permit", "Ask which permit the driver holds.");
+  const top = planAhead({ building: b, dow: day, minute, ...w }, { garages: GARAGES, lots: LOTS }).recommended[0];
+  if (!top) return fail("no_eligible_parking");
+  const plan = buildArrivalPlan({ destinationName: b.name, targetMinute: minute, recommendedLot: top, ...(a.buffer_minutes === undefined ? {} : { bufferMinutes: a.buffer_minutes as number }) });
+  return {
+    ok: true,
+    destination: plan.destinationName,
+    recommended_lot_id: plan.recommendedLotId,
+    recommended_lot_name: plan.recommendedLotName,
+    lot_arrival_time: formatMinute(plan.lotArrivalMinute),
+    class_time: formatMinute(plan.targetMinute),
+    steps: plan.steps.map((step) => ({ label: step.label, time: formatMinute(step.minute), duration_minutes: step.durationMinutes, source: step.source })),
+    assumptions: plan.assumptions,
+    forecast_is_simulated: true,
+  };
+}
+
 export function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolResult {
   const a = asObj(args);
   try {
@@ -356,8 +389,9 @@ export function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolR
       case "permit_check": return permitTool(a, ctx);
       case "garages_now": return garagesTool(a, ctx);
       case "accessible_parking": return accessibleTool(a);
-      case "calculate_walk_route": return walkRouteTool(a);
+      case "calculate_walk_route": return walkRouteTool(a, ctx);
       case "compare_parking_options": return compareParkingTool(a, ctx);
+      case "build_arrival_plan": return buildArrivalPlanTool(a, ctx);
       default: return fail("unknown_tool");
     }
   } catch (err) {

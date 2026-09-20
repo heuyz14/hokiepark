@@ -43,6 +43,16 @@ Why the loop runs in the browser: the tools need the app's data (buildings, lots
 
 The server is a thin, defensive relay (`handler.ts`): the key is a function secret and is never echoed; callers cannot change the system prompt, add tools, or pick the model; requests are validated (roles, tool names, sizes, permit ids) and size-limited; per-visitor (default 60 per 10 min) and daily (default 1,500) rate limits; CORS allow-list; upstream errors map to safe statuses (503 quota, 502 rejected, 504 timeout). The function bundles into ONE file (`npm run advisor:build`), so it can be pasted into the Supabase dashboard without the CLI.
 
+### Routing and accessibility additions
+
+The advisor also exposes `calculate_walk_route`, `compare_parking_options`, and `build_arrival_plan`. Comparison reuses the existing `planAhead` ranking rather than asking the model to score lots. Arrival plans work backward from a target class time with a disclosed parking-search estimate, deterministic walking duration, and user buffer; they deliberately omit a leave-home time because HokiePark has no reliable driving-time source.
+
+The routing core uses deterministic A* over Virginia Tech Facilities’ public **Sidewalks and Pathways** graph (`src/data/walkways.geo.json`; refresh with `npm run walkways`). Connected routes return `walk_graph` geometry and ETA. When a pair of snapped points is disconnected, the tool falls back to a clearly labelled `straight_line_estimate`; it never claims turn-by-turn navigation in that case. The graph reflects the downloaded data snapshot, so refresh and verify it before a future deployment.
+
+Browser location is obtained only after the normal map permission request and lives only in short-lived app memory. It can be used by local deterministic route tools, but `httpTransport` strips it from requests to the advisor relay/model; a regression test verifies this boundary.
+
+Ask responses show a compact, collapsible list of the real tools that completed (not hidden model reasoning) and browser-native read-aloud, pause, resume, and stop controls. Speech runs only in supported browsers and never reads agent activity or raw coordinates.
+
 ## 4. Providers, and turning it on (your steps, about 20 minutes)
 The relay translates the app's one turn format to the provider's API and back (`supabase/functions/advisor/providers.ts`), so the client, tools and guards never change. **OpenRouter is used when `OPENROUTER_API_KEY` is set; otherwise Gemini if `GEMINI_API_KEY` is set.**
 

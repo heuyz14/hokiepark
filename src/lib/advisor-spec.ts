@@ -9,7 +9,7 @@ import { PERMITS, type PermitId } from "./permits.ts";
  */
 
 export const PERMIT_IDS = PERMITS.map((p) => p.id) as PermitId[];
-export const TOOL_NAMES = ["find_place", "plan_parking", "parking_now", "arrival_advice", "permit_check", "garages_now", "accessible_parking", "calculate_walk_route", "compare_parking_options"] as const;
+export const TOOL_NAMES = ["find_place", "plan_parking", "parking_now", "arrival_advice", "permit_check", "garages_now", "accessible_parking", "calculate_walk_route", "compare_parking_options", "build_arrival_plan"] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 /** Limits enforced by BOTH sides (the server rejects anything larger). */
@@ -79,12 +79,19 @@ export const TOOL_DECLARATIONS = [
     description: "Deterministically compare the permit-confirmed parking options for a class. Uses HokiePark's existing forecast ranking; never rank places yourself. Call find_place first for the building.",
     parameters: { type: "object", properties: { building_id: { type: "string", description: "building id from find_place" }, day_of_week: dayParam, class_time: timeParam, permits: permitsParam, accessible: accessibleParam }, required: ["building_id", "day_of_week", "class_time"] },
   },
+  {
+    name: "build_arrival_plan",
+    description: "Build a structured arrival plan for a class using the deterministic recommended lot, parking-search estimate, walking duration, and buffer. It never invents driving time from the driver’s starting location.",
+    parameters: { type: "object", properties: { building_id: { type: "string", description: "building id from find_place" }, day_of_week: dayParam, class_time: timeParam, permits: permitsParam, accessible: accessibleParam, buffer_minutes: { type: "integer", minimum: 0, maximum: 30, description: "Optional requested arrival buffer in minutes." } }, required: ["building_id", "day_of_week", "class_time"] },
+  },
 ] as const;
 
 export interface AdvisorContext {
   now: { dow: number; minute: number };
   permits: PermitId[];
   ada: boolean;
+  /** Browser-only, short-lived context for deterministic tools. Never sent to the model relay. */
+  currentLocation?: { lat: number; lon: number; accuracyMeters?: number };
 }
 
 const DAYS = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -100,7 +107,7 @@ export function systemPrompt(c: AdvisorContext): string {
     "You are HokiePark's parking advisor for Virginia Tech's Blacksburg campus. You help a driver decide where to park.",
     "Rules:",
     "1. Every fact (place names, distances, walk times, open-space counts, forecasts, permit verdicts, arrival times) MUST come from tool results. Never guess or use outside knowledge about VT parking. If the tools do not say it, say you don't know.",
-    "2. Resolve places with find_place first, then call plan_parking, parking_now, arrival_advice, permit_check, garages_now, accessible_parking, calculate_walk_route or compare_parking_options. For several buildings or times, call the tool several times. If find_place returns several plausible matches, ask which one they mean.",
+    "2. Resolve places with find_place first, then call plan_parking, parking_now, arrival_advice, permit_check, garages_now, accessible_parking, calculate_walk_route, compare_parking_options or build_arrival_plan. For several buildings or times, call the tool several times. If find_place returns several plausible matches, ask which one they mean. calculate_walk_route may use origin_id 'current_location' only when the driver explicitly asks to use it; never request or print coordinates.",
     "3. Forecast numbers are SIMULATED predictions, not live sensor data. Say 'forecast' or 'expected', never 'there are'. Numbers from parking_now are the map's current demo counts.",
     "4. Only recommend places in a tool's recommended list. Items in check_sign may be mentioned only as unconfirmed ('check the posted sign'). Only say a permit is valid where a tool verdict is 'yes'.",
     "5. If the driver's permit is unknown and a tool reports no permit, ask which permit they hold instead of guessing.",
