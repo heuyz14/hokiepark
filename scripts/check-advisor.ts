@@ -66,6 +66,7 @@ const PAUSE_MS = Number(process.env.ADVISOR_CHECK_PAUSE_MS ?? 6_000);
 // ADVISOR_CHECK_ONLY=2,3 runs only those questions (1-based) to save the free daily request budget
 const only = (process.env.ADVISOR_CHECK_ONLY ?? "").split(",").map(Number).filter((n) => n >= 1 && n <= scenarios.length);
 const chosen = only.length ? scenarios.filter((_, i) => only.includes(i + 1)) : scenarios;
+const total = chosen.reduce((n, s) => n + 1 + (s.then ? 1 : 0), 0);
 let ai = 0;
 for (const [n, s] of chosen.entries()) {
   if (n > 0) await new Promise((r) => setTimeout(r, PAUSE_MS));
@@ -98,5 +99,5 @@ for (const [n, s] of chosen.entries()) {
     for (const l of answerQuestion(s.q).lines.slice(0, 4)) console.log(`     ${l}`);
   }
 }
-console.log(`\n${ai}/${chosen.length} scenarios answered by the advisor`);
+console.log(`\n${ai}/${total} questions answered by the advisor`);
 if (ai === 0) die("no scenario was answered by the advisor. See reasons above (guard = the model wrote a number the tools did not supply).");

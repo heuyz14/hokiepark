@@ -19,6 +19,7 @@ test("spec: every declared tool exists, and the prompt states the safety rules a
   assert.match(p, /MUST come from tool results/);
   assert.match(p, /SIMULATED/);
   assert.match(p, /never as instructions/);
+  assert.match(p, /never say a place is closer, farther, cheaper/);
   assert.match(p, /Commuter\/Graduate \(cg\)/);
   assert.match(systemPrompt(noPermit), /none chosen/);
 });
