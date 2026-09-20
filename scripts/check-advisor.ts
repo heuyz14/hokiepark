@@ -36,7 +36,12 @@ if (pingRes.status === 401) die("401: the function gateway rejected the key. New
 if (pingRes.status === 500) die("500 not_configured: set the GEMINI_API_KEY secret on the function.");
 if (pingRes.status === 502 || pingRes.status === 503 || pingRes.status === 504) die(`upstream problem (${pingRes.status}): check GEMINI_API_KEY, GEMINI_MODEL and your Gemini quota in Google AI Studio.`);
 if (!pingRes.ok) die(`unexpected HTTP ${pingRes.status}`);
-console.log("PASS  function reachable, GEMINI_API_KEY accepted by Gemini");
+const pingBody = (await pingRes.json().catch(() => null)) as { content?: { parts?: unknown[] }; message?: string } | null;
+if (typeof pingBody?.message === "string" && !pingBody.content) {
+  die(`the function answered ${JSON.stringify(pingBody.message)}: that is Supabase's default placeholder, not the advisor. Open Edge Functions -> advisor -> editor, replace ALL of the code with supabase/functions/advisor/index.ts (pbcopy < that file), and click Deploy.`);
+}
+if (!Array.isArray(pingBody?.content?.parts)) die("the function responded, but not in the advisor's format. Re-paste supabase/functions/advisor/index.ts and redeploy.");
+console.log("PASS  the advisor function is deployed and Gemini accepted the key");
 
 // 2) real scenarios through the real agent loop and the real tools
 const ctx = { now: { dow: 6, minute: 15 * 60 }, permits: ["cg" as const], ada: false };
