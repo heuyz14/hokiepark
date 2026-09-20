@@ -1,7 +1,8 @@
 import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
+import { buildingCodes } from "../data/building-abbreviations.ts";
 import type { Selection } from "../types.ts";
 import { garageStatus, garageTotals, lotStatus, lotSummary } from "../lib/occupancy.ts";
-import { filterByName } from "../lib/search.ts";
+import { filterBuildings, filterByName } from "../lib/search.ts";
 import { sameSelection } from "../state.ts";
 import { adaBadge } from "./badge.ts";
 import { CATEGORY_LABEL, esc, statusPill } from "./format.ts";
@@ -19,7 +20,7 @@ export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selectio
   el.innerHTML = `
     <div class="list-search">
       <label for="list-q">Search garages, lots &amp; buildings</label>
-      <input id="list-q" type="search" placeholder="e.g. Perry, Squires, bookstore" autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <input id="list-q" type="search" placeholder="e.g. Perry, Squires, TORG" autocomplete="off" spellcheck="false" enterkeyhint="search">
     </div>
     <div id="list-results" class="list-results" aria-live="polite"></div>`;
   const input = el.querySelector<HTMLInputElement>("#list-q")!;
@@ -49,7 +50,7 @@ export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selectio
     // exactly "every garage and lot" (spec Section 6), while still giving keyboard and
     // screen-reader users - who can't reach the map's SVG building shapes - a way to open
     // a building's sheet and see its nearest parking (the map's aria-label points here).
-    const buildings = q.trim() ? filterByName(BUILDINGS, q) : [];
+    const buildings = q.trim() ? filterBuildings(BUILDINGS, q) : [];
     if (!garages.length && !lots.length && !buildings.length) {
       results.innerHTML = `<p class="state-msg">No garages, lots, or buildings match &ldquo;${esc(q.trim())}&rdquo;.<br>Try a shorter name, like &ldquo;perry&rdquo; or &ldquo;squ&rdquo;.</p>`;
       return;
@@ -63,7 +64,10 @@ export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selectio
       const v = lotAccess(l, held, { ada: heldAda }).verdict;
       return row("lot", l.id, l.name, lotSummary(l), `${filtering() ? accTag(v) : ""}${statusPill(lotStatus(l))}${l.hasADA ? adaBadge({ label: "ADA" }) : ""}`, v);
     });
-    const bRows = buildings.map((b) => row("building", b.id, b.name, `${CATEGORY_LABEL[b.category]} &middot; Building ${esc(b.num)}`, ""));
+    const bRows = buildings.map((b) => {
+      const codes = buildingCodes(b.num);
+      return row("building", b.id, b.name, `${codes.length ? `<strong>${esc(codes.join(", "))}</strong> &middot; ` : ""}${CATEGORY_LABEL[b.category]} &middot; Building ${esc(b.num)}`, "");
+    });
     results.innerHTML =
       (gRows.length ? `<h2 class="list-h">Garages <span>${gRows.length}</span></h2><ul class="rows">${gRows.join("")}</ul>` : "") +
       (lRows.length ? `<h2 class="list-h">Lots <span>${lRows.length}</span></h2><ul class="rows">${lRows.join("")}</ul>` : "") +

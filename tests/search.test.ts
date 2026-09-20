@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filterByName, matches } from "../src/lib/search.ts";
+import { buildingFromText, filterBuildings, filterByName, matches, resolveBuilding } from "../src/lib/search.ts";
 import { nearest, walkMinutes } from "../src/lib/nearby.ts";
-import { GARAGES, LOTS } from "../src/data/index.ts";
+import { BUILDINGS, GARAGES, LOTS } from "../src/data/index.ts";
 
 test("matches is case, punctuation and token-order insensitive", () => {
   assert.ok(matches("Graduate Life Center West", "grad west"));
@@ -10,6 +10,16 @@ test("matches is case, punctuation and token-order insensitive", () => {
   assert.ok(matches("Perry Street Garage", "  PERRY  "));
   assert.ok(!matches("Perry Street Garage", "cassell"));
   assert.ok(matches("anything", ""));
+});
+
+test("official building abbreviations resolve case-insensitively and rank exact codes first", () => {
+  assert.equal(resolveBuilding(BUILDINGS, "TORG")?.name, "Torgersen Hall");
+  assert.equal(resolveBuilding(BUILDINGS, "han")?.name, "Hancock Hall");
+  assert.equal(resolveBuilding(BUILDINGS, "aj e")?.name, "Ambler Johnston Hall - East Wing");
+  assert.equal(filterBuildings(BUILDINGS, "bur")[0]?.name, "Burruss Hall");
+  assert.equal(resolveBuilding(BUILDINGS, "not-a-building"), null);
+  assert.equal(buildingFromText(BUILDINGS, "what's new on campus"), null, "ordinary words that are also short codes do not become destinations");
+  assert.equal(buildingFromText(BUILDINGS, "class at new")?.name, "Newman Hall");
 });
 
 test("partial names find real items; misspellings return nothing (fuzziness is cut)", () => {

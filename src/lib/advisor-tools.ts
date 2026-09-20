@@ -1,4 +1,4 @@
-import codes from "../../data/timetable-building-codes.json" with { type: "json" };
+import { buildingCodes } from "../data/building-abbreviations.ts";
 import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
 import type { Garage, Lot } from "../types.ts";
 import { findPlace } from "./assistant.ts";
@@ -26,11 +26,8 @@ interface PlaceRef extends Located {
   id: string;
   name: string;
 }
-const codeByNum = new Map<string, string[]>();
-for (const [code, v] of Object.entries(codes as Record<string, { num: string }>)) codeByNum.set(v.num, [...(codeByNum.get(v.num) ?? []), code.toLowerCase()]);
-
 const ALL: (PlaceRef & { codes: string[] })[] = [
-  ...BUILDINGS.map((b) => ({ kind: "building" as const, id: b.id, name: b.name, lat: b.lat, lon: b.lon, codes: codeByNum.get(b.num) ?? [] })),
+  ...BUILDINGS.map((b) => ({ kind: "building" as const, id: b.id, name: b.name, lat: b.lat, lon: b.lon, codes: buildingCodes(b.num).map((code) => norm(code)) })),
   ...GARAGES.map((g) => ({ kind: "garage" as const, id: g.id, name: g.name, lat: g.lat, lon: g.lon, codes: [] })),
   ...LOTS.map((l) => ({ kind: "lot" as const, id: l.id, name: `${l.name} lot`, lat: l.lat, lon: l.lon, codes: [] })),
 ];
@@ -47,7 +44,7 @@ export function searchPlaces(query: string, limit = 5): { id: string; kind: stri
     const n = norm(p.name);
     let score = 0;
     let matched = "";
-    if (tokens.some((t) => p.codes.includes(t))) [score, matched] = [100, "timetable code"];
+    if (p.codes.includes(q)) [score, matched] = [100, "building code"];
     else if (n === q) [score, matched] = [95, "exact name"];
     else if (n.includes(q)) [score, matched] = [70, "name contains it"];
     else if (tokens.length && tokens.every((t) => n.includes(t))) [score, matched] = [55, "every word matches"];

@@ -230,6 +230,8 @@ await shot("5-list");
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='squ';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
 const rows = await ev(`document.querySelectorAll('#list-results .row').length`);
 check("search 'squ' narrows list", rows >= 1 && rows < 5, `rows=${rows}`);
+await ev(`(()=>{const i=document.getElementById('list-q');i.value='TORG';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+check("official building code TORG finds Torgersen Hall", (await ev(`document.querySelector('#list-results .row[data-kind="building"]')?.innerText`))?.includes("Torgersen Hall") && (await ev(`document.querySelector('#list-results .row[data-kind="building"]')?.innerText`))?.includes("TORG"));
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='zzzz';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
 check("no-match empty state", (await ev(`document.querySelector('#list-results .state-msg')?.textContent`))?.includes("No garages, lots, or buildings match"));
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
@@ -337,12 +339,13 @@ await shot("8c-ask-to-map");
 // Plan tab: destination + day + class time + permit -> forecast cards (Databricks predictions.json), permit rules respected
 await click('.tabbar [data-view="plan"]'); await sleep(200); await shot("8d-plan");
 check("Plan tab shows the form and 4 tabs exist", (await ev(`!document.getElementById('view-plan').hidden && !!document.getElementById('plan-form')`)) && (await ev(`document.querySelectorAll('.tabbar button').length`)) === 4);
-await ev(`(()=>{const i=document.getElementById('plan-bldg');i.value='Hancock Hall';i.dispatchEvent(new Event('change'));document.getElementById('plan-day').value='3';document.getElementById('plan-time').value='14:00';})()`);
+await ev(`(()=>{const i=document.getElementById('plan-bldg');i.value='TORG';i.dispatchEvent(new Event('change'));document.getElementById('plan-day').value='3';document.getElementById('plan-time').value='14:00';})()`);
 await ev(`document.getElementById('plan-form').requestSubmit()`); await sleep(250);
 check("Plan without a permit asks for one and recommends nothing", /Choose your permit/.test(await ev(`document.getElementById('plan-out').innerText`)) && (await ev(`document.querySelectorAll('#plan-out .plan-card').length`)) === 0);
 await click('#plan-permit-chips [data-permit="cg"]'); await sleep(300);
 const planText = await ev(`document.getElementById('plan-out').innerText`);
 check("choosing a permit re-runs the plan and lists 1-3 recommendations", (await ev(`document.querySelectorAll('#plan-out .plan-list:first-of-type .plan-card, #plan-out ol .plan-card').length`)) >= 1, JSON.stringify(planText.slice(0, 120)));
+check("Plan resolves TORG to Torgersen Hall", /^Torgersen Hall/.test(planText), JSON.stringify(planText.slice(0, 80)));
 await shot("8e-plan-results");
 check("plan says 2:00 PM Wednesday, arriving 1:45 PM, and labels the forecast simulated", /2:00 PM Wednesday/.test(planText) && /1:45 PM/.test(planText) && /simulated/i.test(planText) && /not measured occupancy/i.test(planText), JSON.stringify(planText.slice(0, 160)));
 check("a plain Commuter permit is not sent to Perry Street Garage", !/Perry Street Garage/.test(await ev(`document.getElementById('plan-out').innerText`)));
@@ -361,6 +364,12 @@ await click('#plan-permit-chips [data-permit="cg"]'); await sleep(200);
 check("cleanup: permit cleared", (await ev(`document.querySelectorAll('#plan-permit-chips .is-on').length`)) === 0);
 await click('.tabbar [data-view="map"]'); await sleep(200);
 if ((await ev(`document.getElementById('sheet').hidden`)) === false) { await click('.sheet-close, #sheet [data-close], #sheet button[aria-label*="Close"]').catch(() => {}); }
+await click('.permit-chip');
+await click('.permit-opt[data-permit="cg"]');
+check("permit can be selected for the current session", /Commuter\/Graduate/.test(await ev(`document.querySelector('.permit-chip')?.innerText || ''`)));
+await send("Page.reload"); await sleep(1500);
+await waitFor(async () => (await ev(`document.querySelector('.permit-chip')?.innerText`)) === "Set your permit", 8000);
+check("a fresh app load never preselects a permit", (await ev(`document.querySelector('.permit-chip')?.innerText`)) === "Set your permit" && (await ev(`document.querySelectorAll('.permit-opt.is-on').length`)) === 0);
 const http = URL_.startsWith("http");
 check("PWA: apple-touch-icon present", await ev(`!!document.querySelector('link[rel=apple-touch-icon]')`));
 check(http ? "PWA: manifest link injected over http" : "PWA: no manifest link on file:// (avoids console error)", (await ev(`!!document.querySelector('link[rel=manifest]')`)) === http);
@@ -422,7 +431,7 @@ const chipText = () => ev(`document.getElementById('sync').textContent`);
 const markerLabel = (gid) => ev(`document.querySelector('.marker-garage[data-id="${gid}"]').getAttribute('aria-label')`);
 const hdr = (req, name) => Object.entries(req.headers).find(([k]) => k.toLowerCase() === name)?.[1];
 if (!LIVE) {
-  check("chip says 'Sample data' when the feed is not configured", (await chipText()) === "Sample data", await chipText());
+  check("chip says sample data does not refresh when the feed is not configured", (await chipText()) === "Sample data · no refresh", await chipText());
 } else {
   check("live: chip reaches 'Live' after first sync", await waitFor(async () => /^Live/.test(await chipText())), await chipText());
   check("live: requests hit /rest/v1/garage_levels with the anon key and no privileged key",

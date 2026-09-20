@@ -24,24 +24,31 @@ export interface SyncLabel {
   tone: "off" | "live" | "warn";
 }
 
+/** Compact polling cadence for the header chip. */
+export function refreshInterval(ms: number): string {
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  return seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m`;
+}
+
 /** Pure description of the header chip for a given status and clock (so it can be unit-tested). */
-export function describeSync(status: SyncStatus, now: number): SyncLabel {
-  if (status.state === "demo") return { text: "Sample data", title: "Showing bundled sample counts (live feed not configured).", tone: "off" };
-  if (status.state === "connecting") return { text: "Connecting", title: "Connecting to the occupancy feed.", tone: "off" };
+export function describeSync(status: SyncStatus, now: number, pollMs?: number): SyncLabel {
+  const cadence = pollMs ? refreshInterval(pollMs) : null;
+  if (status.state === "demo") return { text: "Sample data · no refresh", title: "Showing bundled sample counts. Automatic refresh is off because the live feed is not configured.", tone: "off" };
+  if (status.state === "connecting") return { text: `Connecting${cadence ? ` · refresh ${cadence}` : ""}`, title: `Connecting to the occupancy feed${cadence ? `; it refreshes every ${cadence}` : ""}.`, tone: "off" };
   if (status.state === "offline") {
     return {
-      text: "Offline",
-      title: status.lastSync ? "Can't reach the feed. Showing the last known counts." : "Can't reach the feed. Showing bundled sample counts.",
+      text: `Offline${cadence ? ` · refresh ${cadence}` : ""}`,
+      title: `${status.lastSync ? "Can't reach the feed. Showing the last known counts." : "Can't reach the feed. Showing bundled sample counts."}${cadence ? ` The normal refresh interval is ${cadence}; failed requests may retry more slowly.` : ""}`,
       tone: "warn",
     };
   }
   const old = status.dataAsOf !== null && now - status.dataAsOf > STALE_DATA_MS;
   if (old) {
     return {
-      text: `Data ${relativeAge(now - status.dataAsOf!)}`,
-      title: "Connected, but the counts in the database haven't changed recently (the demo simulator may not be running).",
+      text: `Data ${relativeAge(now - status.dataAsOf!)}${cadence ? ` · refresh ${cadence}` : ""}`,
+      title: `Connected, but the counts in the database haven't changed recently (the demo simulator may not be running).${cadence ? ` The feed refreshes every ${cadence}.` : ""}`,
       tone: "warn",
     };
   }
-  return { text: `Live · ${relativeAge(now - (status.lastSync ?? now))}`, title: "Counts synced from the occupancy feed (simulated demo data).", tone: "live" };
+  return { text: `Live · ${relativeAge(now - (status.lastSync ?? now))}${cadence ? ` · refresh ${cadence}` : ""}`, title: `Counts synced from the occupancy feed (simulated demo data).${cadence ? ` The feed refreshes every ${cadence}.` : ""}`, tone: "live" };
 }

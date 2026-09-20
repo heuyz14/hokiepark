@@ -1,4 +1,5 @@
 import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
+import { buildingFromText } from "./search.ts";
 import type { Garage, Lot, SelectionKind } from "../types.ts";
 import { formatMeters, nearest, walkMinutes } from "./nearby.ts";
 import { garageStatus, garageTotals, levelStatus, openAdaSpaces, openSpaces, STATUS_LABEL } from "./occupancy.ts";
@@ -42,8 +43,11 @@ const sigTokens = (name: string) => norm(name).split(" ").filter((t) => t.length
 
 /** Best place mentioned in the question: most matching distinctive name tokens wins; `prefer` breaks ties. */
 export function findPlace(question: string): Place | null {
-  const q = new Set(norm(question).split(" "));
-  const prefer: SelectionKind[] = /\blots?\b/.test(norm(question)) ? ["lot", "building", "garage"] : /\bgarages?\b/.test(norm(question)) ? ["garage", "building", "lot"] : ["building", "garage", "lot"];
+  const normalized = norm(question);
+  const codedBuilding = /\b(?:lots?|garages?)\b/.test(normalized) ? null : buildingFromText(BUILDINGS, question);
+  if (codedBuilding) return { kind: "building", id: codedBuilding.id, name: codedBuilding.name, lat: codedBuilding.lat, lon: codedBuilding.lon };
+  const q = new Set(normalized.split(" "));
+  const prefer: SelectionKind[] = /\blots?\b/.test(normalized) ? ["lot", "building", "garage"] : /\bgarages?\b/.test(normalized) ? ["garage", "building", "lot"] : ["building", "garage", "lot"];
   const all: Place[] = [
     ...BUILDINGS.map((b) => ({ kind: "building" as const, id: b.id, name: b.name, lat: b.lat, lon: b.lon })),
     ...GARAGES.map((g) => ({ kind: "garage" as const, id: g.id, name: g.name, lat: g.lat, lon: g.lon })),

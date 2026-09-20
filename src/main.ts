@@ -5,7 +5,7 @@ import { createSheet } from "./ui/sheet.ts";
 import { createList } from "./ui/list.ts";
 import { renderLegend } from "./ui/legend.ts";
 import { createAssistant } from "./ui/assistant.ts";
-import { createPermitPicker, loadSaved, save as savePermits } from "./ui/permits.ts";
+import { createPermitPicker } from "./ui/permits.ts";
 import { createPlanView } from "./ui/plan.ts";
 import { nowOf, withPlanAhead } from "./lib/planask.ts";
 import { makeLocalAnswerer } from "./lib/assistant.ts";
@@ -17,8 +17,7 @@ import { createSyncChip } from "./ui/sync.ts";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 function boot() {
-  const saved = loadSaved();
-  const store = createStore({ view: "map", selection: null, source: null, query: "", permits: saved.permits, ada: saved.ada });
+  const store = createStore({ view: "map", selection: null, source: null, query: "", permits: [], ada: false });
   const select = (selection: Selection, source: NonNullable<State["source"]>, view?: View) =>
     store.set({ selection, source, ...(view ? { view } : {}) });
 
@@ -33,11 +32,9 @@ function boot() {
   });
   renderLegend($("legend"));
   const picker = createPermitPicker($("permit-picker"), (permits, ada) => store.set({ permits, ada }));
-  // Apply whatever was remembered from last visit before the first paint.
-  picker.set(saved.permits, saved.ada);
-  map.setPermits(saved.permits, saved.ada);
-  list.setPermits(saved.permits, saved.ada);
-  sheet.setPermits(saved.permits, saved.ada);
+  map.setPermits([], false);
+  list.setPermits([], false);
+  sheet.setPermits([], false);
 
   const views: Record<View, HTMLElement> = { map: $("view-map"), list: $("view-list"), ask: $("view-ask"), plan: $("view-plan") };
   const tabs = [...document.querySelectorAll<HTMLButtonElement>(".tabbar button")];
@@ -54,7 +51,6 @@ function boot() {
   const plan = createPlanView($("view-plan"), {
     getPermits: () => ({ permits: store.get().permits, ada: store.get().ada }),
     onPermits: (permits, ada) => {
-      savePermits(permits, ada);
       picker.set(permits, ada);
       store.set({ permits, ada });
     },
@@ -85,7 +81,7 @@ function boot() {
   });
 
   // Live occupancy (optional). Without config the app just shows the bundled sample counts.
-  const chip = createSyncChip($("sync"), { state: LIVE_CONFIG ? "connecting" : "demo", lastSync: null, dataAsOf: null });
+  const chip = createSyncChip($("sync"), { state: LIVE_CONFIG ? "connecting" : "demo", lastSync: null, dataAsOf: null }, LIVE_CONFIG?.pollMs);
   if (LIVE_CONFIG) {
     startLive(LIVE_CONFIG, {
       onStatus: chip.update,

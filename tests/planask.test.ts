@@ -43,6 +43,11 @@ test("a building plus a time plans; missing either falls through", () => {
   assert.equal(planAnswer("what's open at Perry Street Garage at 2pm", {}, now), null, "a garage is not a destination building");
 });
 
+test("a timetable building abbreviation identifies the destination", () => {
+  const answer = planAnswer("2pm class at torg, commuter permit", {}, now)!;
+  assert.match(answer.lines[0]!, /class at Torgersen Hall/);
+});
+
 test("the permit in the sentence overrides the saved one; with neither it asks", () => {
   const saved = planAnswer("2pm class at Hancock Hall", { permits: ["fs"] }, now)!;
   assert.match(saved.lines[0]!, /Faculty\/Staff/);

@@ -1,10 +1,10 @@
-import { BUILDINGS } from "../data/index.ts";
-import { GARAGES, LOTS } from "../data/index.ts";
+import { buildingCodes } from "../data/building-abbreviations.ts";
+import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
 import { forecastSource, planAhead, type PlanOption, type PlanResult } from "../lib/planahead.ts";
 import { DAY_NAME, formatMinute } from "../lib/planask.ts";
 import { formatMeters } from "../lib/nearby.ts";
 import { PERMITS, SIGNAGE_NOTE, type PermitId } from "../lib/permits.ts";
-import { filterByName } from "../lib/search.ts";
+import { resolveBuilding as findBuilding } from "../lib/search.ts";
 import type { Building, Selection } from "../types.ts";
 import { esc } from "./format.ts";
 
@@ -66,8 +66,11 @@ export function createPlanView(el: HTMLElement, opts: PlanViewOptions): PlanView
       <form class="plan-form" id="plan-form" autocomplete="off" novalidate>
         <h2 class="plan-lead">Where should I park for class?</h2>
         <label for="plan-bldg">Destination building</label>
-        <input id="plan-bldg" type="text" list="plan-bldgs" placeholder="e.g. Hancock Hall" spellcheck="false" autocapitalize="off">
-        <datalist id="plan-bldgs">${BUILDINGS.map((b) => `<option value="${esc(b.name)}"></option>`).join("")}</datalist>
+        <input id="plan-bldg" type="text" list="plan-bldgs" placeholder="e.g. Hancock Hall or HAN" spellcheck="false" autocapitalize="off">
+        <datalist id="plan-bldgs">${BUILDINGS.flatMap((b) => {
+          const codes = buildingCodes(b.num);
+          return [`<option value="${esc(b.name)}"${codes.length ? ` label="${esc(codes.join(", "))}"` : ""}></option>`, ...codes.map((code) => `<option value="${esc(code)}" label="${esc(b.name)}"></option>`)];
+        }).join("")}</datalist>
         <div class="plan-when-row">
           <div><label for="plan-day">Day</label>
             <select id="plan-day">${[1, 2, 3, 4, 5].map((d) => `<option value="${d}"${d === defaultDay(t0) ? " selected" : ""}>${DAY_NAME[d]}</option>`).join("")}</select></div>
@@ -97,12 +100,7 @@ export function createPlanView(el: HTMLElement, opts: PlanViewOptions): PlanView
   }
 
   function resolveBuilding(): Building | null {
-    const q = bldg.value.trim();
-    if (!q) return null;
-    const exact = BUILDINGS.find((b) => b.name.toLowerCase() === q.toLowerCase());
-    if (exact) return exact;
-    const hits = filterByName(BUILDINGS, q);
-    return hits.length === 1 ? hits[0]! : null;
+    return findBuilding(BUILDINGS, bldg.value);
   }
 
   function showError(msg: string) {

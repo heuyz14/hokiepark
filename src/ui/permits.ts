@@ -5,32 +5,6 @@ export interface PermitPickerController {
   set(permits: PermitId[], ada: boolean): void;
 }
 
-const STORE_KEY = "hokiepark.permits.v1";
-
-/** Remembers the driver's permits between visits; a blocked/private store just means no memory. */
-export function loadSaved(): { permits: PermitId[]; ada: boolean } {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return { permits: [], ada: false };
-    const v = JSON.parse(raw) as { permits?: unknown; ada?: unknown };
-    const valid = new Set(PERMITS.map((p) => p.id));
-    return {
-      permits: Array.isArray(v.permits) ? (v.permits.filter((p) => typeof p === "string" && valid.has(p as PermitId)) as PermitId[]) : [],
-      ada: v.ada === true,
-    };
-  } catch {
-    return { permits: [], ada: false };
-  }
-}
-
-export function save(permits: PermitId[], ada: boolean) {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ permits, ada }));
-  } catch {
-    /* private mode: the choice just won't persist */
-  }
-}
-
 /**
  * The permit chooser: a collapsed chip in the map's top-left that opens a panel of toggles.
  * Multi-select, because a driver can hold more than one permit, and because the honest answer to
@@ -78,7 +52,6 @@ export function createPermitPicker(el: HTMLElement, onChange: (permits: PermitId
   }
 
   function commit() {
-    save(permits, ada);
     onChange(permits, ada);
     render();
   }
