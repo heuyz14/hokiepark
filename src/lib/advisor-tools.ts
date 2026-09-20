@@ -5,6 +5,7 @@ import { findPlace } from "./assistant.ts";
 import { PERMIT_IDS, type AdvisorContext, type ToolName } from "./advisor-spec.ts";
 import { footprintDistance, walkMinutes, type Located } from "./nearby.ts";
 import { garageTotals, openAdaSpaces, openSpaces } from "./occupancy.ts";
+import { nearest } from "./nearby.ts";
 import { ARRIVE_BEFORE_MIN, FORECAST, forecastSource, planAhead, type PlanOption } from "./planahead.ts";
 import { classSummary, garageAccess, lotAccess, PERMIT_LABEL, type PermitId } from "./permits.ts";
 import { formatMinute, DAY_NAME } from "./planask.ts";
@@ -240,6 +241,70 @@ function permitTool(a: Args, ctx: AdvisorContext): ToolResult {
   return fail("unknown_place", "Use the id of a lot or garage from find_place.");
 }
 
+const DRILLFIELD_CENTRE: Located = { lat: 37.2285, lon: -80.4225 };
+
+/** Open spaces on the levels of `g` that the permits cover ("usable" in the rule-based assistant). */
+function usableOpen(g: Garage, permits: PermitId[], ada: boolean): number {
+  return g.levels.filter((l) => lotAccess({ classes: l.classes }, permits, { ada }).verdict === "yes").reduce((n, l) => n + openSpaces(l), 0);
+}
+
+function garagesTool(a: Args, ctx: AdvisorContext): ToolResult {
+  const w = who(a, ctx);
+  if ("err" in w) return w.err;
+  const known = w.permits.length > 0 || w.ada;
+  const rows = GARAGES.map((g) => {
+    const t = garageTotals(g);
+    return {
+      id: g.id,
+      name: g.name,
+      current_open_spaces: t.open,
+      capacity: t.capacity,
+      accessible_open_spaces: t.adaOpen,
+      ...(known ? { open_spaces_on_levels_your_permit_covers: usableOpen(g, w.permits, w.ada), permit_verdict: garageAccess(g.levels, w.permits, { ada: w.ada }).verdict } : {}),
+    };
+  });
+  const key = (r: (typeof rows)[number]) => (known ? (r as { open_spaces_on_levels_your_permit_covers: number }).open_spaces_on_levels_your_permit_covers : r.current_open_spaces);
+  const ranked = [...rows].sort((x, y) => key(y) - key(x));
+  const top = ranked[0]!;
+  return {
+    ok: true,
+    permit_checked: known,
+    ranked_most_open_first: ranked,
+    most_open: key(top) > 0 ? { id: top.id, name: top.name, open_spaces: key(top), counted: known ? "levels your permit covers" : "all levels" } : null,
+    counts_are_demo_data: true,
+  };
+}
+
+function accessibleTool(a: Args): ToolResult {
+  const from = a.place_id === undefined || a.place_id === "" ? null : byId.get(String(a.place_id));
+  if (a.place_id !== undefined && a.place_id !== "" && !from) return fail("unknown_place", "Use an id from find_place, or omit place_id for campus-wide.");
+  const origin: Located = from ?? DRILLFIELD_CENTRE;
+  const lots = nearest(LOTS.filter((l) => l.hasADA), origin, 2).map(({ item, meters }) => ({
+    id: item.id,
+    kind: "lot",
+    name: `${item.name} lot`,
+    ...(from ? { meters: Math.round(meters), walk_minutes: walkMinutes(meters) } : {}),
+    designated_accessible_spaces: item.adaSpaces,
+    signed_for: classSummary(item.classes) || "unknown",
+  }));
+  const garages = nearest(GARAGES.filter((g) => garageTotals(g).adaOpen > 0), origin, 1).map(({ item, meters }) => ({
+    id: item.id,
+    kind: "garage",
+    name: item.name,
+    ...(from ? { meters: Math.round(meters), walk_minutes: walkMinutes(meters) } : {}),
+    accessible_spaces_open_now: garageTotals(item).adaOpen,
+    levels_with_accessible_open: item.levels.filter((l) => openAdaSpaces(l) > 0).map((l) => ({ name: l.label, accessible_open: openAdaSpaces(l) })),
+  }));
+  return {
+    ok: true,
+    near: from ? from.name : "campus-wide (Drillfield centre)",
+    lots,
+    garages,
+    reminder: "Accessible spaces need a valid state accessible plate or placard.",
+    counts_are_demo_data: true,
+  };
+}
+
 export function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolResult {
   const a = asObj(args);
   try {
@@ -249,6 +314,8 @@ export function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolR
       case "parking_now": return nowTool(a, ctx);
       case "arrival_advice": return arrivalTool(a, ctx);
       case "permit_check": return permitTool(a, ctx);
+      case "garages_now": return garagesTool(a, ctx);
+      case "accessible_parking": return accessibleTool(a);
       default: return fail("unknown_tool");
     }
   } catch (err) {

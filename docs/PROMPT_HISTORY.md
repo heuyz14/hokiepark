@@ -130,3 +130,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > so what would the ask tab even be for now  /  i want to build gemini so the ask tab has a purpose and would the purpose be strong enough to keep it or can we make this into a parking agent for advice  /  disk freed up, continue and push fix and changes
 
 **Outcome:** Answered that Plan is structured/future and Ask should be the conversational advisor; built the Gemini parking advisor as a grounded tool-using agent (details in STATE.md and `docs/GEMINI_NLP_SPEC.md`), tested without a key. The disk filled mid-work (smoke runs leaked Chrome profiles); after the user freed space I merged the other session's fix (`b74fed0`), re-applied my smoke changes on top (clean), verified everything, wrote `check:advisor`, and pushed. Waiting on the user for the Gemini key and the Supabase function deploy.
+
+## 20. 2026-09-19 - Gemini debugging, then "Migrate the HokiePark AI parking assistant from the Gemini API to OpenRouter" (pasted brief)
+
+> deployed check and whats next  /  deployed go check  /  (pasted a 6-step brief to migrate the assistant from Gemini to OpenRouter)
+
+**Outcome:** Real Gemini runs exposed 429/503 upstream limits (the function, key and gateway were fine). The pasted brief assumed a single chat call with a data snapshot; here the assistant is a tool-using agent behind a Supabase relay, so I adapted it: only the relay's transport changed (OpenRouter provider + translation layer, Gemini kept as a fallback provider). Checked the brief's premise (free OpenRouter budget is 50/day until $10 credits, not larger by default), fetched the live model catalogue for free tool-capable models, added the two missing tools so the three spec questions are answerable, proved their numbers match the rule-based answers, and covered errors (rate limit, credits, timeout, malformed) with tests. Not yet run against a real OpenRouter model.

@@ -1,8 +1,11 @@
-import { LIMITS, PERMIT_IDS, TOOL_DECLARATIONS, TOOL_NAMES, systemPrompt, type AdvisorContext } from "../../../src/lib/advisor-spec.ts";
+import { LIMITS, PERMIT_IDS, TOOL_NAMES, type AdvisorContext } from "../../../src/lib/advisor-spec.ts";
+import { callGemini, callOpenRouter } from "./providers.ts";
+
+export { sanitizeModelParts, upstreamDetail } from "./providers.ts";
 
 /**
  * Supabase Edge Function `advisor`: a thin, defensive relay between the HokiePark app and the Gemini API.
- *  - holds GEMINI_API_KEY (a function secret; it never reaches the browser and is never echoed);
+ *  - holds the model API key as a function secret (OPENROUTER_API_KEY, or GEMINI_API_KEY): it never reaches the browser and is never echoed;
  *  - injects the system prompt and the tool DECLARATIONS itself, so a caller cannot change the rules or add tools;
  *  - validates and size-limits everything the browser sends, rate-limits per visitor and per day;
  *  - returns only the model's next turn. Tools run in the browser; the model is never a source of facts.
@@ -10,6 +13,11 @@ import { LIMITS, PERMIT_IDS, TOOL_DECLARATIONS, TOOL_NAMES, systemPrompt, type A
  */
 
 export interface Env {
+  /** OpenRouter (OpenAI-compatible; many models incl. free ones). Takes precedence when set. */
+  OPENROUTER_API_KEY?: string;
+  /** One OpenRouter model id, or up to 3 comma-separated (tried in order). Default: openrouter/free. */
+  OPENROUTER_MODEL?: string;
+  OPENROUTER_REFERER?: string;
   GEMINI_API_KEY?: string;
   /** Model id, or several separated by commas (tried in order when one is overloaded, over quota, or retired). Check Google AI Studio for current ids. */
   GEMINI_MODEL?: string;
@@ -30,7 +38,6 @@ export interface Deps {
   sleep?: (ms: number) => Promise<void>;
 }
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
 const IP_WINDOW_MS = 10 * 60_000;
 const DAY_MS = 24 * 60 * 60_000;
 
@@ -123,42 +130,13 @@ export function validateBody(body: unknown): ValidBody | { error: string } {
   return { contents: clean, context: { now: { dow: dow as number, minute: minute as number }, permits: context.permits as AdvisorContext["permits"], ada: context.ada } };
 }
 
-/** Keep only the parts the client needs to replay the turn; drop anything unexpected from the upstream response. */
-export function sanitizeModelParts(raw: unknown): Record<string, unknown>[] {
-  if (!Array.isArray(raw)) return [];
-  const out: Record<string, unknown>[] = [];
-  for (const p of raw.slice(0, LIMITS.partsPerMessage)) {
-    if (!isObj(p)) continue;
-    const part: Record<string, unknown> = {};
-    if (typeof p.text === "string") part.text = p.text.slice(0, LIMITS.textChars * 2);
-    if (p.thought === true) part.thought = true;
-    if (typeof p.thoughtSignature === "string" && p.thoughtSignature.length <= LIMITS.signatureChars) part.thoughtSignature = p.thoughtSignature;
-    if (isObj(p.functionCall) && typeof p.functionCall.name === "string" && (TOOL_NAMES as readonly string[]).includes(p.functionCall.name)) {
-      part.functionCall = { name: p.functionCall.name, args: isObj(p.functionCall.args) ? p.functionCall.args : {} };
-    }
-    if (Object.keys(part).length) out.push(part);
-  }
-  return out;
-}
-
-export async function upstreamDetail(res: Response, key: string): Promise<{ upstream_status: number; upstream_code?: string; upstream_message?: string }> {
-  const out: { upstream_status: number; upstream_code?: string; upstream_message?: string } = { upstream_status: res.status };
-  try {
-    const j = (await res.json()) as { error?: { status?: unknown; message?: unknown } };
-    if (typeof j.error?.status === "string") out.upstream_code = j.error.status.slice(0, 40);
-    if (typeof j.error?.message === "string") out.upstream_message = j.error.message.split(key).join("[redacted]").slice(0, 200);
-  } catch {
-    /* non-JSON upstream body: the status alone will do */
-  }
-  return out;
-}
-
 export async function handle(req: Request, env: Env, deps: Deps): Promise<Response> {
   const cors = corsHeaders(req, env);
   if (!cors) return json(403, { error: "origin_not_allowed" });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" }, cors);
-  if (!env.GEMINI_API_KEY) return json(500, { error: "not_configured" }, cors);
+  const provider = env.OPENROUTER_API_KEY ? "openrouter" : env.GEMINI_API_KEY ? "gemini" : null;
+  if (!provider) return json(500, { error: "not_configured" }, cors);
 
   const len = Number(req.headers.get("content-length") ?? 0);
   if (len > LIMITS.requestBytes) return json(413, { error: "too_large" }, cors);
@@ -182,60 +160,9 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
   const v = validateBody(parsed);
   if ("error" in v) return json(400, { error: v.error }, cors);
 
-  const models = (env.GEMINI_MODEL ?? "").split(",").map((m) => m.trim()).filter(Boolean).slice(0, 3);
-  if (!models.length) models.push(DEFAULT_MODEL);
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const payload = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemPrompt(v.context) }] },
-    contents: v.contents,
-    tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-    toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-    generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
-  });
-  // Try each model in order. Overload (503), quota (429), server errors and a retired name (404) move on to the next model;
-  // a lone model gets one short retry on overload. Anything else (bad key, bad request) is final.
-  const RETRYABLE = new Set([404, 429, 500, 503]);
-  let res: Response | null = null;
-  let usedModel = models[0]!;
-  for (let i = 0; i < models.length; i++) {
-    usedModel = models[i]!;
-    for (let attempt = 0; attempt < (models.length === 1 ? 2 : 1); attempt++) {
-      try {
-        res = await deps.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(usedModel)}:generateContent`, {
-          method: "POST",
-          headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-          body: payload,
-          signal: AbortSignal.timeout(8_000),
-        });
-      } catch {
-        res = null;
-        if (i === models.length - 1) return json(504, { error: "upstream_timeout" }, cors);
-        break;
-      }
-      if (res.status === 503 && attempt === 0 && models.length === 1) {
-        await sleep(700);
-        continue;
-      }
-      break;
-    }
-    if (res && (res.ok || !RETRYABLE.has(res.status))) break;
-  }
-  if (!res) return json(504, { error: "upstream_timeout" }, cors);
-  if (!res.ok) {
-    // Surface Gemini's own error code and message (key redacted, length-capped) so a bad model name / key / quota is diagnosable
-    // from the app or `npm run check:advisor`, without ever echoing the request, the key, or the raw upstream body.
-    const detail = await upstreamDetail(res, env.GEMINI_API_KEY);
-    return json(res.status === 429 ? 503 : 502, { error: res.status === 429 ? "quota" : "upstream_rejected", upstream_model: usedModel, ...detail }, cors);
-  }
-
-  let data: unknown;
-  try {
-    data = await res.json();
-  } catch {
-    return json(502, { error: "upstream_bad_json" }, cors);
-  }
-  const cand = isObj(data) && Array.isArray(data.candidates) ? data.candidates[0] : null;
-  const parts = sanitizeModelParts(isObj(cand) && isObj(cand.content) ? cand.content.parts : null);
-  if (!parts.length) return json(502, { error: "no_content" }, cors);
-  return json(200, { content: { role: "model", parts } }, cors);
+  const call = provider === "openrouter" ? callOpenRouter : callGemini;
+  const up = await call({ contents: v.contents, context: v.context }, env, { fetch: deps.fetch, sleep });
+  if (!up.ok) return json(up.status, { error: up.error, ...(up.detail ?? {}) }, cors);
+  return json(200, { content: { role: "model", parts: up.parts } }, cors);
 }

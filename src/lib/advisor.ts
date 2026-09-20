@@ -66,7 +66,7 @@ export function splitPlaces(text: string): { body: string; ids: string[] } {
 const textOf = (c: Content) => c.parts.filter((p) => typeof p.text === "string" && !p.thought).map((p) => p.text as string).join("").trim();
 
 export function createAdvisor(opts: AdvisorOptions) {
-  const timeoutMs = opts.timeoutMs ?? 12_000;
+  const timeoutMs = opts.timeoutMs ?? 25_000; // hosted free models can be slow; each answer is 2-4 sequential model calls
   const maxRounds = Math.min(opts.maxRounds ?? LIMITS.maxRounds, 6);
   let history: Content[] = [];
 
@@ -124,7 +124,7 @@ export function createAdvisor(opts: AdvisorOptions) {
       const used = new Set(toolLog.filter((t) => t.ok).map((t) => t.name));
       const lines = body.split(/\n+/).map((l) => l.trim()).filter(Boolean);
       if (used.has("plan_parking") || used.has("arrival_advice")) lines.push(`Forecasts come from a Databricks-trained model (${forecastSource().model}) on SIMULATED demand shaped by VT's class timetable, not measured occupancy.`);
-      if (used.has("parking_now")) lines.push("Current counts are the map's demo data, not live sensors.");
+      if (used.has("parking_now") || used.has("garages_now") || used.has("accessible_parking")) lines.push("Current counts are the map's demo data, not live sensors.");
       lines.push(SIGNAGE_NOTE);
 
       const turn: Content[] = [{ role: "user", parts: [{ text: q }] }, { role: "model", parts: [{ text: body }] }];
@@ -160,7 +160,17 @@ export function httpTransport(cfg: { url: string; anonKey: string }, fetchFn: ty
       body: JSON.stringify(req),
       signal,
     });
-    if (!res.ok) throw new Error(`advisor HTTP ${res.status}`);
+    if (!res.ok) {
+      // the relay's error bodies are safe by construction (no key, no upstream body): include the reason so failures are diagnosable
+      let why = "";
+      try {
+        const j = (await res.json()) as { error?: unknown; upstream_status?: unknown; upstream_code?: unknown; upstream_message?: unknown };
+        why = [j.error, j.upstream_status, j.upstream_code, j.upstream_message].filter((x) => typeof x === "string" || typeof x === "number").join(" ");
+      } catch {
+        /* no JSON body */
+      }
+      throw new Error(`advisor HTTP ${res.status}${why ? `: ${why}` : ""}`);
+    }
     const body = (await res.json()) as { content?: Content };
     if (!body.content) throw new Error("advisor: no content");
     return body.content;

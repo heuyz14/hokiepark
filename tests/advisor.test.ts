@@ -210,3 +210,51 @@ test("idsIn finds place ids in nested tool output and ignores non-places", () =>
   const ids = idsIn({ recommended: [{ id: "perry-street" }, { id: "not-a-place" }], other: { id: "lot-squires" } });
   assert.deepEqual([...ids].sort(), ["lot-squires", "perry-street"]);
 });
+
+// ---------- the three spec questions: tool output must agree with the rule-based assistant ----------
+import { answerQuestion } from "../src/lib/assistant.ts";
+
+test("SPEC Q3 'which garage has the most open spots right now': garages_now names the same garage and number as the rule-based answer", () => {
+  const rule = answerQuestion("Which garage has the most open spots right now?").lines[0]!;
+  const r = runTool("garages_now", {}, noPermit);
+  assert.ok(r.ok && r.most_open);
+  assert.ok(rule.includes(r.most_open.name), rule);
+  assert.ok(rule.includes(`${r.most_open.open_spaces} of`), rule);
+  const ranked = r.ranked_most_open_first as { current_open_spaces: number }[];
+  assert.deepEqual(ranked.map((g) => g.current_open_spaces), [...ranked.map((g) => g.current_open_spaces)].sort((a, b) => b - a));
+});
+
+test("SPEC Q3 with a permit: ranks by the levels the permit covers, like the rule-based answer", () => {
+  const rule = answerQuestion("Which garage has the most open spots right now?", { permits: ["cg-perry"] }).lines[0]!;
+  const r = runTool("garages_now", {}, { ...ctx, permits: ["cg-perry"] });
+  assert.ok(r.ok);
+  if (r.most_open) assert.ok(rule.includes(r.most_open.name) && rule.includes(String(r.most_open.open_spaces)), rule);
+  assert.equal(r.permit_checked, true);
+});
+
+test("SPEC Q2 'is there accessible parking near Cassell Coliseum': accessible_parking gives the same lot and space count as the rule-based answer", () => {
+  const cassell = searchPlaces("cassell")[0]!;
+  const rule = answerQuestion("Is there accessible parking near Cassell Coliseum?").lines.join("\n");
+  const r = runTool("accessible_parking", { place_id: cassell.id }, noPermit);
+  assert.ok(r.ok && r.lots.length >= 1);
+  for (const lot of r.lots as { name: string; designated_accessible_spaces: number; walk_minutes: number }[]) {
+    assert.ok(rule.includes(lot.name), `${lot.name} not in rule-based answer`);
+    assert.ok(rule.includes(`${lot.designated_accessible_spaces} designated accessible spaces`), lot.name);
+  }
+  for (const g of r.garages as { name: string; accessible_spaces_open_now: number }[]) assert.ok(rule.includes(`${g.name}`) && rule.includes(`${g.accessible_spaces_open_now} accessible spaces open`));
+  assert.match(r.reminder, /plate or placard/);
+  assert.equal(runTool("accessible_parking", {}, noPermit).ok, true, "campus-wide works without a place");
+  assert.equal(runTool("accessible_parking", { place_id: "nope" }, noPermit).ok, false);
+});
+
+test("SPEC Q1 'closest open parking to Squires Student Center': parking_now lists the same open places the rule-based answer does", () => {
+  const rule = answerQuestion("Where's the closest open parking to Squires Student Center?").lines.join("\n");
+  const r = runTool("parking_now", { place_id: searchPlaces("squires student")[0]!.id }, noPermit);
+  assert.ok(r.ok);
+  assert.equal(r.permit_checked, false);
+  const named = r.nearest_with_open_spaces as { name: string; current_open_spaces: number }[];
+  assert.ok(named.length >= 1);
+  // the rule-based answer shows the nearest garage with its open count; when the tool lists a garage its count must match
+  for (const g of named.filter((n) => GARAGES.some((x) => x.name === n.name))) assert.ok(rule.includes(`${g.name}: ${g.current_open_spaces} of`), g.name);
+  assert.ok(named.every((n) => n.current_open_spaces > 0), "only places with open spaces");
+});

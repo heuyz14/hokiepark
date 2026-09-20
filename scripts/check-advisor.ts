@@ -1,11 +1,15 @@
 /**
- * Live check of the DEPLOYED advisor: runs the real agent loop from your machine against your Supabase `advisor` function and real Gemini.
- * Reads HOKIEPARK_SUPABASE_URL / _ANON_KEY (and optionally HOKIEPARK_ADVISOR_URL) from the environment (npm run check:advisor loads
- * .env.local) and never prints a key. Each scenario reports the tools the model chose, the answer, and whether the guards accepted it.
- * A "basic" result means the app would have fallen back to the rule-based assistant; the reason says why.
+ * Live check of the DEPLOYED advisor: runs the real agent loop from your machine against your Supabase `advisor` function and the real
+ * model behind it (OpenRouter, or Gemini). Reads HOKIEPARK_SUPABASE_URL / _ANON_KEY (and HOKIEPARK_ADVISOR_KEY / _URL if set) from the
+ * environment (npm run check:advisor loads .env.local) and never prints a key.
+ *
+ * It asks the three example questions from the spec plus one plan-ahead question, prints the tools the model chose, its answer, and the
+ * rule-based assistant's answer next to it so you can compare numbers. A "basic" result means the app would have fallen back; the reason says why.
+ * Budget: roughly 12-16 model requests. OpenRouter's free models allow 50 requests/day (1,000 after a one-time $10 credit purchase).
  */
 import { createAdvisor, httpTransport } from "../src/lib/advisor.ts";
 import { parseAdvisorConfig } from "../src/lib/advisor-config.ts";
+import { answerQuestion } from "../src/lib/assistant.ts";
 import { parseLiveConfig } from "../src/lib/live-config.ts";
 
 const die = (msg: string): never => {
@@ -24,63 +28,50 @@ if (!cfg) die("Set HOKIEPARK_SUPABASE_URL and HOKIEPARK_SUPABASE_ANON_KEY in .en
 const c = cfg!;
 console.log(`function: ${new URL(c.url).host}${new URL(c.url).pathname}`);
 
-// 1) reachability and secrets, before spending model calls
-const ping = await fetch(c.url, {
+// 1) is the ADVISOR deployed? An invalid body is rejected by the advisor code itself with a 400 JSON error and costs no model request.
+const probe = await fetch(c.url, {
   method: "POST",
   headers: { "content-type": "application/json", apikey: c.anonKey, authorization: `Bearer ${c.anonKey}` },
-  body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "ping" }] }], context: { now: { dow: 3, minute: 540 }, permits: [], ada: false } }),
+  body: "{}",
 }).catch((e) => die(`cannot reach the function: ${(e as Error).message}`));
-const pingRes = ping as Response;
-if (pingRes.status === 404) die("function not found (404). Deploy it: Supabase -> Edge Functions -> new function named 'advisor'.");
-if (pingRes.status === 401) {
-  const detail = (await pingRes.text().catch(() => "")).slice(0, 220);
-  die(`401 from Supabase before the advisor code ran: ${detail}\n  - "Invalid JWT" / "UNAUTHORIZED..." with a publishable key: Edge Functions -> advisor -> Settings -> turn OFF "Verify JWT" (the advisor validates and rate-limits requests itself), then redeploy.\n  - "INVALID_API_KEY ... legacy": the function code is still the placeholder, or set HOKIEPARK_ADVISOR_KEY to the sb_publishable_ key.\n  - Alternatively remove HOKIEPARK_ADVISOR_KEY from .env.local so the legacy anon JWT is used (works when Verify JWT is ON).`);
+const pr = probe as Response;
+const prText = await pr.text();
+if (pr.status === 404) die("function not found (404). Deploy it: Supabase -> Edge Functions -> new function named 'advisor'.");
+if (pr.status === 401) {
+  die(`401 from Supabase before the advisor code ran: ${prText.slice(0, 220)}\n  - "Invalid JWT" / "UNAUTHORIZED..." with a publishable key: Edge Functions -> advisor -> Settings -> turn OFF "Verify JWT" (the advisor validates and rate-limits requests itself), then redeploy.\n  - "INVALID_API_KEY ... legacy": the function code is still the placeholder, or set HOKIEPARK_ADVISOR_KEY to the sb_publishable_ key.\n  - Alternatively remove HOKIEPARK_ADVISOR_KEY from .env.local so the legacy anon JWT is used (works when Verify JWT is ON).`);
 }
-if (pingRes.status === 500) die("500 not_configured: set the GEMINI_API_KEY secret on the function.");
-if (pingRes.status === 502 || pingRes.status === 503 || pingRes.status === 504) {
-  const j = (await pingRes.json().catch(() => ({}))) as { error?: string; upstream_status?: number; upstream_code?: string; upstream_message?: string };
-  const hint = j.upstream_status === 404 || /not found|not supported/i.test(j.upstream_message ?? "")
-    ? "The model name is probably wrong or retired: set the GEMINI_MODEL secret to a current model id from Google AI Studio."
-    : j.upstream_status === 400 && /api key/i.test(j.upstream_message ?? "") || j.upstream_status === 403
-      ? "Gemini refused the key: re-create it in Google AI Studio and update the GEMINI_API_KEY secret (no spaces or quotes)."
-      : j.error === "quota" ? "Gemini quota or rate limit hit: wait a minute, or pick another model." : "Check GEMINI_API_KEY, GEMINI_MODEL and quota in Google AI Studio.";
-  die(`Gemini problem (function returned ${pingRes.status} ${j.error ?? ""}): upstream ${j.upstream_status ?? "?"} ${j.upstream_code ?? ""} ${j.upstream_message ?? ""}\n  ${hint}`);
-}
-if (!pingRes.ok) die(`unexpected HTTP ${pingRes.status}`);
-const pingBody = (await pingRes.json().catch(() => null)) as { content?: { parts?: unknown[] }; message?: string } | null;
-if (typeof pingBody?.message === "string" && !pingBody.content) {
-  die(`the function answered ${JSON.stringify(pingBody.message)}: that is Supabase's default placeholder, not the advisor. Open Edge Functions -> advisor -> editor, replace ALL of the code with supabase/functions/advisor/index.ts (pbcopy < that file), and click Deploy.`);
-}
-if (!Array.isArray(pingBody?.content?.parts)) die("the function responded, but not in the advisor's format. Re-paste supabase/functions/advisor/index.ts and redeploy.");
-console.log("PASS  the advisor function is deployed and Gemini accepted the key");
+if (pr.status === 200 && /"message"\s*:\s*"Hello/.test(prText)) die("the function answered with Supabase's default placeholder, not the advisor. Replace ALL the code in Edge Functions -> advisor with supabase/functions/advisor/index.ts (pbcopy < that file) and click Deploy.");
+if (pr.status === 500 && /not_configured/.test(prText)) die("500 not_configured: set the OPENROUTER_API_KEY secret (or GEMINI_API_KEY) on the function, then redeploy.");
+if (pr.status !== 400 || !/bad context|body must be an object/.test(prText)) die(`unexpected response from the function (HTTP ${pr.status}): ${prText.slice(0, 160)}`);
+console.log("PASS  the advisor function is deployed (its own validation answered)");
 
 // 2) real scenarios through the real agent loop and the real tools
-const ctx = { now: { dow: 6, minute: 15 * 60 }, permits: ["cg" as const], ada: false };
-const scenarios = [
-  "I have a 2pm class in Hancock Hall on Wednesday. Where should I park?",
-  "When should I arrive at Torgersen Hall for a 10am Tuesday class to still find a spot?",
-  "Can I park at the Squires lot with my permit?",
-  "What's the weather like in Blacksburg?", // should be declined politely, no tools
+const ctx = { now: { dow: 6, minute: 15 * 60 }, permits: [] as never[], ada: false };
+const scenarios: { q: string; compare?: boolean }[] = [
+  { q: "Where's the closest open parking to Squires Student Center?", compare: true },
+  { q: "Is there accessible parking near Cassell Coliseum?", compare: true },
+  { q: "Which garage has the most open spots right now?", compare: true },
+  { q: "I have a 2pm class in Hancock Hall on Wednesday, commuter permit. Where should I park?" },
 ];
-const PAUSE_MS = Number(process.env.ADVISOR_CHECK_PAUSE_MS ?? 20_000); // free-tier Gemini allows only a few requests per minute
+const PAUSE_MS = Number(process.env.ADVISOR_CHECK_PAUSE_MS ?? 6_000);
 let ai = 0;
-for (const [n, q] of scenarios.entries()) {
-  if (n > 0) {
-    console.log(`(waiting ${PAUSE_MS / 1000}s so the free-tier rate limit is not tripped)`);
-    await new Promise((r) => setTimeout(r, PAUSE_MS));
-  }
+for (const [n, s] of scenarios.entries()) {
+  if (n > 0) await new Promise((r) => setTimeout(r, PAUSE_MS));
   const advisor = createAdvisor({ transport: httpTransport(c), getContext: () => ctx });
   const t0 = Date.now();
-  const r = await advisor.ask(q);
+  const r = await advisor.ask(s.q);
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`\nQ: ${q}`);
+  console.log(`\nQ: ${s.q}`);
   if (r.ok) {
     ai++;
     console.log(`PASS  ai (${secs}s), tools: ${r.tools.map((t) => `${t.name}${t.ok ? "" : "(error)"}`).join(" -> ") || "none"}`);
     for (const l of r.lines.slice(0, -1)) console.log(`   ${l}`);
-    if (r.refs.length) console.log(`   places: ${r.refs.map((x) => x.label).join(", ")}`);
   } else {
     console.log(`WARN  basic (${secs}s): the app would fall back. reason=${r.reason}${r.detail ? ` (${r.detail})` : ""}`);
+  }
+  if (s.compare) {
+    console.log("   rule-based assistant says:");
+    for (const l of answerQuestion(s.q).lines.slice(0, 4)) console.log(`     ${l}`);
   }
 }
 console.log(`\n${ai}/${scenarios.length} scenarios answered by the advisor`);

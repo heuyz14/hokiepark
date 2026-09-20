@@ -16,7 +16,7 @@ const bubbleLines = (lines: string[]) =>
 
 /** Which engine answered, shown only when the advisor is on (so the fallback is never silent). */
 const sourceTag = (a: AdvisorAnswer, advisor: boolean) =>
-  !advisor ? "" : a.source === "ai" ? `<span class="src src-ai" title="Understood by Gemini; all facts from HokiePark's tools">AI advisor</span>` : `<span class="src src-basic" title="The advisor was unavailable${a.reason ? ` (${esc(a.reason)})` : ""}; this is the built-in rule-based answer">Basic answer</span>`;
+  !advisor ? "" : a.source === "ai" ? `<span class="src src-ai" title="Understood by a hosted AI model; all facts from HokiePark's tools">AI advisor</span>` : `<span class="src src-basic" title="The advisor was unavailable${a.reason ? ` (${esc(a.reason)})` : ""}; this is the built-in rule-based answer">Basic answer</span>`;
 
 const refButtons = (refs: AnswerRef[]) =>
   refs.length
@@ -60,7 +60,7 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
   add(
     "bot",
     advisor
-      ? `<span class="ln">Hi! I'm your parking advisor. Tell me about your class, building and time in your own words and I'll suggest where to park and when to arrive.</span><span class="ln fine">I understand you with Google's Gemini, so please don't type personal details. Every place, distance, count and permit rule comes from HokiePark's own data; forecasts are simulated.</span>`
+      ? `<span class="ln">Hi! I'm your parking advisor. Tell me about your class, building and time in your own words and I'll suggest where to park and when to arrive.</span><span class="ln fine">I understand you with a hosted AI model run by a third party, so please don't type personal details. Every place, distance, count and permit rule comes from HokiePark's own data; forecasts are simulated.</span>`
       : `<span class="ln">Hi! I answer from the same garage, lot and accessible-parking data shown on the map.</span><span class="ln fine">Demo data &mdash; garage counts are simulated.</span>`,
   );
 

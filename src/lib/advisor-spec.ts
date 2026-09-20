@@ -9,7 +9,7 @@ import { PERMITS, type PermitId } from "./permits.ts";
  */
 
 export const PERMIT_IDS = PERMITS.map((p) => p.id) as PermitId[];
-export const TOOL_NAMES = ["find_place", "plan_parking", "parking_now", "arrival_advice", "permit_check"] as const;
+export const TOOL_NAMES = ["find_place", "plan_parking", "parking_now", "arrival_advice", "permit_check", "garages_now", "accessible_parking"] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 /** Limits enforced by BOTH sides (the server rejects anything larger). */
@@ -59,6 +59,16 @@ export const TOOL_DECLARATIONS = [
     description: "Whether the driver's permit is valid at a specific lot or garage (per level for garages), with the reason and any 'check the posted sign' caveat.",
     parameters: { type: "object", properties: { place_id: { type: "string", description: "id of a LOT or GARAGE from find_place" }, permits: permitsParam, accessible: accessibleParam }, required: ["place_id"] },
   },
+  {
+    name: "garages_now",
+    description: "Compare the campus garages right now using the live map counts: open spaces per garage ranked most-open first, accessible spaces open, and (when the driver's permit is known) how many of those spaces are on levels the permit covers. Use for 'which garage has the most open spots'.",
+    parameters: { type: "object", properties: { permits: permitsParam, accessible: accessibleParam }, required: [] },
+  },
+  {
+    name: "accessible_parking",
+    description: "Accessible (ADA) parking near a building, garage or lot: nearest lots with designated accessible spaces and the nearest garage with accessible spaces open now. Does not depend on the driver's permit. Omit place_id for campus-wide.",
+    parameters: { type: "object", properties: { place_id: { type: "string", description: "id from find_place; omit for campus-wide" } }, required: [] },
+  },
 ] as const;
 
 export interface AdvisorContext {
@@ -80,7 +90,7 @@ export function systemPrompt(c: AdvisorContext): string {
     "You are HokiePark's parking advisor for Virginia Tech's Blacksburg campus. You help a driver decide where to park.",
     "Rules:",
     "1. Every fact (place names, distances, walk times, open-space counts, forecasts, permit verdicts, arrival times) MUST come from tool results. Never guess or use outside knowledge about VT parking. If the tools do not say it, say you don't know.",
-    "2. Resolve places with find_place first, then call plan_parking, parking_now, arrival_advice or permit_check. For several buildings or times, call the tool several times. If find_place returns several plausible matches, ask which one they mean.",
+    "2. Resolve places with find_place first, then call plan_parking, parking_now, arrival_advice, permit_check, garages_now or accessible_parking. For several buildings or times, call the tool several times. If find_place returns several plausible matches, ask which one they mean.",
     "3. Forecast numbers are SIMULATED predictions, not live sensor data. Say 'forecast' or 'expected', never 'there are'. Numbers from parking_now are the map's current demo counts.",
     "4. Only recommend places in a tool's recommended list. Items in check_sign may be mentioned only as unconfirmed ('check the posted sign'). Only say a permit is valid where a tool verdict is 'yes'.",
     "5. If the driver's permit is unknown and a tool reports no permit, ask which permit they hold instead of guessing.",
