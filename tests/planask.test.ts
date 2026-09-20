@@ -74,3 +74,18 @@ test("withPlanAhead answers plan questions itself and passes everything else thr
   assert.deepEqual((await ask("which garage has the most open spots"))!.lines, ["fallback"]);
   assert.equal(calls.length, 1);
 });
+
+test("the rule-based path completes a plan question that was waiting for a permit when the reply is just a permit ('commuter')", async () => {
+  const fallback = async () => ({ lines: ["fallback"], refs: [] });
+  const ask = withPlanAhead(fallback, () => ({}), () => now);
+  const first = await ask("When should I arrive at Hancock Hall for a 10am class?");
+  assert.match(first.lines[0]!, /I need your permit/);
+  const second = await ask("commuter");
+  assert.match(second.lines[0]!, /Parking for a 10:00 AM .* class at Hancock Hall .*Commuter\/Graduate/);
+  assert.ok(second.lines.some((l) => /^- 1\. /.test(l)));
+  // it does not linger: the next unrelated short message goes to the normal assistant
+  assert.deepEqual((await ask("commuter")).lines, ["fallback"]);
+  // a long message is not treated as a bare permit reply
+  await ask("2pm class at Hancock Hall");
+  assert.deepEqual((await ask("actually I am a commuter who drives in from far away")).lines, ["fallback"]);
+});

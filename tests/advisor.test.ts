@@ -280,3 +280,45 @@ test("ids in the model's prose are stripped from the shown answer, and a GUARD f
   assert.ok(!g.ok && g.reason === "guard");
   assert.match(g.detail ?? "", /unsupported numbers: 1, 120 in: Perry has 1 garage/);
 });
+
+// ---------- conversation continuity (the "commuter" follow-up bug) ----------
+test("BUG REPRO: a fallback answer is remembered, so the advisor understands a bare 'commuter' follow-up", async () => {
+  const seen: { contents: Content[]; permits: string[] }[] = [];
+  let n = 0;
+  const transport: Transport = async ({ contents, context: c }) => {
+    seen.push({ contents: JSON.parse(JSON.stringify(contents)), permits: [...c.permits] });
+    if (++n === 1) throw new Error("advisor HTTP 502"); // the first question falls back to the rule-based answer
+    return say("Since you're a commuter, the Coliseum West lot is your best bet.\nPLACES: none");
+  };
+  const advisor = createAdvisor({ transport, getContext: () => noPermit });
+  const fallback = async () => ({ lines: ["To plan parking for Hancock Hall at 10:00 AM Saturday I need your permit.", "Say it in your question."], refs: [] });
+  const ask = withAdvisor(fallback, advisor);
+  const first = await ask("When should I arrive at Hancock Hall for a 10am class to still find a spot?");
+  assert.equal((first as { source?: string }).source, "basic");
+  const second = await ask("commuter");
+  assert.equal((second as { source?: string }).source, "ai");
+  const sent = seen[1]!.contents;
+  assert.deepEqual(sent.map((c) => c.role), ["user", "model", "user"], "the earlier exchange is part of the conversation");
+  assert.match(sent[0]!.parts[0]!.text!, /Hancock Hall for a 10am class/);
+  assert.match(sent[1]!.parts[0]!.text!, /I need your permit/);
+  assert.equal(sent[2]!.parts[0]!.text, "commuter");
+  assert.deepEqual(seen[1]!.permits, ["cg"], "the permit typed in the chat is used even though none is saved");
+});
+
+test("permit precedence: named in the message > saved > named earlier in the chat; reset() forgets the chat", async () => {
+  const permitsSeen: string[][] = [];
+  const t: Transport = async ({ context: c }) => (permitsSeen.push([...c.permits]), say("ok\nPLACES: none"));
+  const saved: AdvisorContext = { ...ctx, permits: ["fs"] };
+  const a1 = createAdvisor({ transport: t, getContext: () => noPermit });
+  await a1.ask("I am a commuter");
+  await a1.ask("what about tomorrow");
+  assert.deepEqual(permitsSeen, [["cg"], ["cg"]], "remembered from earlier in the chat");
+  a1.reset();
+  await a1.ask("what about friday");
+  assert.deepEqual(permitsSeen.at(-1), [], "reset forgets it");
+  permitsSeen.length = 0;
+  const a2 = createAdvisor({ transport: t, getContext: () => saved });
+  await a2.ask("visitor parking near squires?");
+  await a2.ask("and later");
+  assert.deepEqual(permitsSeen, [["visitor"], ["fs"]], "a permit named in the message wins for that message; the saved one applies otherwise");
+});

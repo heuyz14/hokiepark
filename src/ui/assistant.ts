@@ -15,8 +15,13 @@ const bubbleLines = (lines: string[]) =>
   lines.map((l) => (l.startsWith("- ") ? `<span class="li">${esc(l.slice(2))}</span>` : `<span class="ln">${esc(l)}</span>`)).join("");
 
 /** Which engine answered, shown only when the advisor is on (so the fallback is never silent). */
+const REASON_TEXT: Record<string, string> = { transport: "AI unavailable", timeout: "AI too slow", guard: "AI answer rejected", rounds: "AI couldn't finish", empty: "AI had no answer", input: "" };
 const sourceTag = (a: AdvisorAnswer, advisor: boolean) =>
-  !advisor ? "" : a.source === "ai" ? `<span class="src src-ai" title="Understood by a hosted AI model; all facts from HokiePark's tools">AI advisor</span>` : `<span class="src src-basic" title="The advisor was unavailable${a.reason ? ` (${esc(a.reason)})` : ""}; this is the built-in rule-based answer">Basic answer</span>`;
+  !advisor
+    ? ""
+    : a.source === "ai"
+      ? `<span class="src src-ai" title="Understood by a hosted AI model; all facts from HokiePark's tools">AI advisor</span>`
+      : `<span class="src src-basic" title="The advisor was unavailable${a.reason ? ` (${esc(a.reason)})` : ""}; this is the built-in rule-based answer">Basic answer${a.reason && REASON_TEXT[a.reason] ? ` &middot; ${esc(REASON_TEXT[a.reason]!)}` : ""}</span>`;
 
 const refButtons = (refs: AnswerRef[]) =>
   refs.length

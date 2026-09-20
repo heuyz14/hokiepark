@@ -496,7 +496,7 @@ if (!LIVE) {
   mock.advisorMode = "down";
   await say("2pm class at Hancock Hall on Wednesday, where do I park?");
   m = await settled();
-  check("advisor down: falls back to the rule-based answer, visibly badged Basic answer", m.src === "Basic answer" && /Parking for a 2:00 PM Wednesday class at Hancock Hall/.test(m.text), JSON.stringify(m).slice(0, 220));
+  check("advisor down: falls back to the rule-based answer, visibly badged Basic answer", m.src.startsWith("Basic answer") && /Parking for a 2:00 PM Wednesday class at Hancock Hall/.test(m.text), JSON.stringify(m).slice(0, 220));
   mock.advisorMode = "empty";
   expectFailures = false;
   await shot("12-advisor");
