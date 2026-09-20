@@ -74,6 +74,9 @@ h1, h2, h3, p { margin: 0; }
 .map .maplibregl-canvas-container { cursor: grab; }
 .map .maplibregl-canvas-container.maplibregl-interactive:active { cursor: grabbing; }
 .map .maplibregl-ctrl-bottom-left { font-size: 11px; }
+.map .maplibregl-ctrl-bottom-right { right: 8px; bottom: 8px; left: 8px; }
+.map .maplibregl-ctrl-bottom-right > .maplibregl-ctrl-attrib.maplibregl-compact { width: auto; margin: 0; box-sizing: border-box; }
+.map .maplibregl-ctrl-bottom-right > .maplibregl-ctrl-attrib.maplibregl-compact.maplibregl-compact-show { width: 100%; }
 
 .map-offline { position: absolute; inset: 0; display: grid; place-items: center; gap: 14px; padding: 24px; text-align: center; background: var(--land); }
 .map-offline p { color: var(--muted); max-width: 26em; }

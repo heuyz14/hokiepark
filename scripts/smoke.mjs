@@ -3,7 +3,7 @@
  * Chrome, serves dist/ from a throwaway local server (so the manifest + service worker are exercised),
  * drives the real UI with mouse/keyboard events, and fails on any console error.
  *
- *   npm run build && npm run smoke -- [width] [height]     (default 430x900; try 375 667 and 1280 800)
+ *   npm run smoke -- [width] [height]                      (default 430x900; try 375 667 and 1280 800; builds its own feed-off bundle)
  *   npm run smoke:live                                     (adds --live: builds a feed-enabled bundle and mocks Supabase)
  *
  * --live builds a second bundle configured for https://smoke.supabase.co with a FAKE anon key, then answers those
@@ -14,7 +14,7 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 
@@ -30,10 +30,14 @@ if (LIVE) {
   const r = spawnSync(process.execPath, [join(ROOT, "scripts/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "https://smoke.supabase.co", HOKIEPARK_SUPABASE_ANON_KEY: FAKE_ANON, HOKIEPARK_POLL_MS: "1000" }, encoding: "utf8" });
   if (r.status !== 0) throw new Error("live build failed: " + r.stderr + r.stdout);
 }
+else {
+  // Feed OFF (bundled counts), built by THIS script so the run never depends on dist/ or on a real .env.local.
+  DIST = join(ROOT, "smoke-out", "dist-off");
+  const r = spawnSync(process.execPath, [join(ROOT, "scripts/build.ts"), "--out", DIST], { env: { ...process.env, HOKIEPARK_SUPABASE_URL: "", HOKIEPARK_SUPABASE_ANON_KEY: "", HOKIEPARK_POLL_MS: "" }, encoding: "utf8" });
+  if (r.status !== 0) throw new Error("feed-off build failed: " + r.stderr + r.stdout);
+}
 const DIR = join(ROOT, "smoke-out") + "/";
 const CH = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const PORT = 9333;
-if (!LIVE && !existsSync(join(DIST, "index.html"))) throw new Error("dist/index.html missing - run `npm run build` first");
 if (!existsSync(CH)) throw new Error(`Chrome not found at ${CH}; set CHROME=/path/to/chrome`);
 mkdirSync(DIR, { recursive: true });
 
@@ -49,17 +53,32 @@ const APP = `http://127.0.0.1:${server.address().port}/index.html`;
 
 // NOTE: no --disable-gpu - the map needs WebGL2 (MapLibre GL JS), which modern headless Chrome
 // provides via software rendering (SwiftShader/ANGLE) as long as GPU isn't explicitly disabled.
-const proc = spawn(CH, ["--headless=new", `--remote-debugging-port=${PORT}`, "--user-data-dir=" + mkdtempSync(join(tmpdir(), "hokiepark-smoke-")), "--no-first-run", "about:blank"], { stdio: "ignore" });
+// Chrome picks a free debugging port itself and reports it in DevToolsActivePort, so a stale browser can never be mistaken for this one.
+const userDir = mkdtempSync(join(tmpdir(), "hokiepark-smoke-"));
+const proc = spawn(CH, ["--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + userDir, "--no-first-run", "about:blank"], { stdio: "ignore" });
 // A crash anywhere below must not leak this Chrome process - a stale one left listening on PORT
 // would silently hijack the next run's connection (this bit us once: a crashed earlier run's
 // Chrome, still on :9333, answered the new run's CDP handshake with its own stale page).
 let cleanedUp = false;
-const cleanup = () => { if (!cleanedUp) { cleanedUp = true; proc.kill(); server.close(); } };
+const cleanup = () => {
+  if (cleanedUp) return;
+  cleanedUp = true;
+  try { proc.kill("SIGKILL"); } catch {}
+  try { server.close(); } catch {}
+  // Delete this run's Chrome profile. Left behind, each one (with the map's tile cache) is large, and dozens of runs once filled the disk.
+  try { rmSync(userDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch {}
+};
+for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(130));
 process.on("exit", cleanup);
 process.on("uncaughtException", (e) => { console.error(e); cleanup(); process.exit(1); });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-let targets;
+let PORT, targets;
+for (let i = 0; i < 100 && !PORT; i++) {
+  try { PORT = readFileSync(join(userDir, "DevToolsActivePort"), "utf8").split("\n")[0].trim(); } catch {}
+  if (!PORT) await sleep(150);
+}
+if (!PORT) throw new Error("Chrome did not start (no DevToolsActivePort)");
 for (let i = 0; i < 50; i++) {
   try { targets = await (await fetch(`http://127.0.0.1:${PORT}/json`)).json(); if (targets.find((t) => t.type === "page")) break; } catch {}
   await sleep(200);
@@ -194,8 +213,14 @@ await click('#zoom-in'); await click('#zoom-in');
 await sleep(300);
 const z1 = await mapZoom();
 check("zoom-in buttons increase zoom", z1 > z0 + 0.5, `${z0.toFixed(2)} -> ${z1.toFixed(2)}`);
+// A bottom sheet left open by the earlier steps covers most of a small phone's map, so gestures aimed at the map's centre
+// would land on the sheet. Close it first (as a user would) and assert it really is closed.
+if (!(await ev(`document.getElementById('sheet').hidden`))) { await click('#sheet [data-close]'); await sleep(300); }
+check("sheet is closed before the map gesture tests", (await ev(`document.getElementById('sheet').hidden`)) === true);
 const centerA = await mapCenter();
 const m = await center('#map');
+const hit = await ev(`(()=>{const r=document.getElementById('map').getBoundingClientRect();const e=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !!e && document.getElementById('map').contains(e)})()`);
+check("the map's centre is actually the map (nothing floats over it)", hit === true);
 await send("Input.dispatchMouseEvent", { type: "mousePressed", x: m.x, y: m.y, button: "left", clickCount: 1 });
 for (let i = 1; i <= 8; i++) await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: m.x + i * 12, y: m.y + i * 6, button: "left" });
 await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: m.x + 96, y: m.y + 48, button: "left", clickCount: 1 });

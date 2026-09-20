@@ -187,5 +187,12 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 - **Smoke note:** the non-live smoke needs a feed-OFF build: `HOKIEPARK_SUPABASE_URL= HOKIEPARK_SUPABASE_ANON_KEY= npm run build` first (with `.env.local` present a plain build is feed-ON and the chip check fails).
 - **Optional next:** `docs/GEMINI_NLP_SPEC.md` (LLM-assisted parsing via a Supabase Edge Function; not built). Deploy to GitHub Pages is still pending (needs the user's GitHub settings).
 
+## Smoke-test fixes pushed (session e7, 2026-09-19) - READ BEFORE EDITING scripts/smoke.mjs
+- **Disk-fill bug fixed:** every smoke run left a full Chrome profile (with MapLibre's tile cache) in `os.tmpdir()`. 99 leaked profiles = 5.6 GB filled the user's disk and broke all shells. `scripts/smoke.mjs` now `rmSync`s its profile in the exit handler (verified: a run leaves 0 profiles and 0 stray Chrome).
+- **Restored what teammate merge `a36ccfb` dropped:** hermetic feed-OFF build into `smoke-out/dist-off` (no more "run `npm run build` first"; never touches `.env.local`), and an OS-assigned Chrome debug port (`DevToolsActivePort`) instead of fixed `:9333`.
+- **The "3 gesture failures at 375x667" were a test artifact, not a map bug:** a bottom sheet left open by the earlier list step covers the map centre on small phones. The test now closes the sheet first and asserts it is closed and that the map centre really is the map.
+- **Pending merge (other session, uncommitted in the main worktree when it stopped):** Gemini advisor edits to `scripts/smoke.mjs` (HOKIEPARK_ADVISOR build env, POST in CORS, advisor mock, `botIdle()`, `if (!LIVE)` around the chip-based Q1-Q3 checks, a "Gemini advisor (mocked)" section) plus `src/lib/advisor*`, `supabase/functions/advisor/*`, `scripts/build-advisor.ts`, `src/ui/assistant.ts`, `src/main.ts`, `scripts/build.ts`, `src/config.ts`, `src/env.d.ts`, `src/styles.css`, `tests/advisor*.test.ts`, `.env.example`. Fetch, then merge those onto this version of smoke.mjs keeping the shared lines from here.
+- **Still to re-add (dropped by the same merge):** the permit-chooser list/sheet/persistence scenarios and the Ask-assistant permit scenarios (the assistant code itself, `answerQuestion(q, {permits, ada})`, is intact and unit-tested).
+
 ## Commands
 `npm run data` | `npm run build` | `npm run dev` (watch) | `npm test` | `npm run typecheck` | `npm run check` (all three) | `npm run timetable` (re-pull term) | `npm run curves` (regenerate curves SQL)
