@@ -156,7 +156,7 @@ h1, h2, h3, p { margin: 0; }
 .pill-full { background: var(--bad-bg); color: var(--bad); }
 
 /* ---------- bottom sheet ---------- */
-.sheet { z-index: 2; position: absolute; left: 0; right: 0; bottom: var(--tab-total); max-height: 58%; overflow-y: auto; overscroll-behavior: contain; background: var(--paper); border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgb(0 0 0 / 0.22); border-top: 3px solid var(--orange); animation: rise 0.22s ease-out; }
+.sheet { z-index: 2; position: absolute; left: 0; right: 0; bottom: var(--tab-total); /* never taller than leaves room for the 4-button map control stack (~260px from the top, plus the iPhone safe area): an open sheet must not hide zoom/locate/reset on short phones */ max-height: min(58%, calc(100% - var(--tab-total) - 268px - env(safe-area-inset-top, 0px))); overflow-y: auto; overscroll-behavior: contain; background: var(--paper); border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgb(0 0 0 / 0.22); border-top: 3px solid var(--orange); animation: rise 0.22s ease-out; }
 @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
 .sheet-grip { width: 38px; height: 4px; border-radius: 4px; background: #d3ccce; margin: 8px auto 0; }
