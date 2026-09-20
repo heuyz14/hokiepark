@@ -233,6 +233,7 @@ h1, h2, h3, p { margin: 0; }
 .agent-event.error { color: #8d1b16; }
 .speech-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .speech-controls button { min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--maroon); padding: 4px 9px; font-weight: 700; }
+.speech-active { display: inline-flex; gap: 6px; }
 .ref, .chip { min-height: 44px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--maroon); background: #fff; color: var(--maroon); font-weight: 600; font-size: 13.5px; text-align: left; }
 .ref:active, .chip:active { background: #f6ecef; }
 .chat-suggest { display: grid; gap: 6px; padding: 4px 14px 10px; }
@@ -242,16 +243,30 @@ h1, h2, h3, p { margin: 0; }
 .followups-cap { flex-basis: 100%; margin: 0 0 2px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--muted); }
 /* Lighter than the "show on map" buttons: these are suggestions, not the answer's main actions. */
 .followups .chip { width: auto; min-height: 36px; font-size: 12.5px; font-weight: 600; padding: 6px 11px; border: 0; background: rgb(134 31 65 / 0.09); color: var(--maroon); }
-.chat-form { display: flex; gap: 8px; padding: 8px 14px 12px; border-top: 1px solid var(--line); }
-.chat-form input { flex: 1; min-width: 0; height: 46px; padding: 0 14px; border: 2px solid #cfc7ca; border-radius: 999px; font-size: 16px; background: #fff; }
-.chat-form input:focus { border-color: var(--maroon); outline: none; box-shadow: 0 0 0 3px rgb(229 117 31 / 0.4); }
+.chat-form { padding: 8px 14px 8px; border-top: 1px solid var(--line); }
+.chat-composer { position: relative; width: 100%; border: 2px solid #cfc7ca; border-radius: 14px; background: #fff; overflow: hidden; }
+.chat-composer:focus-within { border-color: var(--maroon); box-shadow: 0 0 0 3px rgb(229 117 31 / 0.4); }
+.chat-composer textarea { display: block; box-sizing: border-box; width: 100%; min-height: 80px; max-height: 156px; resize: none; border: 0; outline: 0; padding: 12px 14px 52px; font: inherit; font-size: 16px; line-height: 1.45; color: var(--ink); background: transparent; overflow-y: hidden; }
+.composer-actions { position: absolute; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.mic { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--maroon); font-size: 18px; }
+.mic.is-recording { border-color: var(--bad); background: var(--bad-bg); color: var(--bad); box-shadow: inset 0 0 0 2px currentColor; }
+.send { min-width: 62px; height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--maroon); color: #fff; font-weight: 700; }
 .accessibility-settings { margin: 0 14px 12px; color: var(--muted); font-size: 13px; }
-.accessibility-settings summary { cursor: pointer; color: var(--maroon); font-weight: 700; }
-.accessibility-settings label { display: block; margin-top: 7px; }
+.accessibility-settings summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--maroon); font-weight: 700; }
+.accessibility-settings summary::marker { content: ""; }
+.accessibility-settings summary::before { content: "▶"; margin-right: 7px; font-size: 11px; }
+.accessibility-settings[open] summary::before { content: "▼"; }
+.accessibility-options { display: grid; gap: 10px; padding: 2px 0 8px; }
+.accessibility-options label { display: flex; align-items: center; gap: 7px; min-height: 28px; }
+.accessibility-options select { min-height: 36px; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); padding: 0 8px; }
+.accessibility-options fieldset { margin: 0; padding: 0; border: 0; }
+.accessibility-options legend { margin-bottom: 5px; color: var(--ink); font-weight: 700; }
+.speech-rates { display: flex; flex-wrap: wrap; gap: 6px; }
+.speech-rates label { min-height: 36px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--maroon); font-weight: 700; }
+.speech-rates input { margin: 0; }
 .agent-event.running { color: var(--maroon); }
 .a11y-large-text { font-size: 112.5%; }
 .a11y-reduce-motion *, .a11y-reduce-motion *::before, .a11y-reduce-motion *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
-.send { height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--maroon); color: #fff; font-weight: 700; }
 .send:disabled { opacity: 0.55; }
 
 /* ---------- sync chip (header) ---------- */

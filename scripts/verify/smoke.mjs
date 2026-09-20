@@ -300,6 +300,15 @@ const botText = () => ev(`[...document.querySelectorAll('#chat-log .msg.bot')].p
 const botIdle = async () => { await sleep(120); await waitFor(async () => !(await ev(`!!document.querySelector('#chat-log .msg.pending')`)), 8000); };
 const chips = await ev(`document.querySelectorAll('#chat-suggest .chip').length`);
 check("3 starter chips before the first question", chips === 3);
+const composer = await ev(`(()=>{const t=document.getElementById('chat-q'),m=document.querySelector('.mic'),s=document.querySelector('.send');return {tag:t?.tagName,rows:t?.rows,height:t?.getBoundingClientRect().height,mic:m?.getBoundingClientRect().width,send:s?.getBoundingClientRect().height,settings:document.querySelector('.accessibility-settings')?.open};})()`);
+check("Ask composer is a large multiline textarea with compact controls", composer.tag === "TEXTAREA" && composer.rows >= 3 && composer.height >= 72 && composer.mic <= 44 && composer.send >= 44, JSON.stringify(composer));
+const grownComposer = await ev(`(()=>{const t=document.getElementById('chat-q');t.value='Parking question\\n'.repeat(30);t.dispatchEvent(new Event('input',{bubbles:true}));const r={height:t.getBoundingClientRect().height,overflow:getComputedStyle(t).overflowY};t.value='';t.dispatchEvent(new Event('input',{bubbles:true}));return r;})()`);
+check("Ask composer grows then scrolls at its safe maximum", grownComposer.height >= 140 && grownComposer.height <= 160 && grownComposer.overflow === "auto", JSON.stringify(grownComposer));
+check("Accessibility and voice settings start collapsed", composer.settings === false);
+await click('.accessibility-settings summary');
+check("Accessibility and voice settings expand on demand", (await ev(`document.querySelector('.accessibility-settings')?.open`)) === true);
+await click('.accessibility-settings summary');
+check("Accessibility and voice settings collapse again", (await ev(`document.querySelector('.accessibility-settings')?.open`)) === false);
 
 // Ask by typing, so these checks don't depend on where the chips happen to sit.
 const say = async (q) => {
@@ -339,6 +348,7 @@ await ev(`(()=>{const i=document.getElementById('chat-q');i.value='is perry stre
 await ev(`document.getElementById('chat-form').requestSubmit()`); await botIdle();
 t = await botText();
 check("typed question answered with level rows", /Level 1 - Commuter & graduate: 0 open of 250 \(Full\)/.test(t));
+check("assistant responses retain a compact read-aloud action", (await ev(`!!document.querySelector('#chat-log .msg.bot:last-child .speech-read')`)) === true);
 // show on map hand-off
 await click('#chat-log .msg.bot:last-child .ref');
 await sleep(900);

@@ -1,6 +1,8 @@
 export interface AccessibilityPreferences {
   autoRead: boolean;
   speechRate: 0.75 | 1 | 1.25 | 1.5;
+  /** Empty/undefined means the browser's system default voice. */
+  voiceURI?: string;
   largeText: boolean;
   reduceMotion: boolean;
 }
@@ -14,7 +16,7 @@ export function loadAccessibilityPreferences(storage: Storage | undefined = type
   try {
     const raw: unknown = JSON.parse(storage.getItem(KEY) ?? "{}");
     const value = raw && typeof raw === "object" ? raw as Partial<AccessibilityPreferences> : {};
-    return { autoRead: value.autoRead === true, speechRate: rates.has(value.speechRate as AccessibilityPreferences["speechRate"]) ? value.speechRate as AccessibilityPreferences["speechRate"] : 1, largeText: value.largeText === true, reduceMotion: value.reduceMotion === true };
+    return { autoRead: value.autoRead === true, speechRate: rates.has(value.speechRate as AccessibilityPreferences["speechRate"]) ? value.speechRate as AccessibilityPreferences["speechRate"] : 1, ...(typeof value.voiceURI === "string" && value.voiceURI.length <= 200 ? { voiceURI: value.voiceURI } : {}), largeText: value.largeText === true, reduceMotion: value.reduceMotion === true };
   } catch { return { ...ACCESSIBILITY_DEFAULTS }; }
 }
 

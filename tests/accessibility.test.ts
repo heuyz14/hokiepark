@@ -15,4 +15,6 @@ test("accessibility preferences default safely and persist only supported speech
   assert.deepEqual(loadAccessibilityPreferences(storage), { autoRead: true, speechRate: 1.25, largeText: true, reduceMotion: true });
   storage.setItem("hokiepark-accessibility-v1", JSON.stringify({ autoRead: true, speechRate: 9 }));
   assert.deepEqual(loadAccessibilityPreferences(storage), { ...ACCESSIBILITY_DEFAULTS, autoRead: true });
+  storage.setItem("hokiepark-accessibility-v1", JSON.stringify({ voiceURI: "system-voice" }));
+  assert.equal((loadAccessibilityPreferences(storage) as { voiceURI?: string }).voiceURI, "system-voice");
 });

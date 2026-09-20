@@ -47,12 +47,14 @@ const agentActivity = (answer: AdvisorAnswer, advisor: boolean) => {
 
 const speechControls = () =>
   isSpeechSupported()
-    ? `<div class="speech-controls"><button type="button" class="speech-read" aria-label="Read this response aloud">Read aloud</button><button type="button" class="speech-pause" aria-label="Pause spoken response">Pause</button><button type="button" class="speech-resume" aria-label="Resume spoken response">Resume</button><button type="button" class="speech-stop" aria-label="Stop spoken response">Stop</button></div>`
+    ? `<div class="speech-controls"><button type="button" class="speech-read" aria-label="Read this response aloud">🔊 Read aloud</button><span class="speech-active" hidden><button type="button" class="speech-toggle" aria-label="Pause spoken response">⏸ Pause</button><button type="button" class="speech-stop" aria-label="Stop spoken response">■ Stop</button></span></div>`
     : "";
 
 type Recognition = { start(): void; stop(): void; abort(): void; onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; continuous: boolean; interimResults: boolean; lang: string };
 type RecognitionCtor = new () => Recognition;
 const recognitionCtor = (): RecognitionCtor | undefined => (window as unknown as { SpeechRecognition?: RecognitionCtor; webkitSpeechRecognition?: RecognitionCtor }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: RecognitionCtor }).webkitSpeechRecognition;
+const microphoneGlyph = "🎤";
+const stopGlyph = "■";
 
 const activityList = (events: AdvisorToolEvent[]) => events.length ? `<details class="agent-activity" open><summary>HokiePark agent activity</summary><ul>${events.map((event) => `<li class="agent-event ${event.status === "error" ? "error" : event.status === "success" ? "ok" : "running"}">${event.status === "success" ? "✓" : event.status === "error" ? "!" : "…"} ${esc(event.label)}</li>`).join("")}</ul></details>` : "";
 const mapActions = (actions: AdvisorMapAction[] | undefined) => actions?.some((action) => action.type === "show_route") ? `<div class="refs"><button type="button" class="advisor-route">Show walking route on map</button></div>` : "";
@@ -67,19 +69,27 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       </div>
       <form class="chat-form" id="chat-form" autocomplete="off">
         <label for="chat-q" class="sr-only">Ask a parking question</label>
-        <input id="chat-q" type="text" placeholder="${advisor ? "Describe your class and permit&hellip;" : "Ask about parking&hellip;"}" enterkeyhint="send" maxlength="200">
-        <button type="button" class="mic" aria-label="Ask HokiePark by voice" hidden>Voice input</button><button type="submit" class="send">Send</button>
+        <div class="chat-composer">
+          <textarea id="chat-q" rows="3" placeholder="${advisor ? "Describe your class, destination, time, or parking question..." : "Ask a parking question..."}" enterkeyhint="send" maxlength="300"></textarea>
+          <div class="composer-actions"><button type="button" class="mic" aria-label="Start voice input" title="Start voice input" hidden><span aria-hidden="true">${microphoneGlyph}</span></button><button type="submit" class="send" aria-label="Send parking question">Send</button></div>
+        </div>
       </form>
-      <details class="accessibility-settings"><summary>Accessibility settings</summary><label><input type="checkbox" data-a11y="autoRead"> Automatically read AI responses</label><label>Speech speed <select data-a11y="speechRate"><option value="0.75">0.75x</option><option value="1">1.0x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></label><label><input type="checkbox" data-a11y="largeText"> Larger interface text</label><label><input type="checkbox" data-a11y="reduceMotion"> Reduce motion</label></details>
+      <details class="accessibility-settings"><summary>Accessibility &amp; voice</summary><div class="accessibility-options"><label><input type="checkbox" data-a11y="autoRead"> Read responses aloud automatically</label><fieldset><legend>Speech speed</legend><div class="speech-rates"><label><input type="radio" name="speech-rate" value="0.75">0.75x</label><label><input type="radio" name="speech-rate" value="1">1x</label><label><input type="radio" name="speech-rate" value="1.25">1.25x</label><label><input type="radio" name="speech-rate" value="1.5">1.5x</label></div></fieldset><label>Voice <select data-a11y="voiceURI"><option value="">System Default</option></select></label><label><input type="checkbox" data-a11y="largeText"> Larger interface text</label><label><input type="checkbox" data-a11y="reduceMotion"> Reduce motion</label></div></details>
     </div>`;
   const log = el.querySelector<HTMLElement>("#chat-log")!;
   const suggest = el.querySelector<HTMLElement>("#chat-suggest")!;
   const form = el.querySelector<HTMLFormElement>("#chat-form")!;
-  const input = el.querySelector<HTMLInputElement>("#chat-q")!;
+  const input = el.querySelector<HTMLTextAreaElement>("#chat-q")!;
   const send = el.querySelector<HTMLButtonElement>(".send")!;
   const mic = el.querySelector<HTMLButtonElement>(".mic")!;
   const Recognition = recognitionCtor();
   let recognition: Recognition | null = null;
+  const setMicState = (recording: boolean) => {
+    mic.classList.toggle("is-recording", recording);
+    mic.setAttribute("aria-label", recording ? "Stop voice input" : "Start voice input");
+    mic.title = recording ? "Recording — tap to stop" : "Start voice input";
+    mic.innerHTML = `<span aria-hidden="true">${recording ? stopGlyph : microphoneGlyph}</span>`;
+  };
   if (Recognition) {
     mic.hidden = false;
     mic.addEventListener("click", () => {
@@ -88,18 +98,17 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       recognition.continuous = false;
       recognition.interimResults = false;
       recognition.lang = navigator.language || "en-US";
-      mic.textContent = "Cancel voice";
-      mic.setAttribute("aria-label", "Cancel voice input");
+      setMicState(true);
       recognition.onresult = (event) => {
         input.value = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join(" ").trim();
+        resizeComposer();
         input.focus(); // transcript is deliberately editable and never submitted automatically
       };
       recognition.onend = recognition.onerror = () => {
         recognition = null;
-        mic.textContent = "Voice input";
-        mic.setAttribute("aria-label", "Ask HokiePark by voice");
+        setMicState(false);
       };
-      try { recognition.start(); } catch { recognition = null; mic.textContent = "Voice input"; }
+      try { recognition.start(); } catch { recognition = null; setMicState(false); }
     });
   }
   let preferences: AccessibilityPreferences = loadAccessibilityPreferences();
@@ -109,11 +118,40 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     if (control instanceof HTMLInputElement) control.checked = preferences[key] === true;
     else control.value = String(preferences[key]);
     control.addEventListener("change", () => {
-      preferences = { ...preferences, [key]: control instanceof HTMLInputElement ? control.checked : Number(control.value) } as AccessibilityPreferences;
+      preferences = { ...preferences, [key]: control instanceof HTMLInputElement ? control.checked : key === "voiceURI" ? control.value || undefined : Number(control.value) } as AccessibilityPreferences;
       saveAccessibilityPreferences(preferences);
       applyAccessibilityPreferences(preferences);
     });
   }
+  const voiceSelect = el.querySelector<HTMLSelectElement>('select[data-a11y="voiceURI"]')!;
+  const paintVoices = () => {
+    if (!isSpeechSupported()) return;
+    const voices = window.speechSynthesis.getVoices().filter((voice) => voice.lang.startsWith(navigator.language.slice(0, 2))).sort((a, b) => a.name.localeCompare(b.name));
+    voiceSelect.innerHTML = `<option value="">System Default</option>${voices.map((voice) => `<option value="${esc(voice.voiceURI)}">${esc(voice.name)}${voice.default ? " (default)" : ""}</option>`).join("")}`;
+    voiceSelect.value = preferences.voiceURI ?? "";
+  };
+  paintVoices();
+  if (isSpeechSupported()) window.speechSynthesis.onvoiceschanged = paintVoices;
+  for (const rate of el.querySelectorAll<HTMLInputElement>('input[name="speech-rate"]')) {
+    rate.checked = Number(rate.value) === preferences.speechRate;
+    rate.addEventListener("change", () => {
+      if (!rate.checked) return;
+      preferences = { ...preferences, speechRate: Number(rate.value) as AccessibilityPreferences["speechRate"] };
+      saveAccessibilityPreferences(preferences);
+    });
+  }
+  const resizeComposer = () => {
+    input.style.height = "auto";
+    input.style.height = `${Math.min(input.scrollHeight, 156)}px`;
+    input.style.overflowY = input.scrollHeight > 156 ? "auto" : "hidden";
+  };
+  resizeComposer();
+  input.addEventListener("input", resizeComposer);
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    form.requestSubmit();
+  });
 
   const add = (cls: string, html: string) => {
     const div = document.createElement("div");
@@ -170,7 +208,7 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       const routeAction = (a as AdvisorAnswer).mapActions?.find((action): action is Extract<AdvisorMapAction, { type: "show_route" }> => action.type === "show_route");
       if (routeAction) pending.dataset.mapActions = JSON.stringify(routeAction);
       else delete pending.dataset.mapActions;
-      if (preferences.autoRead && (a as AdvisorAnswer).source === "ai") speak(a.lines.join(". "), { rate: preferences.speechRate });
+      if (preferences.autoRead && (a as AdvisorAnswer).source === "ai") speak(a.lines.join(". "), { rate: preferences.speechRate, voiceURI: preferences.voiceURI });
     } catch (err) {
       console.error(err);
       pending.className = "msg bot error";
@@ -187,6 +225,7 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     e.preventDefault();
     const q = input.value;
     input.value = "";
+    resizeComposer();
     void ask(q);
   });
   suggest.addEventListener("click", (e) => {
@@ -201,10 +240,35 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     const response = (e.target as Element).closest<HTMLElement>(".msg.bot");
     if (!response) return;
     const spokenText = [...response.querySelectorAll<HTMLElement>(".ln")].map((line) => line.textContent ?? "").join(". ");
-    if ((e.target as Element).closest(".speech-read")) speak(spokenText, { rate: preferences.speechRate });
-    if ((e.target as Element).closest(".speech-pause")) pauseSpeech();
-    if ((e.target as Element).closest(".speech-resume")) resumeSpeech();
-    if ((e.target as Element).closest(".speech-stop")) stopSpeech();
+    if ((e.target as Element).closest(".speech-read")) {
+      for (const controls of log.querySelectorAll<HTMLElement>(".speech-controls")) {
+        controls.querySelector<HTMLElement>(".speech-read")!.hidden = false;
+        controls.querySelector<HTMLElement>(".speech-active")!.hidden = true;
+      }
+      speak(spokenText, { rate: preferences.speechRate, voiceURI: preferences.voiceURI });
+      response.querySelector<HTMLElement>(".speech-read")!.hidden = true;
+      response.querySelector<HTMLElement>(".speech-active")!.hidden = false;
+    }
+    const toggle = (e.target as Element).closest<HTMLElement>(".speech-toggle");
+    if (toggle) {
+      const paused = toggle.dataset.paused === "true";
+      if (paused) {
+        resumeSpeech();
+        toggle.dataset.paused = "false";
+        toggle.textContent = "⏸ Pause";
+        toggle.setAttribute("aria-label", "Pause spoken response");
+      } else {
+        pauseSpeech();
+        toggle.dataset.paused = "true";
+        toggle.textContent = "▶ Resume";
+        toggle.setAttribute("aria-label", "Resume spoken response");
+      }
+    }
+    if ((e.target as Element).closest(".speech-stop")) {
+      stopSpeech();
+      response.querySelector<HTMLElement>(".speech-read")!.hidden = false;
+      response.querySelector<HTMLElement>(".speech-active")!.hidden = true;
+    }
     if ((e.target as Element).closest(".advisor-route")) {
       const answerIndex = [...log.querySelectorAll<HTMLElement>(".msg.bot")].indexOf(response);
       // map actions are attached to the same response below, never supplied as model JavaScript.
