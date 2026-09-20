@@ -1,7 +1,7 @@
 import type { Selection } from "./types.ts";
 import type { PermitId } from "./lib/permits.ts";
 
-export type View = "map" | "list" | "ask";
+export type View = "map" | "list" | "ask" | "plan";
 
 export interface State {
   view: View;

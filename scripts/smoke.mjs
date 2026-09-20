@@ -244,6 +244,33 @@ await click('#chat-log .msg.bot:last-child .ref');
 await sleep(900);
 check("'Show on map' returns to map with sheet open", (await ev(`document.getElementById('view-map').hidden`)) === false && (await ev(`document.getElementById('sheet').hidden`)) === false, await ev(`document.getElementById('sheet-title')?.textContent`));
 await shot("8c-ask-to-map");
+// Plan tab: destination + day + class time + permit -> forecast cards (Databricks predictions.json), permit rules respected
+await click('.tabbar [data-view="plan"]'); await sleep(200); await shot("8d-plan");
+check("Plan tab shows the form and 4 tabs exist", (await ev(`!document.getElementById('view-plan').hidden && !!document.getElementById('plan-form')`)) && (await ev(`document.querySelectorAll('.tabbar button').length`)) === 4);
+await ev(`(()=>{const i=document.getElementById('plan-bldg');i.value='Hancock Hall';i.dispatchEvent(new Event('change'));document.getElementById('plan-day').value='3';document.getElementById('plan-time').value='14:00';})()`);
+await ev(`document.getElementById('plan-form').requestSubmit()`); await sleep(250);
+check("Plan without a permit asks for one and recommends nothing", /Choose your permit/.test(await ev(`document.getElementById('plan-out').innerText`)) && (await ev(`document.querySelectorAll('#plan-out .plan-card').length`)) === 0);
+await click('#plan-permit-chips [data-permit="cg"]'); await sleep(300);
+const planText = await ev(`document.getElementById('plan-out').innerText`);
+check("choosing a permit re-runs the plan and lists 1-3 recommendations", (await ev(`document.querySelectorAll('#plan-out .plan-list:first-of-type .plan-card, #plan-out ol .plan-card').length`)) >= 1, JSON.stringify(planText.slice(0, 120)));
+await shot("8e-plan-results");
+check("plan says 2:00 PM Wednesday, arriving 1:45 PM, and labels the forecast simulated", /2:00 PM Wednesday/.test(planText) && /1:45 PM/.test(planText) && /simulated/i.test(planText) && /not measured occupancy/i.test(planText), JSON.stringify(planText.slice(0, 160)));
+check("a plain Commuter permit is not sent to Perry Street Garage", !/Perry Street Garage/.test(await ev(`document.getElementById('plan-out').innerText`)));
+check("the permit choice synced to the Map tab's picker", /Commuter\/Graduate/.test(await ev(`document.querySelector('.permit-chip')?.innerText || ''`)));
+await ev(`document.querySelector('#plan-out ol .ref').click()`); await sleep(900);
+check("Plan 'Show on map' opens the map with a sheet", (await ev(`document.getElementById('view-map').hidden`)) === false && (await ev(`document.getElementById('sheet').hidden`)) === false);
+// typed plan question in Ask
+await click('.tabbar [data-view="ask"]');
+await ev(`(()=>{const i=document.getElementById('chat-q');i.value='I have a 2pm class in Hancock Hall on Wednesday, where do I park?';})()`);
+await ev(`document.getElementById('chat-form').requestSubmit()`); await sleep(350);
+t = await botText();
+check("Ask answers a plan-ahead question with a forecast and the simulated disclaimer", /Parking for a 2:00 PM Wednesday class at Hancock Hall/.test(t) && /SIMULATED/.test(t), JSON.stringify(t?.slice(0, 140)));
+// leave the app as we found it: no permit chosen, back on the map, nothing selected
+await click('.tabbar [data-view="plan"]');
+await click('#plan-permit-chips [data-permit="cg"]'); await sleep(200);
+check("cleanup: permit cleared", (await ev(`document.querySelectorAll('#plan-permit-chips .is-on').length`)) === 0);
+await click('.tabbar [data-view="map"]'); await sleep(200);
+if ((await ev(`document.getElementById('sheet').hidden`)) === false) { await click('.sheet-close, #sheet [data-close], #sheet button[aria-label*="Close"]').catch(() => {}); }
 const http = URL_.startsWith("http");
 check("PWA: apple-touch-icon present", await ev(`!!document.querySelector('link[rel=apple-touch-icon]')`));
 check(http ? "PWA: manifest link injected over http" : "PWA: no manifest link on file:// (avoids console error)", (await ev(`!!document.querySelector('link[rel=manifest]')`)) === http);

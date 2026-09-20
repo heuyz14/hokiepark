@@ -76,6 +76,8 @@ VT timetable with randomised driver behaviour; the model is judged on held-out d
 places** (whole lots hidden: MAE 2.99 vs 7.30 for a place-agnostic average), and an ablation shows the class-schedule features matter within the simulation.
 Notebook 06 needs scikit-learn; if the serverless environment lacks it, add a first cell `%pip install scikit-learn` (a Python restart is expected).
 
+**Getting the result into the app:** download `out/predictions.json` from the volume, replace `src/data/predictions.json`, run `npm test` (it checks the file still matches the app's lots and garage capacities), rebuild.
+
 ## Findings worth saying in the pitch
 - The sensitivity sweep (radius 600/900/1200 m x commuter class weight 0.7/0.9) moves the curves by under 0.5 percentage points on
   average, and the commuter level's hours at or above 90% only between 5.25 and 6.25. The output is dominated by the assumed staff

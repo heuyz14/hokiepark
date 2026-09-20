@@ -59,8 +59,10 @@ Two splits, because one alone would mislead. Full local run (902,400 label rows)
 
 ## 5. What reaches the app (notebook 07)
 The registered model batch-scores every place x weekday x bucket (94 x 5 x 96 = 45,120 predictions) into Delta `gold_predictions` and a
-131 KB `predictions.json` (marked `"kind": "SIMULATED"`, with the model name and version). **The app reads that file; it never calls Databricks at
+131 KB `predictions.json` (marked `"kind": "SIMULATED"`, with the model name and version). **The app reads that file (shipped as `src/data/predictions.json`, the real workspace output of these notebooks); it never calls Databricks at
 query time**, so an outage cannot break the demo. A live Model Serving endpoint is worth adding once real sensor data exists.
+
+**Where you can see it in the app:** the **Plan** tab (building + day + class time + permit -> ranked options with forecast fullness and a Likely open / Filling up / Risky label) and Ask ("I have a 2pm class in Hancock Hall"). Only places the permit rules confirm are recommended.
 
 ## 6. Databricks components, and what each does here
 | Component | Role |

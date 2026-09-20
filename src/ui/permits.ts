@@ -23,7 +23,7 @@ export function loadSaved(): { permits: PermitId[]; ada: boolean } {
   }
 }
 
-function save(permits: PermitId[], ada: boolean) {
+export function save(permits: PermitId[], ada: boolean) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({ permits, ada }));
   } catch {

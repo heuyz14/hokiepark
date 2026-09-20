@@ -5,7 +5,9 @@ import { createSheet } from "./ui/sheet.ts";
 import { createList } from "./ui/list.ts";
 import { renderLegend } from "./ui/legend.ts";
 import { createAssistant } from "./ui/assistant.ts";
-import { createPermitPicker, loadSaved } from "./ui/permits.ts";
+import { createPermitPicker, loadSaved, save as savePermits } from "./ui/permits.ts";
+import { createPlanView } from "./ui/plan.ts";
+import { withPlanAhead } from "./lib/planask.ts";
 import { makeLocalAnswerer } from "./lib/assistant.ts";
 import { LIVE_CONFIG } from "./config.ts";
 import { startLive } from "./live.ts";
@@ -36,11 +38,22 @@ function boot() {
   list.setPermits(saved.permits, saved.ada);
   sheet.setPermits(saved.permits, saved.ada);
 
-  const views: Record<View, HTMLElement> = { map: $("view-map"), list: $("view-list"), ask: $("view-ask") };
+  const views: Record<View, HTMLElement> = { map: $("view-map"), list: $("view-list"), ask: $("view-ask"), plan: $("view-plan") };
   const tabs = [...document.querySelectorAll<HTMLButtonElement>(".tabbar button")];
 
   // Swap this for an LLM-backed Answerer here if a backend proxy is ever added (it should receive the same context).
-  createAssistant($("view-ask"), { answer: makeLocalAnswerer(() => ({ permits: store.get().permits, ada: store.get().ada })), onSelect: (sel) => select(sel, "assistant", "map") });
+  const askContext = () => ({ permits: store.get().permits, ada: store.get().ada });
+  // Plan-ahead questions ("2pm class at Hancock") are answered from the Databricks forecast; everything else goes to the normal assistant.
+  createAssistant($("view-ask"), { answer: withPlanAhead(makeLocalAnswerer(askContext), askContext), onSelect: (sel) => select(sel, "assistant", "map") });
+  const plan = createPlanView($("view-plan"), {
+    getPermits: () => ({ permits: store.get().permits, ada: store.get().ada }),
+    onPermits: (permits, ada) => {
+      savePermits(permits, ada);
+      picker.set(permits, ada);
+      store.set({ permits, ada });
+    },
+    onSelect: (sel) => select(sel, "assistant", "map"),
+  });
 
   store.subscribe((s, prev) => {
     if (s.view !== prev.view) {
@@ -58,6 +71,7 @@ function boot() {
       list.setPermits(s.permits, s.ada);
       sheet.setPermits(s.permits, s.ada);
       sheet.render(s.view === "map" ? s.selection : null);
+      plan.setPermits(s.permits, s.ada);
     }
     if (selChanged && s.selection && s.source !== "map" && s.view === "map") {
       document.getElementById("sheet-title")?.focus({ preventScroll: true });
