@@ -46,11 +46,10 @@ export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selectio
     const q = input.value;
     const garages = filterByName(GARAGES, q);
     const lots = filterByName(LOTS, q);
-    // Buildings only surface once the user searches: this keeps the default browse list
-    // exactly "every garage and lot" (spec Section 6), while still giving keyboard and
-    // screen-reader users - who can't reach the map's SVG building shapes - a way to open
-    // a building's sheet and see its nearest parking (the map's aria-label points here).
-    const buildings = q.trim() ? filterBuildings(BUILDINGS, q) : [];
+    // Every university building is listed too (alphabetical), after the garages and lots, so a driver can open a building's sheet and see its
+    // nearest parking without typing. Searching filters all three groups. Keyboard and screen-reader users, who cannot reach the map's
+    // building shapes, rely on this list (the map's aria-label points here).
+    const buildings = q.trim() ? filterBuildings(BUILDINGS, q) : [...BUILDINGS].sort((a, b) => a.name.localeCompare(b.name));
     if (!garages.length && !lots.length && !buildings.length) {
       results.innerHTML = `<p class="state-msg">No garages, lots, or buildings match &ldquo;${esc(q.trim())}&rdquo;.<br>Try a shorter name, like &ldquo;perry&rdquo; or &ldquo;squ&rdquo;.</p>`;
       return;
@@ -68,10 +67,13 @@ export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selectio
       const codes = buildingCodes(b.num);
       return row("building", b.id, b.name, `${codes.length ? `<strong>${esc(codes.join(", "))}</strong> &middot; ` : ""}${CATEGORY_LABEL[b.category]} &middot; Building ${esc(b.num)}`, "");
     });
-    results.innerHTML =
-      (gRows.length ? `<h2 class="list-h">Garages <span>${gRows.length}</span></h2><ul class="rows">${gRows.join("")}</ul>` : "") +
-      (lRows.length ? `<h2 class="list-h">Lots <span>${lRows.length}</span></h2><ul class="rows">${lRows.join("")}</ul>` : "") +
-      (bRows.length ? `<h2 class="list-h">Buildings <span>${bRows.length}</span></h2><ul class="rows">${bRows.join("")}</ul>` : "");
+    const groups = [
+      { id: "garages", label: "Garages", rows: gRows },
+      { id: "lots", label: "Lots", rows: lRows },
+      { id: "buildings", label: "Buildings", rows: bRows },
+    ].filter((g) => g.rows.length);
+    const jump = groups.length > 1 ? `<div class="list-jump" role="group" aria-label="Jump to a section">${groups.map((g) => `<button type="button" data-jump="list-sec-${g.id}">${g.label} ${g.rows.length}</button>`).join("")}</div>` : "";
+    results.innerHTML = jump + groups.map((g) => `<h2 class="list-h" id="list-sec-${g.id}">${g.label} <span>${g.rows.length}</span></h2><ul class="rows">${g.rows.join("")}</ul>`).join("");
   }
 
   input.addEventListener("input", () => {
@@ -79,6 +81,8 @@ export function createList(el: HTMLElement, handlers: { onSelect: (sel: Selectio
     handlers.onQuery(input.value);
   });
   results.addEventListener("click", (e) => {
+    const jumpBtn = (e.target as Element).closest<HTMLElement>("button[data-jump]");
+    if (jumpBtn) return void document.getElementById(jumpBtn.dataset.jump!)?.scrollIntoView({ block: "start" });
     const btn = (e.target as Element).closest<HTMLElement>("button[data-kind]");
     if (btn) handlers.onSelect({ kind: btn.dataset.kind as "garage" | "lot" | "building", id: btn.dataset.id! });
   });

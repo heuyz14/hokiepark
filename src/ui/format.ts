@@ -12,6 +12,9 @@ export const CATEGORY_LABEL: Record<BuildingCategory, string> = {
   athletic: "Athletic",
 };
 
+/** Fill color per building category: the map layer and the legend both read this, so they cannot drift apart. */
+export const CATEGORY_COLOR: Record<BuildingCategory, string> = { academic: "#8b2346", residential: "#86aedb", support: "#cdb891", athletic: "#f4b48a" };
+
 /** Short forms for the legend, where width is tight. */
 export const CATEGORY_SHORT: Record<BuildingCategory, string> = {
   academic: "Academic",

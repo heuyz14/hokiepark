@@ -5,7 +5,7 @@ import type { Building, Footprint, Garage, Lot, Selection } from "../types.ts";
 import { footprintBounds, footprintToGeoJSON } from "../lib/geojson.ts";
 import { garageStatus, garageTotals } from "../lib/occupancy.ts";
 import { classSummary, garageAccess, lotAccess, type LotClass, type PermitId } from "../lib/permits.ts";
-import { esc } from "./format.ts";
+import { esc, CATEGORY_COLOR } from "./format.ts";
 
 export interface MapController {
   /** Highlight a selection. `fly` recenters/zooms on it; otherwise only nudges it out from under the sheet. */
@@ -33,7 +33,7 @@ const MAX_FIT_ZOOM = 18.5;
 const LOAD_TIMEOUT_MS = 9000;
 
 // Same tokens as styles.css's :root (kept in sync by hand - GL paint expressions can't read CSS custom properties).
-const CAT_COLOR: Record<Building["category"], string> = { academic: "#8b2346", residential: "#86aedb", support: "#cdb891", athletic: "#f4b48a" };
+const CAT_COLOR = CATEGORY_COLOR;
 const LOT_FILL = "#c9c3b7";
 const LOT_ADA_FILL = "#b9cdf2";
 const LOT_LINE = "#9c9384";
@@ -197,8 +197,8 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     const belowLabels = map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id;
 
     map.addSource("buildings", { type: "geojson", data: toFeatureCollection(BUILDINGS, (b) => ({ category: b.category })) });
-    map.addLayer({ id: "buildings-fill", type: "fill", source: "buildings", paint: { "fill-color": ["match", ["get", "category"], "academic", CAT_COLOR.academic, "residential", CAT_COLOR.residential, "support", CAT_COLOR.support, "athletic", CAT_COLOR.athletic, "#999"], "fill-opacity": 0.48 } }, belowLabels);
-    map.addLayer({ id: "buildings-outline", type: "line", source: "buildings", paint: { "line-color": "rgba(76,55,62,0.82)", "line-width": 1.2 } }, belowLabels);
+    map.addLayer({ id: "buildings-fill", type: "fill", source: "buildings", paint: { "fill-color": ["match", ["get", "category"], "academic", CAT_COLOR.academic, "residential", CAT_COLOR.residential, "support", CAT_COLOR.support, "athletic", CAT_COLOR.athletic, "#999"], "fill-opacity": 0.66 } }, belowLabels);
+    map.addLayer({ id: "buildings-outline", type: "line", source: "buildings", paint: { "line-color": "rgba(76,55,62,0.9)", "line-width": 1.4 } }, belowLabels);
 
     map.addSource("lots", { type: "geojson", data: toFeatureCollection(LOTS, (l) => ({ hasADA: l.hasADA })) });
     map.addLayer({ id: "lots-fill", type: "fill", source: "lots", layout: { visibility: "none" }, paint: { "fill-color": ["case", ["get", "hasADA"], LOT_ADA_FILL, LOT_FILL], "fill-opacity": 0 } }, belowLabels);

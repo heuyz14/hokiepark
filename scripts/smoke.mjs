@@ -176,6 +176,7 @@ const mapLoaded = await waitFor(async () => (await ev(`window.__hokiepark_map?.l
 check("map loaded (style + tiles from OpenFreeMap)", mapLoaded);
 await sleep(300);
 await shot("1-map");
+check("legend lists the 4 building categories with their map colors", (await ev(`[...document.querySelectorAll('#legend .legend-building')].map((li)=>li.textContent.trim()).join('|')`)) === "Academic|Residential/dining|Student life|Athletic" && (await ev(`[...document.querySelectorAll('#legend .swatch-building')].every((x)=>getComputedStyle(x).backgroundColor!=='rgba(0, 0, 0, 0)')`)));
 
 const mapFillsView = await ev(`(()=>{const m=document.getElementById('map').getBoundingClientRect();const v=document.getElementById('view-map').getBoundingClientRect();return Math.abs(m.width-v.width)<1&&Math.abs(m.height-v.height)<1&&m.height>window.innerHeight*0.6})()`);
 check("map fills the full available map view", mapFillsView);
@@ -214,6 +215,13 @@ await shot("3-lot-sheet");
 // legitimately overlap a building's centroid and takes click priority over the polygon beneath it.
 await click('#sheet [data-close]');
 await click('.tabbar [data-view="list"]');
+// default (no search): garages, lots AND all 102 university buildings, with jump links
+check("list default shows Garages, Lots and Buildings sections", (await ev(`[...document.querySelectorAll('#list-results .list-h')].map((h)=>h.id).join()`)) === "list-sec-garages,list-sec-lots,list-sec-buildings");
+check("list default includes all 102 buildings, alphabetical", (await ev(`document.querySelectorAll('#list-results .row[data-kind="building"]').length`)) === 102 && (await ev(`(()=>{const n=[...document.querySelectorAll('#list-results .row[data-kind="building"] .row-main > strong')].map((x)=>x.textContent);return n.join('|')===[...n].sort((a,b)=>a.localeCompare(b)).join('|')})()`)));
+check("list default still has 2 garages and 85 lots", (await ev(`document.querySelectorAll('#list-results .row[data-kind="garage"]').length`)) === 2 && (await ev(`document.querySelectorAll('#list-results .row[data-kind="lot"]').length`)) === 85);
+await click('#list-results [data-jump="list-sec-buildings"]'); await sleep(300);
+check("jump link scrolls the Buildings section into view", (await ev(`(()=>{const r=document.getElementById('list-sec-buildings').getBoundingClientRect();const c=document.getElementById('view-list').getBoundingClientRect();return r.top>=c.top-2&&r.top<c.top+200})()`)));
+await shot("5a-list-default-buildings");
 await ev(`(()=>{const i=document.getElementById('list-q');i.value='burruss';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
 check("building search finds Burruss Hall", (await ev(`document.querySelector('#list-results .row[data-kind="building"] strong')?.textContent`)) === "Burruss Hall");
 await click('#list-results .row[data-kind="building"]');
