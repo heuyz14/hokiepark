@@ -23,9 +23,9 @@ test("refreshInterval presents the configured polling cadence compactly", () => 
   assert.equal(refreshInterval(5 * 60_000), "5m");
 });
 
-test("threshold is 12 minutes: comfortably above the 5-minute cron so a healthy feed never warns", () => {
+test("threshold is 12 minutes: above the slowest documented cron cadence (10 min) so a healthy feed never warns", () => {
   assert.equal(STALE_DATA_MS, 12 * 60_000);
-  assert.ok(STALE_DATA_MS >= 2 * 5 * 60_000, "must tolerate two missed 5-minute ticks");
+  assert.ok(STALE_DATA_MS > 10 * 60_000, "must exceed the slowest documented schedule (*/10)");
 });
 
 test("data 0-5 minutes old (a healthy 5-minute cron) shows Live with the sync age, tone live", () => {

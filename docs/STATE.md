@@ -206,5 +206,14 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 - **Verified locally:** 214 tests. The three spec questions through agent -> relay -> fake OpenRouter model -> real tools give the same garage / lot / accessible-space numbers as the rule-based assistant; error mapping (401, 402, 404 data-policy, 429, 5xx retry, 200-with-error, empty, malformed) and key redaction; translation layer mutation-checked (call-id matching, tool shape, no retry on 429, key redaction).
 - **NOT verified:** a real model via OpenRouter. Free-model tool-calling quality is unknown (`OPENROUTER_MODEL` suggestions came from the live catalogue: qwen/qwen3.8-27b:free, nvidia/nemotron-3-super-120b-a12b:free, google/gemma-4-31b-it:free). **User steps:** OpenRouter key, privacy setting for free models, paste new `index.ts`, secrets `OPENROUTER_API_KEY` / `OPENROUTER_MODEL`, then `npm run check:advisor`. Details: `docs/GEMINI_NLP_SPEC.md` (file name kept).
 
+## Repo restructure checklist (added by session e7, 2026-09-20, for the chore/repo-structure branch)
+The other session is moving `scripts/*` into `scripts/{build,data,verify}/`, `docs/*` into subfolders and reference data into `data/reference/`. These things depend on file POSITION and must be updated in the same change (all found by grep, all covered by `npm run check`, `npm run smoke -- 375 667`, `npm run smoke:live`, `npm run check:supabase`):
+- Scripts that compute the repo root or import `../src/...`: `build.ts`, `smoke.mjs`, `check-supabase.ts`, `check-advisor.ts`, `build-advisor.ts`, `build-data.ts`, `fetch-gis.ts`, `fetch-timetable.ts`, `gen-seed.ts`, `gen-curves.ts`, `export-databricks-inputs.ts` (each needs one more `../` after moving down a level).
+- `scripts/smoke.mjs` builds bundles with `join(ROOT, "scripts/build.ts")`: that path must follow `build.ts`. It also imports `../src/data/*`, `../src/lib/permits.ts`, `../src/lib/occupancy.ts`.
+- `package.json` scripts (`data`, `build`, `dev`, `smoke`, `smoke:live`, `seed`, `curves`, `timetable`, `databricks:inputs`, `advisor:build`, `check:advisor`, `check:supabase`) and `.github/workflows/*.yml` hard-code `scripts/...` paths.
+- Tests read files by relative URL (e.g. `tests/contrast.test.ts`, `tests/seed.test.ts`): unaffected while `tests/`, `src/` and `supabase/` stay put.
+- Cross-links in README and docs (`docs/SUPABASE.md`, the runbook, `supabase/optional/schedule_simulator.sql`, comments in scripts/tests) name files by path: grep before merging.
+- Do not merge until `npm run smoke -- 375 667` AND `npm run smoke:live` pass on the branch. Session e7 holds no pending edits in `scripts/`, `docs/` or `data/` and will not push there until the restructure is merged.
+
 ## Commands
 `npm run data` | `npm run build` | `npm run dev` (watch) | `npm test` | `npm run typecheck` | `npm run check` (all three) | `npm run timetable` (re-pull term) | `npm run curves` (regenerate curves SQL)
