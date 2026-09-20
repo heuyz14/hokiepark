@@ -2,7 +2,7 @@
 
 The app works with **no database** (bundled sample counts). Adding Supabase makes garage counts come from a table that
 you can change live, and every view (map markers, list, detail sheet, assistant) updates within one poll interval.
-Counts are still **simulated demo data**; there are no real sensors (spec Sections 9 and 14).
+Counts are still **simulated demo data**; there are no real sensors (spec Sections 5 and 8).
 
 ## How it works
 ```
@@ -98,4 +98,4 @@ against the real clock. Re-pull the term with `npm run timetable`, then `npm run
 ## Limits and next steps
 - Polling every 15 s (`HOKIEPARK_POLL_MS`, min 1000). Supabase Realtime would push instead; not needed for a demo.
 - Lots still have no live counts (no per-lot data exists); only garages are live.
-- Production (spec Section 12): the same `garage_levels` shape would be served from Databricks/Unity Catalog behind an API.
+- Production (spec Section 7): the same `garage_levels` shape would be served from Databricks/Unity Catalog behind an API.

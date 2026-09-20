@@ -2,8 +2,7 @@
 
 | Folder / file | What is in it |
 | --- | --- |
-| [`product/SPEC.md`](product/SPEC.md) | The product spec: problem, users, features, data accuracy, production vision, roadmap |
-| [`product/BUILD_PLAN.md`](product/BUILD_PLAN.md) | The original 6-hour hackathon build plan |
+| [`product/SPEC.md`](product/SPEC.md) | **The** product document: problem, users, features, data accuracy, Databricks, limitations, roadmap |
 | [`architecture/ARCHITECTURE.md`](architecture/ARCHITECTURE.md) | System overview, rules the code follows, module map, security model, extension points |
 | [`operations/DEMO_RUNBOOK.md`](operations/DEMO_RUNBOOK.md) | Pre-demo checklist, the 3-minute flow, questions to ask, failure modes, what not to claim |
 | [`operations/SUPABASE.md`](operations/SUPABASE.md) | Live occupancy: tables, security, setup, the class-schedule simulator, demo clock |

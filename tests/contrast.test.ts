@@ -43,7 +43,7 @@ for (const [name, fg, bg] of PAIRS) {
   });
 }
 
-test("ADA blue is visually distinct from residential-building blue (spec Section 10)", () => {
+test("ADA blue is visually distinct from residential-building blue (spec Section 4.3)", () => {
   // Distinct in luminance, not just hue: badges must never be mistaken for a residential building.
   assert.ok(Math.abs(lum(v("ada")) - lum(v("cat-residential"))) > 0.15);
 });

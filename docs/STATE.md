@@ -1,7 +1,7 @@
 # HokiePark - current state
 
 _Last updated: 2026-09-19 ~19:00 (Class-schedule occupancy Tier A built, awaiting user to run 2 SQL files; Phases 1-5 done; Supabase live feed verified against the REAL project; permit-eligibility filter built; iPhone (Wi-Fi) check passed by user; next: deploy + rehearsal)._
-Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source docs: `product/SPEC.md`, `product/BUILD_PLAN.md`.
+Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source doc: `product/SPEC.md` (the single product document; the old 6-hour build plan was deleted, it remains in git history).
 
 ## What this is
 HokiePark: mobile-first VT campus parking map for VTHacks 14 (Deloitte x Databricks track). Ships as ONE self-contained
@@ -207,7 +207,7 @@ colours). Replaces the invented `Lot.permit` field, which was wrong in ways that
 - **NOT verified:** a real model via OpenRouter. Free-model tool-calling quality is unknown (`OPENROUTER_MODEL` suggestions came from the live catalogue: qwen/qwen3.8-27b:free, nvidia/nemotron-3-super-120b-a12b:free, google/gemma-4-31b-it:free). **User steps:** OpenRouter key, privacy setting for free models, paste new `index.ts`, secrets `OPENROUTER_API_KEY` / `OPENROUTER_MODEL`, then `npm run check:advisor`. Details: `docs/advisor/ADVISOR.md` (file name kept).
 
 ## Repo restructure (branch chore/repo-structure, 2026-09-20)
-- Moved (git mv, history preserved): `HOKIEPARK_SPEC.md` + build plan -> `docs/product/{SPEC,BUILD_PLAN}.md`; docs into `docs/{architecture,operations,advisor,databricks,product}/` (`docs/STATE.md` and `docs/PROMPT_HISTORY.md` deliberately stay put); scripts into `scripts/{build,data,verify}/`; `data/timetable-building-codes.json` and `data/vt_parking_app_dataset.csv` -> `data/reference/`. npm script names are unchanged. `GEMINI_NLP_SPEC.md` became `docs/advisor/ADVISOR.md`.
+- Moved (git mv, history preserved): `HOKIEPARK_SPEC.md` + build plan -> `docs/product/{SPEC,BUILD_PLAN}.md` (the build plan was later deleted and the spec rewritten as one current document); docs into `docs/{architecture,operations,advisor,databricks,product}/` (`docs/STATE.md` and `docs/PROMPT_HISTORY.md` deliberately stay put); scripts into `scripts/{build,data,verify}/`; `data/timetable-building-codes.json` and `data/vt_parking_app_dataset.csv` -> `data/reference/`. npm script names are unchanged. `GEMINI_NLP_SPEC.md` became `docs/advisor/ADVISOR.md`.
 - Added: `.github/workflows/ci.yml` (typecheck + tests + build, plus the Python tests, on every push/PR), `.nvmrc` (24), `.editorconfig`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/README.md`, `scripts/README.md`, `data/README.md`, a rewritten `README.md` and `docs/architecture/ARCHITECTURE.md` (the old one described the removed SVG map), package.json `engines`/`repository`.
 - Verified on the branch: typecheck clean, 226 unit tests, 26 Python tests, build, every generator re-run (data, seed, curves, advisor:build, databricks:inputs) produces byte-identical output except path text in header comments, smoke at 430x900 / 375x667 and `smoke:live` all pass, and a link check over all 17 markdown files finds no broken links. No dead source modules were found.
 - MERGED to main 2026-09-20 (merge commit 8636dc1) with an MIT `LICENSE` (copyright "HokiePark contributors"; teammates should be told). Re-verified on merged main: typecheck, 226 unit tests, 26 Python tests, build, smoke 430x900 and `smoke:live`.
@@ -224,6 +224,9 @@ The other session is moving `scripts/*` into `scripts/{build,data,verify}/`, `do
 ## Bug fixed: garage markers in the wrong place (2026-09-20)
 - Report: garage pills drifted far from the real garages and moved wrongly when panning (screenshot from the user). Cause: `refreshGarages()` (runs on every live-feed update) set `div.className = ...`, wiping MapLibre's `maplibregl-marker` class, which is what makes a marker `position: absolute; top: 0; left: 0`; the app's own `.marker { position: relative }` then took over. Lot markers were never re-classed, so only garages were wrong (and only after the first live update).
 - Fix: `withLibraryClasses()` (ui/format.ts) keeps `maplibregl-*` classes when refreshing. Regression coverage: unit test (`tests/marker-classes.test.ts`) and a browser check in `smoke:live` that garage markers are `position:absolute` with `maplibregl-marker` after a live refresh; verified to FAIL with the bug reintroduced and pass with the fix.
+
+## Spec consolidated into one document (2026-09-20)
+- User asked to remove or simplify the spec documents into one. `docs/product/SPEC.md` was rewritten as the single current product document (11 sections: overview, problem, users, what it does, data and accuracy, how it is built, Databricks, scope/limitations, roadmap, glossary, credits); `docs/product/BUILD_PLAN.md` was deleted (history keeps it). The old spec described the removed SVG map, hand-set counts, "92 buildings" and Artifact-platform AI, all stale. Section numbers changed, so code comments that cited them were updated (`src/data/index.ts`, `lots.ts`, `tests/contrast.test.ts`, `docs/operations/SUPABASE.md`).
 
 ## Commands
 `npm run data` | `npm run build` | `npm run dev` (watch) | `npm test` | `npm run typecheck` | `npm run check` (all three) | `npm run timetable` (re-pull term) | `npm run curves` (regenerate curves SQL)

@@ -6,7 +6,7 @@ import geo from "./lots.geo.json" with { type: "json" };
  * Lot names, positions, status and `areaSqFt` come from VT's own ParkingLots GIS layer (every
  * "Main Campus" lot, minus a handful of driveways/loading docks - see scripts/data/build-data.ts).
  * VT's public layer has NO permit-type, ADA, or occupancy fields. Occupancy is simulated
- * (spec Section 14, same treatment as garages.ts), while permit classes below come from VT's
+ * (spec Section 5, same treatment as garages.ts), while permit classes below come from VT's
  * official parking map when a lot can be matched confidently. Unmatched lots keep an empty class
  * list and `needsConfirm: true`, so the app says to check the sign instead of inventing a rule.
  *
@@ -23,7 +23,7 @@ import geo from "./lots.geo.json" with { type: "json" };
  * matched to it with confidence, by name and location: Stadium, Bookstore, and Coliseum West
  * (VT's "Coliseum Lot", both by Cassell Coliseum). Those three get a sourced `info` block below
  * and the official-map permit class where known. The remaining lots deliberately stay unknown.
- * The five ADA lots follow spec Section 7 (Squires, Cassell/Coliseum, Bookstore, Drillfield
+ * The five ADA lots follow spec Section 4.3 (Squires, Cassell/Coliseum, Bookstore, Drillfield
  * North) plus Stanger St. ADA as the fifth, which the spec leaves unnamed - CONFIRM WITH A
  * TEAMMATE.
  */
