@@ -59,7 +59,7 @@ export function createPermitPicker(el: HTMLElement, onChange: (permits: PermitId
 
     el.innerHTML = `
       <button type="button" class="permit-chip${permits.length || ada ? " is-set" : ""}" aria-expanded="${open}" aria-controls="permit-panel">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 4h6a5 5 0 0 1 0 10H7V4Zm0 10v6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="2" y="5.5" width="20" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M5.5 10h2.2M10.4 10h3.2M16.3 10h2.2M5.5 14h3.4M11.6 14h6.9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
         <span>${esc(summary())}</span>
       </button>
       <div id="permit-panel" class="permit-panel" ${open ? "" : "hidden"}>
