@@ -1,7 +1,7 @@
 import type { Answer, AnswerRef, Answerer } from "../lib/assistant.ts";
 import { followUpQuestions, SUGGESTED_QUESTIONS } from "../lib/assistant.ts";
 import { ADVISOR_SUGGESTIONS, ADVISOR_TOOL_LABELS, type AdvisorAnswer, type AdvisorMapAction, type AdvisorToolEvent } from "../lib/advisor.ts";
-import { isSpeechSupported, pauseSpeech, resumeSpeech, speak, stopSpeech } from "../lib/speech.ts";
+import { isSpeechSupported, pauseSpeech, resumeSpeech, setSpeechRate, speak, stopSpeech } from "../lib/speech.ts";
 import { applyAccessibilityPreferences, loadAccessibilityPreferences, saveAccessibilityPreferences, type AccessibilityPreferences } from "../lib/accessibility.ts";
 import type { Selection } from "../types.ts";
 import { esc } from "./format.ts";
@@ -72,7 +72,7 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       <form class="chat-form" id="chat-form" autocomplete="off">
         <label for="chat-q" class="sr-only">Ask a parking question</label>
         <div class="chat-composer">
-          <textarea id="chat-q" rows="3" placeholder="${advisor ? "Describe your class, destination, time, or parking question..." : "Ask a parking question..."}" enterkeyhint="send" maxlength="300"></textarea>
+          <textarea id="chat-q" rows="1" placeholder="${advisor ? "Describe your class, destination, time, or parking question..." : "Ask a parking question..."}" enterkeyhint="send" maxlength="300"></textarea>
           <div class="composer-actions"><button type="button" class="mic" aria-label="Start voice input" title="Start voice input" hidden><span aria-hidden="true">${microphoneGlyph}</span></button><button type="submit" class="send" aria-label="Send parking question">Send</button></div>
         </div>
       </form>
@@ -140,8 +140,24 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       if (!rate.checked) return;
       preferences = { ...preferences, speechRate: Number(rate.value) as AccessibilityPreferences["speechRate"] };
       saveAccessibilityPreferences(preferences);
+      // Takes effect on the response being read right now, not just the next one.
+      setSpeechRate(preferences.speechRate);
     });
   }
+  /** Return one response's controls to the resting "Read aloud" state. */
+  const resetSpeechControls = (scope: HTMLElement) => {
+    const read = scope.querySelector<HTMLElement>(".speech-read");
+    const active = scope.querySelector<HTMLElement>(".speech-active");
+    const toggle = scope.querySelector<HTMLElement>(".speech-toggle");
+    if (read) read.hidden = false;
+    if (active) active.hidden = true;
+    if (toggle) {
+      toggle.dataset.paused = "false";
+      toggle.textContent = "⏸ Pause";
+      toggle.setAttribute("aria-label", "Pause spoken response");
+    }
+  };
+
   const resizeComposer = () => {
     input.style.height = "auto";
     input.style.height = `${Math.min(input.scrollHeight, 156)}px`;
@@ -241,13 +257,14 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     if (b) onSelect({ kind: b.dataset.kind as "garage" | "lot" | "building", id: b.dataset.id! });
     const response = (e.target as Element).closest<HTMLElement>(".msg.bot");
     if (!response) return;
-    const spokenText = [...response.querySelectorAll<HTMLElement>(".ln")].map((line) => line.textContent ?? "").join(". ");
+    // ".ln" alone skipped every bullet (rendered as ".li"), so only the opening line was read.
+    // Suggestions are read last, as an invitation rather than part of the answer.
+    const body = [...response.querySelectorAll<HTMLElement>(".ln, .li")].map((line) => line.textContent ?? "").filter(Boolean);
+    const followUps = [...response.querySelectorAll<HTMLElement>(".followups .chip")].map((chip) => chip.textContent ?? "").filter(Boolean);
+    const spokenText = [...body, ...(followUps.length ? [`You could ask next: ${followUps.join("; ")}`] : [])].join(". ");
     if ((e.target as Element).closest(".speech-read")) {
-      for (const controls of log.querySelectorAll<HTMLElement>(".speech-controls")) {
-        controls.querySelector<HTMLElement>(".speech-read")!.hidden = false;
-        controls.querySelector<HTMLElement>(".speech-active")!.hidden = true;
-      }
-      speak(spokenText, { rate: preferences.speechRate, voiceURI: preferences.voiceURI });
+      for (const controls of log.querySelectorAll<HTMLElement>(".speech-controls")) resetSpeechControls(controls);
+      speak(spokenText, { rate: preferences.speechRate, voiceURI: preferences.voiceURI, onEnd: () => resetSpeechControls(response) });
       response.querySelector<HTMLElement>(".speech-read")!.hidden = true;
       response.querySelector<HTMLElement>(".speech-active")!.hidden = false;
     }
@@ -268,8 +285,7 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     }
     if ((e.target as Element).closest(".speech-stop")) {
       stopSpeech();
-      response.querySelector<HTMLElement>(".speech-read")!.hidden = false;
-      response.querySelector<HTMLElement>(".speech-active")!.hidden = true;
+      resetSpeechControls(response);
     }
     if ((e.target as Element).closest(".advisor-route")) {
       const answerIndex = [...log.querySelectorAll<HTMLElement>(".msg.bot")].indexOf(response);

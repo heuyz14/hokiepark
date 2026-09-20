@@ -301,7 +301,9 @@ const botIdle = async () => { await sleep(120); await waitFor(async () => !(awai
 const chips = await ev(`document.querySelectorAll('#chat-suggest .chip').length`);
 check("1 focused starter chip before the first question", chips === 1);
 const composer = await ev(`(()=>{const t=document.getElementById('chat-q'),m=document.querySelector('.mic'),s=document.querySelector('.send');return {tag:t?.tagName,rows:t?.rows,height:t?.getBoundingClientRect().height,mic:m?.getBoundingClientRect().width,send:s?.getBoundingClientRect().height,settings:document.querySelector('.accessibility-settings')?.open};})()`);
-check("Ask composer is a large multiline textarea with compact controls", composer.tag === "TEXTAREA" && composer.rows >= 3 && composer.height >= 72 && composer.mic <= 44 && composer.send >= 44, JSON.stringify(composer));
+// One line at rest so the Ask tab opens with room for the conversation, not the input box;
+// the next check covers that it still grows and then scrolls as you type.
+check("Ask composer rests at one line with compact controls", composer.tag === "TEXTAREA" && composer.rows === 1 && composer.height <= 52 && composer.mic <= 44 && composer.send >= 44, JSON.stringify(composer));
 const grownComposer = await ev(`(()=>{const t=document.getElementById('chat-q');t.value='Parking question\\n'.repeat(30);t.dispatchEvent(new Event('input',{bubbles:true}));const r={height:t.getBoundingClientRect().height,overflow:getComputedStyle(t).overflowY};t.value='';t.dispatchEvent(new Event('input',{bubbles:true}));return r;})()`);
 check("Ask composer grows then scrolls at its safe maximum", grownComposer.height >= 140 && grownComposer.height <= 160 && grownComposer.overflow === "auto", JSON.stringify(grownComposer));
 check("Accessibility and voice settings start collapsed", composer.settings === false);
