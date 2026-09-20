@@ -3,7 +3,7 @@
 A mobile-first parking map and advisor for Virginia Tech's Blacksburg campus, built for **VTHacks 14** (Deloitte x Databricks
 "Campus Life Intelligence Hub" track). Independent hackathon prototype, not an official Virginia Tech service.
 
-**Live:** https://heuyz14.github.io/terraceb/ (installable on iPhone: Safari -> Share -> Add to Home Screen)
+**Live:** https://heuyz14.github.io/hokiepark/ (installable on iPhone: Safari -> Share -> Add to Home Screen)
 
 > **Honest about its data.** Occupancy is **simulated**, shaped by VT's public class timetable, because no real sensor feed exists.
 > The forecast model is trained on that simulation, so its accuracy measures recovery of the simulation, not real-world accuracy.
