@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "HokiePark - VTHacks 14 parking map and advisor for Virginia Tech (single-file PWA)",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/heuyz14/terraceb.git"

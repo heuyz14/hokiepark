@@ -81,3 +81,8 @@ It only redeploys when you run it. Details: [`docs/operations/DEMO_RUNBOOK.md`](
 
 ## Documentation
 Start at [`docs/README.md`](docs/README.md). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md). Security: [`SECURITY.md`](SECURITY.md).
+
+## License
+The code is released under the [MIT License](LICENSE). The data it displays is not covered by it: building and parking geometry and the class
+timetable come from Virginia Tech's public services and remain subject to Virginia Tech's terms, and the permit rules paraphrase VT Parking
+Services' published Quick Guide. "Virginia Tech" and "Hokies" are Virginia Tech marks; this project is not affiliated with or endorsed by the university.
