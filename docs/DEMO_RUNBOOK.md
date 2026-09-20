@@ -8,7 +8,7 @@ Say that out loud in the demo. Counts move toward the target by at most ~8% of a
 ## Before you present (10 min)
 1. `npm run check:supabase` -> 4 PASS lines. `npm run build` -> `live feed: ON`.
 2. Supabase SQL editor: `update public.sim_config set clock_override = null;` (real clock; weekends replay Wednesday).
-3. Optional auto-movement: enable `pg_cron`, run `supabase/optional/schedule_simulator.sql` (ticks every minute).
+3. Optional auto-movement: enable `pg_cron`, run `supabase/optional/schedule_simulator.sql` (ticks every 5 minutes).
    No cron? Run `select public.simulate_occupancy_tick();` before each part of the demo.
 4. Open the deployed URL on the phone (chip should read `Live`). Keep `docs/fallback/` screenshots on the laptop.
 
@@ -48,7 +48,7 @@ To hold a scenario, set `clock_override` to a time whose target matches it, or p
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Chip says `Offline` | Network / Supabase outage | App keeps last counts; keep presenting, or show `docs/fallback/` screenshots |
-| Chip says `Data 12m ago` | Nothing is ticking | Run the tick, or enable pg_cron |
+| Chip says `Data 12m ago` (or `4h ago`) | Nothing is ticking (warns after 12 min without a change) | Run the tick, or enable pg_cron with `supabase/optional/schedule_simulator.sql` |
 | Counts look frozen after changing the clock | Tick moves ~8% per call | Run the tick ~15 times |
 | Chip says `Sample data` | Build has no Supabase values | Set the two vars in `.env.local` (local) or GitHub Actions Variables (deployed) and rebuild |
 | Everything is 95% full | Working as designed at peak | Jump to 07:30 or 20:00, or lower `peakFrac` in `src/lib/demand.ts` and run `npm run curves` |

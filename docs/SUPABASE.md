@@ -36,7 +36,7 @@ browser  fetchOccupancy -> parseOccupancyRows (strict validation) -> applyOccupa
 7. **Build:** `npm run build` should report `live feed: ON (<your-project>.supabase.co)`. Open `dist/index.html` (or serve it): chip shows `Live`.
 8. **Make it move (optional):**
    - Manual, best for judging: in the SQL editor run `select public.simulate_occupancy_tick();` and watch the app update.
-   - Automatic: enable the `pg_cron` extension, then run `supabase/optional/schedule_simulator.sql` (nudges every minute).
+   - Automatic: enable the `pg_cron` extension, then run `supabase/optional/schedule_simulator.sql` (nudges every 5 minutes; the header chip warns "Data Nm ago" only after 12 minutes without a change).
    - Exact scenarios: `update public.garage_levels set occupied = capacity - 3 where garage_id = 'perry-street' and level_index = 1;`
 9. **Deploy with the feed:** in the GitHub repo, Settings -> Secrets and variables -> Actions -> **Variables** tab, add
    `HOKIEPARK_SUPABASE_URL` and `HOKIEPARK_SUPABASE_ANON_KEY` (public values), then re-run "Deploy to Pages".

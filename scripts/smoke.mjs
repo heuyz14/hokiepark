@@ -67,6 +67,8 @@ const cleanup = () => {
   try { server.close(); } catch {}
   // Delete this run's Chrome profile. Left behind, each one (with the map's tile cache) is large, and dozens of runs once filled the disk.
   try { rmSync(userDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch {}
+  // Chrome's helper processes can outlive the main one by a moment and recreate files, so sweep once more after they are gone.
+  try { spawn("sh", ["-c", `sleep 3; rm -rf "$1"`, "sweep", userDir], { detached: true, stdio: "ignore" }).unref(); } catch {}
 };
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(130));
 process.on("exit", cleanup);
