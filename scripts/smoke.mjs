@@ -471,7 +471,7 @@ if (!LIVE) {
   const say = async (q) => { await ev(`(()=>{const i=document.getElementById('chat-q');i.value=${JSON.stringify(q)};})()`); await ev(`document.getElementById('chat-form').requestSubmit()`); };
   const lastBot = () => ev(`(()=>{const m=[...document.querySelectorAll('#chat-log .msg.bot')].pop();return m?{text:m.innerText,src:m.querySelector('.src')?.textContent||'',pending:m.classList.contains('pending'),refs:m.querySelectorAll('button.ref').length}:null})()`);
   const settled = async () => { await waitFor(async () => !(await lastBot()).pending, 8000); return lastBot(); };
-  check("advisor: greeting names the advisor and the Google notice; 3 advisor suggestions", /parking advisor/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && /Gemini/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && (await ev(`document.querySelectorAll('.chip').length`)) === 3);
+  check("advisor: greeting names the advisor and the Google notice; 3 advisor suggestions", /parking advisor/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && /Gemini/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && (await ev(`document.querySelectorAll('#chat-suggest .chip').length`)) === 3);
   await say("2pm class at Hancock Hall on Wednesday, where do I park?");
   let m = await settled();
   check("advisor: with no permit it asks for one (tool error handled), badged AI advisor", m.src === "AI advisor" && /Which permit do you hold/.test(m.text), JSON.stringify(m).slice(0, 200));
