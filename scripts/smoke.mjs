@@ -73,6 +73,9 @@ const cleanup = () => {
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(130));
 process.on("exit", cleanup);
 process.on("uncaughtException", (e) => { console.error(e); cleanup(); process.exit(1); });
+// Overall watchdog: a normal run takes 1-3 minutes. If the browser stalls in a way no single call notices, abort (cleanly) instead of hanging.
+const WATCHDOG_MS = Number(process.env.SMOKE_WATCHDOG_MS) || (LIVE ? 420_000 : 300_000);
+setTimeout(() => { console.error(`FAIL  smoke exceeded ${WATCHDOG_MS / 1000}s and was aborted (see the last check above for where it stalled)`); process.exit(1); }, WATCHDOG_MS).unref();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let PORT, targets;
@@ -139,7 +142,15 @@ async function onPaused({ requestId, request }) {
   const rows = mock.mode === "bad" ? [{ ...mock.rows[0], occupied: 99999 }] : mock.rows.map((r) => ({ ...r, updated_at: new Date().toISOString() }));
   return fulfill(200, [...CORS, { name: "content-type", value: "application/json" }], JSON.stringify(rows));
 }
-const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+// Every DevTools call has a deadline, so a stalled browser fails fast and names the call instead of hanging the run
+// (a hung run keeps its Chrome alive, and leaked Chrome profiles once filled the disk).
+const CALL_TIMEOUT_MS = 45_000;
+const send = (method, params = {}) => new Promise((resolve, reject) => {
+  const i = ++id;
+  const timer = setTimeout(() => { pending.delete(i); reject(new Error(`DevTools call timed out after ${CALL_TIMEOUT_MS / 1000}s: ${method}`)); }, CALL_TIMEOUT_MS);
+  pending.set(i, (d) => { clearTimeout(timer); resolve(d); });
+  ws.send(JSON.stringify({ id: i, method, params }));
+});
 const ev = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails)); return r.result.result.value; };
 const shot = async (name) => { const r = await send("Page.captureScreenshot", { format: "png" }); writeFileSync(`${DIR}${OUT}-${name}.png`, Buffer.from(r.result.data, "base64")); };
 // scrollIntoView first: with 85 lots the list view scrolls, and a click's page coordinates must
