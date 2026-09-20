@@ -60,7 +60,8 @@ const activityList = (events: AdvisorToolEvent[]) => events.length ? `<details c
 const mapActions = (actions: AdvisorMapAction[] | undefined) => actions?.some((action) => action.type === "show_route") ? `<div class="refs"><button type="button" class="advisor-route">Show walking route on map</button></div>` : "";
 
 export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = false, ensureCurrentLocation, subscribeActivity, onMapAction }: AssistantOptions): void {
-  const suggestions = advisor ? ADVISOR_SUGGESTIONS : SUGGESTED_QUESTIONS;
+  // Keep the cold-start surface focused; follow-up suggestions still provide more paths after an answer.
+  const suggestions = (advisor ? ADVISOR_SUGGESTIONS : SUGGESTED_QUESTIONS).slice(0, 2);
   el.innerHTML = `
     <div class="chat">
       <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>

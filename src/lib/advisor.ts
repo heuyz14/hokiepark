@@ -81,7 +81,6 @@ const mapActionsFrom = (results: ToolResult[]): AdvisorMapAction[] => {
 export const ADVISOR_SUGGESTIONS = [
   "I have a 2pm class in Torgersen on Wednesday. Where should I park?",
   "When should I arrive at Hancock Hall for a 10am class to still find a spot?",
-  "Can I park at the Squires lot with my permit?",
 ];
 
 const numbersIn = (s: string): number[] => (s.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);

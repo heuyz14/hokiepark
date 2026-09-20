@@ -299,7 +299,7 @@ const botText = () => ev(`[...document.querySelectorAll('#chat-log .msg.bot')].p
 // wait for the pending "Checking the data..." bubble to be replaced (the advisor path adds a network hop before the fallback answers)
 const botIdle = async () => { await sleep(120); await waitFor(async () => !(await ev(`!!document.querySelector('#chat-log .msg.pending')`)), 8000); };
 const chips = await ev(`document.querySelectorAll('#chat-suggest .chip').length`);
-check("3 starter chips before the first question", chips === 3);
+check("2 focused starter chips before the first question", chips === 2);
 const composer = await ev(`(()=>{const t=document.getElementById('chat-q'),m=document.querySelector('.mic'),s=document.querySelector('.send');return {tag:t?.tagName,rows:t?.rows,height:t?.getBoundingClientRect().height,mic:m?.getBoundingClientRect().width,send:s?.getBoundingClientRect().height,settings:document.querySelector('.accessibility-settings')?.open};})()`);
 check("Ask composer is a large multiline textarea with compact controls", composer.tag === "TEXTAREA" && composer.rows >= 3 && composer.height >= 72 && composer.mic <= 44 && composer.send >= 44, JSON.stringify(composer));
 const grownComposer = await ev(`(()=>{const t=document.getElementById('chat-q');t.value='Parking question\\n'.repeat(30);t.dispatchEvent(new Event('input',{bubbles:true}));const r={height:t.getBoundingClientRect().height,overflow:getComputedStyle(t).overflowY};t.value='';t.dispatchEvent(new Event('input',{bubbles:true}));return r;})()`);
