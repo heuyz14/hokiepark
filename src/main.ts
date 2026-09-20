@@ -7,9 +7,10 @@ import { renderLegend } from "./ui/legend.ts";
 import { createAssistant } from "./ui/assistant.ts";
 import { createPermitPicker, loadSaved, save as savePermits } from "./ui/permits.ts";
 import { createPlanView } from "./ui/plan.ts";
-import { withPlanAhead } from "./lib/planask.ts";
+import { nowOf, withPlanAhead } from "./lib/planask.ts";
 import { makeLocalAnswerer } from "./lib/assistant.ts";
-import { LIVE_CONFIG } from "./config.ts";
+import { ADVISOR_CONFIG, LIVE_CONFIG } from "./config.ts";
+import { createAdvisor, httpTransport, withAdvisor } from "./lib/advisor.ts";
 import { startLive } from "./live.ts";
 import { createSyncChip } from "./ui/sync.ts";
 
@@ -44,7 +45,12 @@ function boot() {
   // Swap this for an LLM-backed Answerer here if a backend proxy is ever added (it should receive the same context).
   const askContext = () => ({ permits: store.get().permits, ada: store.get().ada });
   // Plan-ahead questions ("2pm class at Hancock") are answered from the Databricks forecast; everything else goes to the normal assistant.
-  createAssistant($("view-ask"), { answer: withPlanAhead(makeLocalAnswerer(askContext), askContext), onSelect: (sel) => select(sel, "assistant", "map") });
+  const rules = withPlanAhead(makeLocalAnswerer(askContext), askContext);
+  // Optional Gemini advisor (docs/GEMINI_NLP_SPEC.md): it only picks tools and explains their results; any failure falls back to `rules`.
+  const answer = ADVISOR_CONFIG
+    ? withAdvisor(rules, createAdvisor({ transport: httpTransport(ADVISOR_CONFIG), getContext: () => ({ now: nowOf(), permits: store.get().permits, ada: store.get().ada }) }))
+    : rules;
+  createAssistant($("view-ask"), { answer, onSelect: (sel) => select(sel, "assistant", "map"), advisor: ADVISOR_CONFIG !== null });
   const plan = createPlanView($("view-plan"), {
     getPermits: () => ({ permits: store.get().permits, ada: store.get().ada }),
     onPermits: (permits, ada) => {

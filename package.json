@@ -15,6 +15,7 @@
     "seed": "node scripts/gen-seed.ts",
     "curves": "node scripts/gen-curves.ts",
     "databricks:inputs": "node scripts/export-databricks-inputs.ts",
+    "advisor:build": "node scripts/build-advisor.ts",
     "test:py": "python3 databricks/tests/test_parity.py && python3 databricks/tests/test_sim.py && python3 databricks/tests/test_ml.py",
     "timetable": "node scripts/fetch-timetable.ts",
     "smoke:live": "node scripts/smoke.mjs 430 900 --live",

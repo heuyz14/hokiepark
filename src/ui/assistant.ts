@@ -1,31 +1,39 @@
 import type { Answer, AnswerRef, Answerer } from "../lib/assistant.ts";
 import { SUGGESTED_QUESTIONS } from "../lib/assistant.ts";
+import { ADVISOR_SUGGESTIONS, type AdvisorAnswer } from "../lib/advisor.ts";
 import type { Selection } from "../types.ts";
 import { esc } from "./format.ts";
 
 export interface AssistantOptions {
   answer: Answerer;
   onSelect: (sel: Selection) => void;
+  /** True when the Gemini-backed advisor is wired in: changes the greeting, suggestions and answer badges. */
+  advisor?: boolean;
 }
 
 const bubbleLines = (lines: string[]) =>
   lines.map((l) => (l.startsWith("- ") ? `<span class="li">${esc(l.slice(2))}</span>` : `<span class="ln">${esc(l)}</span>`)).join("");
+
+/** Which engine answered, shown only when the advisor is on (so the fallback is never silent). */
+const sourceTag = (a: AdvisorAnswer, advisor: boolean) =>
+  !advisor ? "" : a.source === "ai" ? `<span class="src src-ai" title="Understood by Gemini; all facts from HokiePark's tools">AI advisor</span>` : `<span class="src src-basic" title="The advisor was unavailable${a.reason ? ` (${esc(a.reason)})` : ""}; this is the built-in rule-based answer">Basic answer</span>`;
 
 const refButtons = (refs: AnswerRef[]) =>
   refs.length
     ? `<div class="refs">${refs.map((r) => `<button type="button" class="ref" data-kind="${r.kind}" data-id="${esc(r.id)}">Show ${esc(r.label)} on map</button>`).join("")}</div>`
     : "";
 
-export function createAssistant(el: HTMLElement, { answer, onSelect }: AssistantOptions): void {
+export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = false }: AssistantOptions): void {
+  const suggestions = advisor ? ADVISOR_SUGGESTIONS : SUGGESTED_QUESTIONS;
   el.innerHTML = `
     <div class="chat">
       <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
       <div class="chat-suggest" id="chat-suggest">
-        ${SUGGESTED_QUESTIONS.map((q) => `<button type="button" class="chip">${esc(q)}</button>`).join("")}
+        ${suggestions.map((q) => `<button type="button" class="chip">${esc(q)}</button>`).join("")}
       </div>
       <form class="chat-form" id="chat-form" autocomplete="off">
         <label for="chat-q" class="sr-only">Ask a parking question</label>
-        <input id="chat-q" type="text" placeholder="Ask about parking&hellip;" enterkeyhint="send" maxlength="200">
+        <input id="chat-q" type="text" placeholder="${advisor ? "Describe your class and permit&hellip;" : "Ask about parking&hellip;"}" enterkeyhint="send" maxlength="200">
         <button type="submit" class="send">Send</button>
       </form>
     </div>`;
@@ -43,7 +51,12 @@ export function createAssistant(el: HTMLElement, { answer, onSelect }: Assistant
     return div;
   };
 
-  add("bot", `<span class="ln">Hi! I answer from the same garage, lot and accessible-parking data shown on the map.</span><span class="ln fine">Demo data &mdash; garage counts are simulated.</span>`);
+  add(
+    "bot",
+    advisor
+      ? `<span class="ln">Hi! I'm your parking advisor. Tell me about your class, building and time in your own words and I'll suggest where to park and when to arrive.</span><span class="ln fine">I understand you with Google's Gemini, so please don't type personal details. Every place, distance, count and permit rule comes from HokiePark's own data; forecasts are simulated.</span>`
+      : `<span class="ln">Hi! I answer from the same garage, lot and accessible-parking data shown on the map.</span><span class="ln fine">Demo data &mdash; garage counts are simulated.</span>`,
+  );
 
   let busy = false;
   async function ask(question: string) {
@@ -52,11 +65,11 @@ export function createAssistant(el: HTMLElement, { answer, onSelect }: Assistant
     busy = true;
     send.disabled = true;
     add("me", esc(q));
-    const pending = add("bot pending", `<span class="ln">Checking the data&hellip;</span>`);
+    const pending = add("bot pending", `<span class="ln">${advisor ? "Thinking it through&hellip;" : "Checking the data&hellip;"}</span>`);
     try {
       const a: Answer = await answer(q);
       pending.className = "msg bot";
-      pending.innerHTML = bubbleLines(a.lines) + refButtons(a.refs);
+      pending.innerHTML = sourceTag(a as AdvisorAnswer, advisor) + bubbleLines(a.lines) + refButtons(a.refs);
     } catch (err) {
       console.error(err);
       pending.className = "msg bot error";
