@@ -405,3 +405,7 @@ h1, h2, h3, p { margin: 0; }
 .list-jump { display: flex; gap: 8px; padding: 6px 14px 0; }
 .list-jump button { min-height: 36px; padding: 4px 12px; border-radius: 999px; border: 1.5px solid var(--maroon); background: #fff; color: var(--maroon); font-weight: 600; font-size: 0.8125rem; }
 .list-jump button:active { background: #f6ecef; }
+
+/* Plan: the prompt shown when no permit is chosen, and the permit caveat on an unconfirmed card. */
+.plan-prompt { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; border-left: 4px solid var(--warn); background: var(--warn-bg); color: var(--ink); font-size: 0.8125rem; line-height: 1.45; }
+.plan-caution { color: var(--warn); font-weight: 600; }

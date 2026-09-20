@@ -55,10 +55,17 @@ test("score rewards short walks and penalises fullness, and Risky is demoted", (
   assert.ok(planScore(1, 96, "Risky") > planScore(10, 60, "Likely open"));
 });
 
-test("no permit chosen: asks for one and recommends nothing", () => {
+test("no permit chosen: still shows where the parking is, but confirms nothing", () => {
   const r = plan("hancock", []);
-  assert.equal(r.needsPermit, true);
-  assert.deepEqual([r.recommended, r.checkSign], [[], []]);
+  assert.equal(r.needsPermit, true, "the UI still needs to prompt for a permit");
+  // Useful: a visitor, or someone about to pay hourly, gets ranked options instead of a dead end.
+  assert.ok(r.checkSign.length > 0, "a driver without a permit must still see nearby parking");
+  // Safe: nothing may be presented as confirmed when there is no permit to confirm it against.
+  assert.deepEqual(r.recommended, [], "nothing is confirmed without a permit");
+  for (const o of r.checkSign) {
+    assert.notEqual(o.verdict, "yes", `${o.name} claimed a confident yes with no permit held`);
+    assert.ok(o.predictedOpen >= 0 && o.predictedOpen <= o.capacity, `${o.name} must still carry a usable forecast`);
+  }
 });
 
 test("SAFETY: every recommendation is a confident 'yes' from the permit rules, and none is ranked on a place the permit rules out", () => {

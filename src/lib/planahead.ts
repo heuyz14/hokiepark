@@ -131,7 +131,11 @@ export function planAhead(input: PlanInput, data: { garages: Garage[]; lots: Lot
   const dow = effectiveDow(input.dow);
   const arriveMinute = Math.max(0, input.minute - ARRIVE_BEFORE_MIN);
   const empty: PlanResult = { arriveMinute, dow, replayed: input.dow < 1 || input.dow > 5, needsPermit: false, recommended: [], checkSign: [], notValid: 0 };
-  if (!input.permits.length && !input.ada) return { ...empty, needsPermit: true };
+  // No permit chosen is a real situation - a visitor, or someone about to pay hourly - not a
+  // reason to refuse. Rank everything by forecast and walk anyway; `needsPermit` only tells the
+  // UI to say these haven't been checked against a permit, and the rules put them all in
+  // `checkSign` rather than claiming any of them is confirmed.
+  const needsPermit = !input.permits.length && !input.ada;
 
   const held = { ada: input.ada };
   const yes: PlanOption[] = [];
@@ -208,9 +212,15 @@ export function planAhead(input: PlanInput, data: { garages: Garage[]; lots: Lot
   const byScore = (a: PlanOption, b: PlanOption) => a.score - b.score || a.meters - b.meters || a.id.localeCompare(b.id);
   return {
     ...empty,
+    needsPermit,
     recommended: yes.sort(byScore).slice(0, input.limit ?? MAX_RECOMMENDED),
-    // unconfirmed places are ordered by distance only: their forecast is not something to steer a driver by
-    checkSign: check.filter((o) => o.meters <= CHECK_RADIUS_M).sort((a, b) => a.meters - b.meters || a.id.localeCompare(b.id)).slice(0, MAX_CHECK),
+    // Unconfirmed places are ordered by distance only: their forecast is not something to steer a
+    // driver by. With no permit chosen everything lands here, so rank those by score instead -
+    // there is no permit judgement to withhold, only availability to be useful about.
+    checkSign: check
+      .filter((o) => o.meters <= CHECK_RADIUS_M)
+      .sort(needsPermit ? byScore : (a, b) => a.meters - b.meters || a.id.localeCompare(b.id))
+      .slice(0, MAX_CHECK),
     notValid,
   };
 }

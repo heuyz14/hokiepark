@@ -37,22 +37,25 @@ const card = (o: PlanOption, n: number | null): string => {
   }</div>`;
   const where = `<p class="plan-sub">${esc(formatMeters(o.meters))} &middot; about ${o.walkMin} min ${o.routeType === "walk_graph" ? "walk via campus paths" : "straight-line walk estimate"}</p>`;
   const body =
-    o.verdict === "yes"
-      ? `<p class="plan-main">Forecast: about <strong>${o.predictedOpen}</strong> of ${o.capacity} open (${o.predictedPct}% full) at ${esc(formatMinute(o.arriveMinute))}</p>` +
-        (o.bestLevel ? `<p class="plan-sub">Most room: ${esc(o.bestLevel.label)} (about ${o.bestLevel.predictedOpen} of ${o.bestLevel.capacity})</p>` : "") +
-        (o.adaOpenEstimate !== undefined ? `<p class="plan-sub">About ${o.adaOpenEstimate} accessible spaces open</p>` : "") +
-        `<p class="plan-sub">Right now on the map: ${o.nowOpen} open</p>`
-      : `<p class="plan-sub">${esc(o.note ?? "We can't confirm your permit here - check the posted sign.")}</p>`;
+    `<p class="plan-main">Forecast: about <strong>${o.predictedOpen}</strong> of ${o.capacity} open (${o.predictedPct}% full) at ${esc(formatMinute(o.arriveMinute))}</p>` +
+    (o.bestLevel ? `<p class="plan-sub">Most room: ${esc(o.bestLevel.label)} (about ${o.bestLevel.predictedOpen} of ${o.bestLevel.capacity})</p>` : "") +
+    (o.adaOpenEstimate !== undefined ? `<p class="plan-sub">About ${o.adaOpenEstimate} accessible spaces open</p>` : "") +
+    `<p class="plan-sub">Right now on the map: ${o.nowOpen} open</p>` +
+    (o.verdict === "yes" ? "" : `<p class="plan-sub plan-caution">${esc(o.note ?? "We can't confirm your permit here - check the posted sign.")}</p>`);
   return `<li class="plan-card">${head}${where}${body}<button type="button" class="ref" data-kind="${o.kind}" data-id="${esc(o.id)}">Show on map</button><button type="button" class="ref" data-route-kind="${o.kind}" data-route-id="${esc(o.id)}">Show walking route</button></li>`;
 };
 
 export function renderPlanResult(r: PlanResult, input: { building: string; minute: number }): string {
   const src = forecastSource();
-  if (r.needsPermit) return `<p class="plan-empty" role="status">Choose your permit above so I only suggest places you can legally use.</p>`;
+  const permitPrompt = r.needsPermit
+    ? `<p class="plan-prompt" role="status">Ranked by how full each place is forecast to be. <strong>Set your permit above</strong> to see which of these you can legally use &mdash; without one, check the posted sign, or look for a lot that sells hourly parking.</p>`
+    : "";
   const when = `Class at ${formatMinute(input.minute)} ${DAY_NAME[r.dow] ?? ""} &middot; arriving about ${formatMinute(r.arriveMinute)}`;
   const recs = r.recommended.length
     ? `<ol class="plan-list">${r.recommended.map((o, i) => card(o, i + 1)).join("")}</ol>`
-    : `<p class="plan-empty">No place I can confirm for your permit within a 25-minute walk of ${esc(input.building)} at that time.</p>`;
+    : r.needsPermit
+      ? ""
+      : `<p class="plan-empty">No place I can confirm for your permit within a 25-minute walk of ${esc(input.building)} at that time.</p>`;
   const arrival = r.recommended[0]
     ? (() => {
         const plan = buildArrivalPlan({ destinationName: input.building, targetMinute: input.minute, recommendedLot: r.recommended[0]! });
@@ -66,9 +69,9 @@ export function renderPlanResult(r: PlanResult, input: { building: string; minut
       })()
     : "";
   const check = r.checkSign.length
-    ? `<h3 class="plan-h">Nearby, but I can't confirm your permit</h3><ul class="plan-list">${r.checkSign.map((o) => card(o, null)).join("")}</ul>`
+    ? `<h3 class="plan-h">${r.needsPermit ? "Closest parking, permit not checked" : "Nearby, but I can't confirm your permit"}</h3><ul class="plan-list">${r.checkSign.map((o) => card(o, null)).join("")}</ul>`
     : "";
-  return `<h2 class="plan-title">${esc(input.building)}</h2><p class="plan-when">${when}</p>${arrival}${recs}${check}
+  return `<h2 class="plan-title">${esc(input.building)}</h2><p class="plan-when">${when}</p>${permitPrompt}${arrival}${recs}${check}
     <p class="fine">Forecast from a Databricks-trained model (${esc(src.model)}, ${esc(src.generated)}) on <strong>simulated</strong> demand shaped by VT's class timetable. It is not measured occupancy and has not been validated against real sensors.</p>
     <p class="fine">${esc(SIGNAGE_NOTE)}</p>`;
 }

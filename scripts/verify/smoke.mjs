@@ -378,7 +378,11 @@ check("choosing an option fills the field and closes the list",
   await ev(`document.getElementById('plan-bldg').value`));
 await ev(`(()=>{const i=document.getElementById('plan-bldg');i.value='TORG';i.dispatchEvent(new Event('change'));document.getElementById('plan-day').value='3';document.getElementById('plan-time').value='14:00';})()`);
 await ev(`document.getElementById('plan-form').requestSubmit()`); await sleep(250);
-check("Plan without a permit asks for one and recommends nothing", /Choose your permit/.test(await ev(`document.getElementById('plan-out').innerText`)) && (await ev(`document.querySelectorAll('#plan-out .plan-card').length`)) === 0);
+// Without a permit the tab still has to be useful - a visitor or an hourly payer gets ranked
+// parking - while confirming nothing: every card must read "Check sign", never a green verdict.
+const noPermit = await ev(`(()=>{const o=document.getElementById('plan-out');return {text:o.innerText, cards:o.querySelectorAll('.plan-card').length, prompt:!!o.querySelector('.plan-prompt'), confirmed:o.querySelectorAll('.plan-list .pill-open, .plan-list .pill-limited, .plan-list .pill-full').length};})()`);
+check("Plan without a permit still ranks nearby parking", noPermit.cards > 0 && /Forecast: about/.test(noPermit.text), JSON.stringify({ cards: noPermit.cards }));
+check("Plan without a permit prompts for one and confirms nothing", noPermit.prompt && noPermit.confirmed === 0, JSON.stringify({ prompt: noPermit.prompt, confirmed: noPermit.confirmed }));
 await click('#plan-permit-chips [data-permit="cg"]'); await sleep(300);
 const planText = await ev(`document.getElementById('plan-out').innerText`);
 check("choosing a permit re-runs the plan and lists 1-3 recommendations", (await ev(`document.querySelectorAll('#plan-out .plan-list:first-of-type .plan-card, #plan-out ol .plan-card').length`)) >= 1, JSON.stringify(planText.slice(0, 120)));
