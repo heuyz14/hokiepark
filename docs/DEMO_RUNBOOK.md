@@ -8,7 +8,7 @@ Say that out loud in the demo. Counts move toward the target by at most ~8% of a
 ## Before you present (10 min)
 1. `npm run check:supabase` -> 4 PASS lines. `npm run build` -> `live feed: ON`.
 2. Supabase SQL editor: `update public.sim_config set clock_override = null;` (real clock; weekends replay Wednesday).
-3. Optional auto-movement: enable `pg_cron`, run `supabase/optional/schedule_simulator.sql` (ticks every 5 minutes).
+3. Optional auto-movement: enable `pg_cron`, run `supabase/optional/schedule_simulator.sql` (ticks every minute).
    No cron? Run `select public.simulate_occupancy_tick();` before each part of the demo.
 4. Open the deployed URL on the phone (chip should read `Live`). Keep `docs/fallback/` screenshots on the laptop.
 

@@ -54,16 +54,19 @@ if (meta.provider === "gemini") console.log("NOTE  provider is GEMINI, not OpenR
 
 // 2) real scenarios through the real agent loop and the real tools
 const ctx = { now: { dow: 6, minute: 15 * 60 }, permits: [] as never[], ada: false };
-const scenarios: { q: string; compare?: boolean }[] = [
+const scenarios: { q: string; compare?: boolean; then?: string }[] = [
   { q: "Where's the closest open parking to Squires Student Center?", compare: true },
   { q: "Is there accessible parking near Cassell Coliseum?", compare: true },
   { q: "Which garage has the most open spots right now?", compare: true },
   { q: "I have a 2pm class in Hancock Hall on Wednesday, commuter permit. Where should I park?" },
+  // continuity: no permit is saved, so the advisor should ask for it; the bare reply "commuter" must complete the SAME question
+  { q: "When should I arrive at Hancock Hall for a 10am class to still find a spot?", then: "commuter" },
 ];
 const PAUSE_MS = Number(process.env.ADVISOR_CHECK_PAUSE_MS ?? 6_000);
 // ADVISOR_CHECK_ONLY=2,3 runs only those questions (1-based) to save the free daily request budget
 const only = (process.env.ADVISOR_CHECK_ONLY ?? "").split(",").map(Number).filter((n) => n >= 1 && n <= scenarios.length);
 const chosen = only.length ? scenarios.filter((_, i) => only.includes(i + 1)) : scenarios;
+const total = chosen.reduce((n, s) => n + 1 + (s.then ? 1 : 0), 0);
 let ai = 0;
 for (const [n, s] of chosen.entries()) {
   if (n > 0) await new Promise((r) => setTimeout(r, PAUSE_MS));
@@ -79,10 +82,22 @@ for (const [n, s] of chosen.entries()) {
   } else {
     console.log(`WARN  basic (${secs}s): the app would fall back. reason=${r.reason}${r.detail ? ` (${r.detail})` : ""}`);
   }
+  if (s.then) {
+    await new Promise((r) => setTimeout(r, PAUSE_MS));
+    const t1 = Date.now();
+    const r2 = await advisor.ask(s.then);
+    console.log(`Q (follow-up on the same conversation): ${s.then}`);
+    if (r2.ok) {
+      ai++;
+      console.log(`PASS  ai (${((Date.now() - t1) / 1000).toFixed(1)}s), tools: ${r2.tools.map((t) => `${t.name}${t.ok ? "" : "(error)"}`).join(" -> ") || "none"}`);
+      for (const l of r2.lines.slice(0, -1)) console.log(`   ${l}`);
+      if (!r2.tools.length || /which building|what day|what time/i.test(r2.lines.join(" "))) console.log("WARN  the follow-up looks like it lost the earlier question (it asked again or used no tools)");
+    } else console.log(`WARN  basic (${((Date.now() - t1) / 1000).toFixed(1)}s): reason=${r2.reason}${r2.detail ? ` (${r2.detail})` : ""}`);
+  }
   if (s.compare) {
     console.log("   rule-based assistant says:");
     for (const l of answerQuestion(s.q).lines.slice(0, 4)) console.log(`     ${l}`);
   }
 }
-console.log(`\n${ai}/${chosen.length} scenarios answered by the advisor`);
+console.log(`\n${ai}/${total} questions answered by the advisor`);
 if (ai === 0) die("no scenario was answered by the advisor. See reasons above (guard = the model wrote a number the tools did not supply).");

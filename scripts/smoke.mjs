@@ -475,7 +475,7 @@ if (!LIVE) {
   // 3) outage: last known counts stay, chip warns, recovery is automatic
   expectFailures = true;
   mock.mode = "down";
-  check("outage: chip shows Offline", await waitFor(async () => (await chipText()) === "Offline"), await chipText());
+  check("outage: chip shows Offline", await waitFor(async () => /^Offline/.test(await chipText())), await chipText());
   check("outage: last known counts stay on screen", /330 of 1350/.test(await markerLabel("perry-street")), await markerLabel("perry-street"));
   await shot("10-offline-chip");
   mock.mode = "ok";
@@ -483,7 +483,7 @@ if (!LIVE) {
 
   // 4) malformed payload is rejected wholesale
   mock.mode = "bad";
-  check("bad payload: chip shows Offline (rejected)", await waitFor(async () => (await chipText()) === "Offline"), await chipText());
+  check("bad payload: chip shows Offline (rejected)", await waitFor(async () => /^Offline/.test(await chipText())), await chipText());
   check("bad payload: counts unchanged (all-or-nothing)", /330 of 1350/.test(await markerLabel("perry-street")), await markerLabel("perry-street"));
   mock.mode = "ok";
   check("bad payload: recovers to Live", await waitFor(async () => /^Live/.test(await chipText()), 20000), await chipText());
@@ -513,7 +513,7 @@ if (!LIVE) {
   mock.advisorMode = "down";
   await say("2pm class at Hancock Hall on Wednesday, where do I park?");
   m = await settled();
-  check("advisor down: falls back to the rule-based answer, visibly badged Basic answer", m.src === "Basic answer" && /Parking for a 2:00 PM Wednesday class at Hancock Hall/.test(m.text), JSON.stringify(m).slice(0, 220));
+  check("advisor down: falls back to the rule-based answer, visibly badged Basic answer", m.src.startsWith("Basic answer") && /Parking for a 2:00 PM Wednesday class at Hancock Hall/.test(m.text), JSON.stringify(m).slice(0, 220));
   mock.advisorMode = "empty";
   expectFailures = false;
   await shot("12-advisor");

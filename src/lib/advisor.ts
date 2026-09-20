@@ -1,8 +1,8 @@
-import type { Answer, AnswerRef, Answerer } from "./assistant.ts";
+import { detectPermits, type Answer, type AnswerRef, type Answerer } from "./assistant.ts";
 import { LIMITS, contextLine, type AdvisorContext } from "./advisor-spec.ts";
 import { idsIn, placeRef, runTool, type ToolResult } from "./advisor-tools.ts";
 import { forecastSource } from "./planahead.ts";
-import { SIGNAGE_NOTE } from "./permits.ts";
+import { SIGNAGE_NOTE, type PermitId } from "./permits.ts";
 
 /**
  * The parking advisor: a tool-using agent that runs its loop in the BROWSER against deterministic tools (advisor-tools.ts), while a
@@ -80,11 +80,17 @@ export function createAdvisor(opts: AdvisorOptions) {
   const timeoutMs = opts.timeoutMs ?? 25_000; // hosted free models can be slow; each answer is 2-4 sequential model calls
   const maxRounds = Math.min(opts.maxRounds ?? LIMITS.maxRounds, 6);
   let history: Content[] = [];
+  /** Permits the driver named in this chat ("commuter"), remembered for later questions when none is saved. */
+  let sessionPermits: PermitId[] = [];
 
   async function ask(question: string): Promise<AdvisorResult> {
     const q = question.trim();
     if (!q || q.length > LIMITS.questionChars) return { ok: false, reason: "input" };
-    const ctx = opts.getContext();
+    const base = opts.getContext();
+    // A permit named in the message wins (like the rule-based assistant), then the saved one, then one named earlier in this chat.
+    const named = detectPermits(q.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim());
+    if (named.length) sessionPermits = named;
+    const ctx: AdvisorContext = { ...base, permits: named.length ? named : base.permits.length ? base.permits : sessionPermits };
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     const contents: Content[] = [...history, { role: "user", parts: [{ text: q }] }];
@@ -151,15 +157,27 @@ export function createAdvisor(opts: AdvisorOptions) {
     }
   }
 
-  return { ask, reset: () => void (history = []) };
+  /** Record an exchange answered by ANOTHER engine (the rule-based fallback) so a follow-up like "commuter" still has its context. */
+  function remember(question: string, answer: string) {
+    const q = question.trim().slice(0, LIMITS.questionChars);
+    const a = answer.trim().slice(0, 600);
+    if (!q || !a) return;
+    const named = detectPermits(q.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim());
+    if (named.length) sessionPermits = named;
+    history = [...history, { role: "user" as const, parts: [{ text: q }] }, { role: "model" as const, parts: [{ text: a }] }].slice(-6);
+  }
+
+  return { ask, remember, reset: () => void ((history = []), (sessionPermits = [])) };
 }
 
 /** Advisor first; on ANY failure the rule-based answerer responds (tagged "basic"), so the chat never breaks. */
-export function withAdvisor(fallback: Answerer, advisor: { ask(q: string): Promise<AdvisorResult> }): Answerer {
+export function withAdvisor(fallback: Answerer, advisor: { ask(q: string): Promise<AdvisorResult>; remember?(question: string, answer: string): void }): Answerer {
   return async (question) => {
     const r = await advisor.ask(question);
     if (r.ok) return { lines: r.lines, refs: r.refs, source: "ai" } satisfies AdvisorAnswer;
     const a = await fallback(question);
+    // the fallback's answer is part of the conversation: without this the advisor forgets what "commuter" was answering
+    advisor.remember?.(question, a.lines.filter((l) => l !== SIGNAGE_NOTE).join("\n"));
     return { ...a, source: "basic", reason: r.reason } satisfies AdvisorAnswer;
   };
 }

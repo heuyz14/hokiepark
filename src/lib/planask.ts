@@ -124,5 +124,23 @@ export function planAnswer(question: string, ctx: AnswerContext, now: Now): Answ
 }
 
 /** Wraps an answerer: plan-ahead questions are handled here, everything else goes to `fallback` unchanged. */
-export const withPlanAhead = (fallback: Answerer, getContext: () => AnswerContext, now: () => Now = nowOf): Answerer =>
-  async (question) => planAnswer(question, getContext(), now()) ?? fallback(question);
+export const withPlanAhead = (fallback: Answerer, getContext: () => AnswerContext, now: () => Now = nowOf): Answerer => {
+  /** A plan question that asked for a permit; a short reply that is just a permit ("commuter") completes it. */
+  let waiting: string | null = null;
+  return async (question) => {
+    const words = question.trim().split(/\s+/).length;
+    const normalized = question.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    if (waiting && words <= 4 && detectPermits(normalized).length) {
+      const completed = planAnswer(`${waiting} ${question}`, getContext(), now());
+      waiting = null;
+      if (completed) return completed;
+    }
+    const a = planAnswer(question, getContext(), now());
+    if (a) {
+      waiting = /I need your permit/.test(a.lines[0] ?? "") ? question : null;
+      return a;
+    }
+    waiting = null;
+    return fallback(question);
+  };
+};
