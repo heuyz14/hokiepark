@@ -38,7 +38,10 @@ const LOT_FILL = "#c9c3b7";
 const LOT_ADA_FILL = "#b9cdf2";
 const LOT_LINE = "#9c9384";
 const ADA_COLOR = "#0b4fd0";
-const GARAGE_FILL = "#3d3036";
+const GARAGE_FILL = "#861f41";
+const GARAGE_LINE = "#6a1833";
+const GARAGE_IDLE_OPACITY = 0.45;
+const GARAGE_IDLE_LINE = 2.5;
 const ORANGE = "#e5751f";
 const MAROON = "#861f41";
 // Permit-filter colors deliberately override the map's category colors so the answer is
@@ -205,8 +208,9 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
     map.addLayer({ id: "lots-outline", type: "line", source: "lots", layout: { visibility: "none" }, paint: { "line-color": ["case", ["get", "hasADA"], ADA_COLOR, LOT_LINE], "line-width": ["case", ["get", "hasADA"], 1.6, 1] } }, belowLabels);
 
     map.addSource("garages", { type: "geojson", data: toFeatureCollection(GARAGES, () => ({})) });
-    map.addLayer({ id: "garages-fill", type: "fill", source: "garages", layout: { visibility: "none" }, paint: { "fill-color": GARAGE_FILL, "fill-opacity": 0 } }, belowLabels);
-    map.addLayer({ id: "garages-outline", type: "line", source: "garages", layout: { visibility: "none" }, paint: { "line-color": "#000", "line-width": 1 } }, belowLabels);
+    // Garage footprints are ALWAYS drawn (unlike lots): the pill on top is pinned to the footprint's centre, so the building must be visible under it.
+    map.addLayer({ id: "garages-fill", type: "fill", source: "garages", paint: { "fill-color": GARAGE_FILL, "fill-opacity": GARAGE_IDLE_OPACITY } }, belowLabels);
+    map.addLayer({ id: "garages-outline", type: "line", source: "garages", paint: { "line-color": GARAGE_LINE, "line-width": GARAGE_IDLE_LINE } }, belowLabels);
 
     map.addSource("selection", { type: "geojson", data: EMPTY_FC });
     map.addLayer({ id: "selection-outline", type: "line", source: "selection", paint: { "line-color": ORANGE, "line-width": 4 } });
@@ -242,7 +246,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
       addMarker("lot", l.id, l.lon, l.lat, `marker marker-lot${l.hasADA ? " has-ada" : ""}${l.classes.length ? " has-permit-label" : ""}`, lotMarkerHtml(l), label, () => onSelect({ kind: "lot", id: l.id }));
     }
     for (const g of GARAGES) {
-      addMarker("garage", g.id, g.lon, g.lat, `marker marker-garage st-${garageStatus(g)}`, garageMarkerHtml(g), garageLabel(g), () => onSelect({ kind: "garage", id: g.id }));
+      addMarker("garage", g.id, g.center.lon, g.center.lat, `marker marker-garage st-${garageStatus(g)}`, garageMarkerHtml(g), garageLabel(g), () => onSelect({ kind: "garage", id: g.id }));
     }
 
     const applyDeclutter = () => el.classList.toggle("show-all-lots", map.getZoom() >= LOT_DECLUTTER_ZOOM);
@@ -272,7 +276,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
         const on = activePermits.length > 0 || activeAda;
         el.classList.toggle("filtering", on);
         const visibility = on ? "visible" : "none";
-        for (const layer of ["lots-fill", "lots-outline", "garages-fill", "garages-outline"]) {
+        for (const layer of ["lots-fill", "lots-outline"]) {
           map.setLayoutProperty(layer, "visibility", visibility);
         }
         const mark = (node: HTMLElement | undefined, verdict: string | null) => {
@@ -302,11 +306,11 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
         map.setPaintProperty("garages-fill", "fill-color", on
           ? ["match", ["get", "access"], "yes", PERMIT_YES, "check", PERMIT_CHECK, PERMIT_NO]
           : GARAGE_FILL);
-        map.setPaintProperty("garages-fill", "fill-opacity", on ? ["match", ["get", "access"], "yes", 0.42, "check", 0.34, 0.02] : 0);
+        map.setPaintProperty("garages-fill", "fill-opacity", on ? ["match", ["get", "access"], "yes", 0.42, "check", 0.34, 0.12] : GARAGE_IDLE_OPACITY);
         map.setPaintProperty("garages-outline", "line-color", on
           ? ["match", ["get", "access"], "yes", "#005f3c", "check", "#9b6500", "#666b70"]
-          : "#000");
-        map.setPaintProperty("garages-outline", "line-width", on ? ["match", ["get", "access"], "yes", 4, "check", 3, 0] : 0);
+          : GARAGE_LINE);
+        map.setPaintProperty("garages-outline", "line-width", on ? ["match", ["get", "access"], "yes", 4, "check", 3, 1.5] : GARAGE_IDLE_LINE);
       });
     },
     setSelection(sel, { fly }) {

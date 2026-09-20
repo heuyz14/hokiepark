@@ -3,7 +3,7 @@ import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
 import type { Garage, Lot } from "../types.ts";
 import { findPlace } from "./assistant.ts";
 import { PERMIT_IDS, type AdvisorContext, type ToolName } from "./advisor-spec.ts";
-import { footprintDistance, walkMinutes, type Located } from "./nearby.ts";
+import { footprintDistance, haversineMeters, walkMinutes, type Located } from "./nearby.ts";
 import { garageTotals, openAdaSpaces, openSpaces } from "./occupancy.ts";
 import { nearest } from "./nearby.ts";
 import { ARRIVE_BEFORE_MIN, FORECAST, forecastSource, planAhead, type PlanOption } from "./planahead.ts";
@@ -302,6 +302,49 @@ function accessibleTool(a: Args): ToolResult {
   };
 }
 
+/** There is no vetted campus pedestrian network in this data bundle yet. This deliberately
+ * returns a labelled estimate instead of drawing a route through buildings or inventing turns. */
+function walkRouteTool(a: Args): ToolResult {
+  const origin = byId.get(String(a.origin_id));
+  const destination = byId.get(String(a.destination_id));
+  if (!origin || !destination) return fail("unknown_place", "Use place ids returned by find_place.");
+  const distance = Math.round(haversineMeters(origin, destination));
+  return {
+    ok: true,
+    origin: { id: origin.id, name: origin.name },
+    destination: { id: destination.id, name: destination.name },
+    distance_meters: distance,
+    duration_seconds: Math.round(distance / 1.3),
+    walking_minutes: Math.max(1, Math.ceil(distance / (1.3 * 60))),
+    route_type: "straight_line_estimate",
+    note: "No vetted campus walkway graph is bundled yet; this is a straight-line walking estimate, not turn-by-turn navigation.",
+  };
+}
+
+/** Reuses planAhead, the same deterministic scoring source as the Plan tab. */
+function compareParkingTool(a: Args, ctx: AdvisorContext): ToolResult {
+  const b = BUILDINGS.find((x) => x.id === a.building_id);
+  if (!b) return fail("unknown_building", "Use a building id from find_place.");
+  const day = parseDay(a.day_of_week);
+  const minute = parseTime(a.class_time);
+  if (day === null || minute === null) return fail("invalid_time", "Use ISO weekday 1-7 and 24-hour HH:MM.");
+  const w = who(a, ctx);
+  if ("err" in w) return w.err;
+  if (!w.permits.length && !w.ada) return fail("no_permit", "Ask which permit the driver holds.");
+  const result = planAhead({ building: b, dow: day, minute, ...w }, { garages: GARAGES, lots: LOTS });
+  return {
+    ok: true,
+    building: b.name,
+    options: result.recommended.map((o, index) => ({
+      ...optionJson(o),
+      rank: index + 1,
+      reasons: [`${o.walkMin}-minute walk`, `${o.predictedOpen} forecast open spaces`, "permit-confirmed"],
+    })),
+    excluded_by_permit: result.notValid,
+    forecast_is_simulated: true,
+  };
+}
+
 export function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolResult {
   const a = asObj(args);
   try {
@@ -313,6 +356,8 @@ export function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolR
       case "permit_check": return permitTool(a, ctx);
       case "garages_now": return garagesTool(a, ctx);
       case "accessible_parking": return accessibleTool(a);
+      case "calculate_walk_route": return walkRouteTool(a);
+      case "compare_parking_options": return compareParkingTool(a, ctx);
       default: return fail("unknown_tool");
     }
   } catch (err) {

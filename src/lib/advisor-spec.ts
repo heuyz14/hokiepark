@@ -9,7 +9,7 @@ import { PERMITS, type PermitId } from "./permits.ts";
  */
 
 export const PERMIT_IDS = PERMITS.map((p) => p.id) as PermitId[];
-export const TOOL_NAMES = ["find_place", "plan_parking", "parking_now", "arrival_advice", "permit_check", "garages_now", "accessible_parking"] as const;
+export const TOOL_NAMES = ["find_place", "plan_parking", "parking_now", "arrival_advice", "permit_check", "garages_now", "accessible_parking", "calculate_walk_route", "compare_parking_options"] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 /** Limits enforced by BOTH sides (the server rejects anything larger). */
@@ -69,6 +69,16 @@ export const TOOL_DECLARATIONS = [
     description: "Accessible (ADA) parking near a building, garage or lot: nearest lots with designated accessible spaces and the nearest garage with accessible spaces open now. Does not depend on the driver's permit. Omit place_id for campus-wide.",
     parameters: { type: "object", properties: { place_id: { type: "string", description: "id from find_place; omit for campus-wide" } }, required: [] },
   },
+  {
+    name: "calculate_walk_route",
+    description: "Calculate a deterministic walking distance and ETA between two known places. Call find_place first for each id. The result says whether a vetted campus walk graph was used or whether it is explicitly a straight-line estimate.",
+    parameters: { type: "object", properties: { origin_id: { type: "string", description: "place id from find_place" }, destination_id: { type: "string", description: "place id from find_place" } }, required: ["origin_id", "destination_id"] },
+  },
+  {
+    name: "compare_parking_options",
+    description: "Deterministically compare the permit-confirmed parking options for a class. Uses HokiePark's existing forecast ranking; never rank places yourself. Call find_place first for the building.",
+    parameters: { type: "object", properties: { building_id: { type: "string", description: "building id from find_place" }, day_of_week: dayParam, class_time: timeParam, permits: permitsParam, accessible: accessibleParam }, required: ["building_id", "day_of_week", "class_time"] },
+  },
 ] as const;
 
 export interface AdvisorContext {
@@ -90,7 +100,7 @@ export function systemPrompt(c: AdvisorContext): string {
     "You are HokiePark's parking advisor for Virginia Tech's Blacksburg campus. You help a driver decide where to park.",
     "Rules:",
     "1. Every fact (place names, distances, walk times, open-space counts, forecasts, permit verdicts, arrival times) MUST come from tool results. Never guess or use outside knowledge about VT parking. If the tools do not say it, say you don't know.",
-    "2. Resolve places with find_place first, then call plan_parking, parking_now, arrival_advice, permit_check, garages_now or accessible_parking. For several buildings or times, call the tool several times. If find_place returns several plausible matches, ask which one they mean.",
+    "2. Resolve places with find_place first, then call plan_parking, parking_now, arrival_advice, permit_check, garages_now, accessible_parking, calculate_walk_route or compare_parking_options. For several buildings or times, call the tool several times. If find_place returns several plausible matches, ask which one they mean.",
     "3. Forecast numbers are SIMULATED predictions, not live sensor data. Say 'forecast' or 'expected', never 'there are'. Numbers from parking_now are the map's current demo counts.",
     "4. Only recommend places in a tool's recommended list. Items in check_sign may be mentioned only as unconfirmed ('check the posted sign'). Only say a permit is valid where a tool verdict is 'yes'.",
     "5. If the driver's permit is unknown and a tool reports no permit, ask which permit they hold instead of guessing.",

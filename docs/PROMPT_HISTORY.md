@@ -142,3 +142,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > pages is set up, check it / give me the allow origins value also clean up the disk space / why is my system data so much / allowed origins secret added, check it / refresh runbook also i noticed that only the lots are loaded in not the university buildings
 
 **Outcome:** GitHub Pages is live and verified (all files 200, workflow success, chip Live, no secrets in the bundle). The advisor function's origin allow-list is active and stable (Pages/localhost allowed, foreign origins 403). `pg_cron` runs every minute. Disk was critically low (Docker 10 GB, a Windows ISO 5.6 GB, a staged macOS update, Codex caches); freed ~1 GB of regenerable dev caches and the redundant Claude.dmg only. Runbook rewritten for the deployed site, Plan tab, advisor questions with expected answers, failure modes and what not to claim. Bug report about university buildings not showing: investigated (map draws building polygons at 0.48 opacity over the basemap; the List tab shows only garages and lots until you search) and asked which screen was meant.
+
+## 22. 2026-09-20 - garage pins, second report
+
+> parking garages bug still present i dont know why / cant u just put it over the buildings and make their location fixed
+
+**Outcome:** Reproduced in a real browser (permit "C/G + Perry Street", zoom, pan, wait through a live poll): the deployed build already had the earlier className fix and the pill tracked its label and the map correctly, so the remaining problem was that the pill covered a footprint that was not drawn unless a permit was set. Garage footprints are now always drawn (maroon), and each pin is placed on the footprint's area-weighted centre (`Garage.center`, `footprintCentroid`) instead of the published point. `lon/lat` are unchanged on purpose: the demand model and committed curves/forecasts are computed from them. 229 unit tests, smoke at 430x900, 1280x800 and live all pass.

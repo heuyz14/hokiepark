@@ -31,7 +31,19 @@ export type FailReason = "input" | "transport" | "timeout" | "rounds" | "empty" 
 export type AdvisorResult =
   | { ok: true; lines: string[]; refs: AnswerRef[]; tools: { name: string; ok: boolean }[] }
   | { ok: false; reason: FailReason; detail?: string };
-export type AdvisorAnswer = Answer & { source?: "ai" | "basic"; reason?: FailReason };
+export type AdvisorAnswer = Answer & { source?: "ai" | "basic"; reason?: FailReason; tools?: { name: string; ok: boolean }[] };
+
+export const ADVISOR_TOOL_LABELS: Record<string, string> = {
+  find_place: "Found destination",
+  plan_parking: "Checked eligible parking",
+  parking_now: "Checked current parking",
+  arrival_advice: "Built arrival timing advice",
+  permit_check: "Checked parking restrictions",
+  garages_now: "Compared garage availability",
+  accessible_parking: "Checked accessible parking",
+  calculate_walk_route: "Calculated walking estimate",
+  compare_parking_options: "Compared parking options",
+};
 
 export interface AdvisorOptions {
   transport: Transport;
@@ -174,7 +186,7 @@ export function createAdvisor(opts: AdvisorOptions) {
 export function withAdvisor(fallback: Answerer, advisor: { ask(q: string): Promise<AdvisorResult>; remember?(question: string, answer: string): void }): Answerer {
   return async (question) => {
     const r = await advisor.ask(question);
-    if (r.ok) return { lines: r.lines, refs: r.refs, source: "ai" } satisfies AdvisorAnswer;
+    if (r.ok) return { lines: r.lines, refs: r.refs, tools: r.tools, source: "ai" } satisfies AdvisorAnswer;
     const a = await fallback(question);
     // the fallback's answer is part of the conversation: without this the advisor forgets what "commuter" was answering
     advisor.remember?.(question, a.lines.filter((l) => l !== SIGNAGE_NOTE).join("\n"));

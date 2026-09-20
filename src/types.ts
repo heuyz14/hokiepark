@@ -77,6 +77,8 @@ export interface GarageLevel {
 }
 
 export interface Garage extends GarageGeo {
+  /** Centre of the footprint: where the map pins the marker so it sits on the building. */
+  center: { lon: number; lat: number };
   levels: GarageLevel[];
   /** Both garages are named in the VT dataset, so this is always sourced, unlike Lot.info. */
   info: PracticalInfo;

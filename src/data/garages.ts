@@ -57,10 +57,28 @@ export const GARAGE_NOTE: Record<string, string> = {
   "north-end-center": "North End Garage access uses Hokie Passport scanning, and a permit is required here at all hours.",
 };
 
+/** Area-weighted centre of the footprint's largest ring, so a garage's marker sits on the building itself (not on a hand-picked point beside it). */
+export function footprintCentroid(footprint: GarageGeo["footprint"]): { lon: number; lat: number } | null {
+  let best: { area: number; lon: number; lat: number } | null = null;
+  for (const ring of footprint) {
+    let a = 0, cx = 0, cy = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const [x0, y0] = ring[i]!;
+      const [x1, y1] = ring[(i + 1) % ring.length]!;
+      const f = x0 * y1 - x1 * y0;
+      a += f; cx += (x0 + x1) * f; cy += (y0 + y1) * f;
+    }
+    if (a === 0) continue;
+    if (!best || Math.abs(a) > best.area) best = { area: Math.abs(a), lon: cx / (3 * a), lat: cy / (3 * a) };
+  }
+  return best && { lon: best.lon, lat: best.lat };
+}
+
 export const GARAGES: Garage[] = (geo as GarageGeo[]).map((g) => {
   const levels = SEED_LEVELS[g.id];
   const info = INFO[g.id];
   if (!levels) throw new Error(`No demo levels for garage ${g.id}`);
   if (!info) throw new Error(`No practical info for garage ${g.id}`);
-  return { ...g, levels: levels.map((l) => ({ ...l })), info };
+  // lon/lat stay as published (the demand model and committed forecasts are computed from them); `center` is only where the map draws the pin
+  return { ...g, center: footprintCentroid(g.footprint) ?? { lon: g.lon, lat: g.lat }, levels: levels.map((l) => ({ ...l })), info };
 });

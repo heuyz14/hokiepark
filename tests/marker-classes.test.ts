@@ -17,3 +17,13 @@ test("withLibraryClasses copes with empty input, extra spaces and no library cla
   assert.equal(withLibraryClasses(["x", "y"], " a "), "a");
   assert.equal(withLibraryClasses(new Set(["maplibregl-marker"]), ""), "maplibregl-marker");
 });
+
+test("each garage marker is centred on its own footprint, within the footprint's bounds", async () => {
+  const { GARAGES } = await import("../src/data/garages.ts");
+  for (const g of GARAGES) {
+    const pts = g.footprint.flat();
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    assert.ok(g.center.lon >= Math.min(...xs) && g.center.lon <= Math.max(...xs), `${g.id} lon inside footprint bounds`);
+    assert.ok(g.center.lat >= Math.min(...ys) && g.center.lat <= Math.max(...ys), `${g.id} lat inside footprint bounds`);
+  }
+});

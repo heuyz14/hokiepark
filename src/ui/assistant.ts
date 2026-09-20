@@ -1,6 +1,7 @@
 import type { Answer, AnswerRef, Answerer } from "../lib/assistant.ts";
 import { followUpQuestions, SUGGESTED_QUESTIONS } from "../lib/assistant.ts";
-import { ADVISOR_SUGGESTIONS, type AdvisorAnswer } from "../lib/advisor.ts";
+import { ADVISOR_SUGGESTIONS, ADVISOR_TOOL_LABELS, type AdvisorAnswer } from "../lib/advisor.ts";
+import { isSpeechSupported, pauseSpeech, resumeSpeech, speak, stopSpeech } from "../lib/speech.ts";
 import type { Selection } from "../types.ts";
 import { esc } from "./format.ts";
 
@@ -31,6 +32,17 @@ const refButtons = (refs: AnswerRef[]) =>
 const chipRow = (questions: string[]) =>
   questions.length
     ? `<div class="followups"><p class="followups-cap">Ask next</p>${questions.map((q) => `<button type="button" class="chip">${esc(q)}</button>`).join("")}</div>`
+    : "";
+
+const agentActivity = (answer: AdvisorAnswer, advisor: boolean) => {
+  if (!advisor || answer.source !== "ai" || !answer.tools?.length) return "";
+  const tools = answer.tools.map((tool) => `<li class="agent-event ${tool.ok ? "ok" : "error"}">${tool.ok ? "✓" : "!"} ${esc(ADVISOR_TOOL_LABELS[tool.name] ?? tool.name)}</li>`).join("");
+  return `<details class="agent-activity"><summary>HokiePark agent activity</summary><ul>${tools}</ul></details>`;
+};
+
+const speechControls = () =>
+  isSpeechSupported()
+    ? `<div class="speech-controls"><button type="button" class="speech-read" aria-label="Read this response aloud">Read aloud</button><button type="button" class="speech-pause" aria-label="Pause spoken response">Pause</button><button type="button" class="speech-resume" aria-label="Resume spoken response">Resume</button><button type="button" class="speech-stop" aria-label="Stop spoken response">Stop</button></div>`
     : "";
 
 export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = false }: AssistantOptions): void {
@@ -92,7 +104,7 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       // An answer that already lists three "show on map" buttons doesn't need three more chips.
       // Backfill from whichever starter set this mode uses, so advisor mode stays in its own voice.
       const ups = followUpQuestions(a, asked, a.refs.length >= 3 ? 2 : 3, suggestions);
-      pending.innerHTML = sourceTag(a as AdvisorAnswer, advisor) + bubbleLines(a.lines) + refButtons(a.refs) + chipRow(ups);
+      pending.innerHTML = sourceTag(a as AdvisorAnswer, advisor) + agentActivity(a as AdvisorAnswer, advisor) + bubbleLines(a.lines) + refButtons(a.refs) + speechControls() + chipRow(ups);
     } catch (err) {
       console.error(err);
       pending.className = "msg bot error";
@@ -119,5 +131,12 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     if (chip) return void ask(chip.textContent ?? "");
     const b = (e.target as Element).closest<HTMLElement>("button.ref");
     if (b) onSelect({ kind: b.dataset.kind as "garage" | "lot" | "building", id: b.dataset.id! });
+    const response = (e.target as Element).closest<HTMLElement>(".msg.bot");
+    if (!response) return;
+    const spokenText = [...response.querySelectorAll<HTMLElement>(".ln")].map((line) => line.textContent ?? "").join(". ");
+    if ((e.target as Element).closest(".speech-read")) speak(spokenText);
+    if ((e.target as Element).closest(".speech-pause")) pauseSpeech();
+    if ((e.target as Element).closest(".speech-resume")) resumeSpeech();
+    if ((e.target as Element).closest(".speech-stop")) stopSpeech();
   });
 }

@@ -68,6 +68,19 @@ test("tool arguments are validated (bad ids, times, days, permits are errors, ne
   assert.equal(runTool("delete_everything", {}, ctx).ok, false);
 });
 
+test("route and comparison tools stay deterministic and label the current routing limitation", () => {
+  const route = runTool("calculate_walk_route", { origin_id: "lot-torgersen", destination_id: bid("torgersen") }, ctx) as { ok: true; route_type: string; distance_meters: number; duration_seconds: number };
+  assert.ok(route.ok);
+  assert.equal(route.route_type, "straight_line_estimate");
+  assert.equal(route.duration_seconds, Math.round(route.distance_meters / 1.3));
+  assert.equal(runTool("calculate_walk_route", { origin_id: "nope", destination_id: bid("torgersen") }, ctx).ok, false);
+
+  const comparison = runTool("compare_parking_options", { building_id: bid("torgersen"), day_of_week: 3, class_time: "14:00" }, ctx) as { ok: true; options: { rank: number }[]; forecast_is_simulated: boolean };
+  assert.ok(comparison.ok && comparison.options.length > 0);
+  assert.deepEqual(comparison.options.map((option) => option.rank), comparison.options.map((_, index) => index + 1));
+  assert.equal(comparison.forecast_is_simulated, true);
+});
+
 test("arrival_advice: rows are consistent with labels and the latest non-risky arrival is truly non-risky", () => {
   const r = runTool("arrival_advice", { building_id: bid("hancock"), day_of_week: 3, class_time: "14:00", permits: ["cg-perry"] }, ctx) as { ok: true; options: { id: string; arrivals: { arrive_time: string; label: string; minutes_before_class: number }[]; latest_arrival_not_risky: { arrive_time: string; label: string } | null }[] };
   assert.ok(r.ok && r.options.length >= 1);

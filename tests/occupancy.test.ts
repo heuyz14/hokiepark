@@ -5,7 +5,7 @@ import { GARAGES, LOTS } from "../src/data/index.ts";
 import type { Garage, Lot } from "../src/types.ts";
 
 const info = { source: "test", permitDetail: "", overnightParking: "", payment: "", enforcement: "", location: "" };
-const g = (levels: Garage["levels"]): Garage => ({ id: "t", name: "T", lat: 0, lon: 0, footprint: [], levels, info });
+const g = (levels: Garage["levels"]): Garage => ({ id: "t", name: "T", lat: 0, lon: 0, footprint: [], center: { lon: 0, lat: 0 }, levels, info });
 const lot = (capacity: number, occupied: number): Lot => ({
   id: "t", name: "T", number: 1, status: "Active", lat: 0, lon: 0, footprint: [], areaSqFt: 0,
   classes: ["cg"], needsConfirm: false, hasADA: false, adaSpaces: 0, capacity, occupied,

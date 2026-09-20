@@ -223,6 +223,13 @@ h1, h2, h3, p { margin: 0; }
 .msg.error { background: var(--bad-bg); color: var(--bad); }
 .msg .fine { color: var(--muted); font-size: 12.5px; margin: 0; }
 .refs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.agent-activity { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.agent-activity summary { cursor: pointer; font-weight: 700; color: var(--maroon); }
+.agent-activity ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+.agent-event.ok { color: #176b48; }
+.agent-event.error { color: #8d1b16; }
+.speech-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.speech-controls button { min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--maroon); padding: 4px 9px; font-weight: 700; }
 .ref, .chip { min-height: 44px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--maroon); background: #fff; color: var(--maroon); font-weight: 600; font-size: 13.5px; text-align: left; }
 .ref:active, .chip:active { background: #f6ecef; }
 .chat-suggest { display: grid; gap: 6px; padding: 4px 14px 10px; }
