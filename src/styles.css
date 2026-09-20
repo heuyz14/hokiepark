@@ -245,6 +245,12 @@ h1, h2, h3, p { margin: 0; }
 .chat-form { display: flex; gap: 8px; padding: 8px 14px 12px; border-top: 1px solid var(--line); }
 .chat-form input { flex: 1; min-width: 0; height: 46px; padding: 0 14px; border: 2px solid #cfc7ca; border-radius: 999px; font-size: 16px; background: #fff; }
 .chat-form input:focus { border-color: var(--maroon); outline: none; box-shadow: 0 0 0 3px rgb(229 117 31 / 0.4); }
+.accessibility-settings { margin: 0 14px 12px; color: var(--muted); font-size: 13px; }
+.accessibility-settings summary { cursor: pointer; color: var(--maroon); font-weight: 700; }
+.accessibility-settings label { display: block; margin-top: 7px; }
+.agent-event.running { color: var(--maroon); }
+.a11y-large-text { font-size: 112.5%; }
+.a11y-reduce-motion *, .a11y-reduce-motion *::before, .a11y-reduce-motion *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 .send { height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--maroon); color: #fff; font-weight: 700; }
 .send:disabled { opacity: 0.55; }
 

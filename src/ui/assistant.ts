@@ -1,7 +1,8 @@
 import type { Answer, AnswerRef, Answerer } from "../lib/assistant.ts";
 import { followUpQuestions, SUGGESTED_QUESTIONS } from "../lib/assistant.ts";
-import { ADVISOR_SUGGESTIONS, ADVISOR_TOOL_LABELS, type AdvisorAnswer } from "../lib/advisor.ts";
+import { ADVISOR_SUGGESTIONS, ADVISOR_TOOL_LABELS, type AdvisorAnswer, type AdvisorMapAction, type AdvisorToolEvent } from "../lib/advisor.ts";
 import { isSpeechSupported, pauseSpeech, resumeSpeech, speak, stopSpeech } from "../lib/speech.ts";
+import { applyAccessibilityPreferences, loadAccessibilityPreferences, saveAccessibilityPreferences, type AccessibilityPreferences } from "../lib/accessibility.ts";
 import type { Selection } from "../types.ts";
 import { esc } from "./format.ts";
 
@@ -12,6 +13,8 @@ export interface AssistantOptions {
   advisor?: boolean;
   /** Permission is still requested by the normal map/browser flow; no coordinates reach this component. */
   ensureCurrentLocation?: () => Promise<boolean>;
+  subscribeActivity?: (listener: (event: AdvisorToolEvent) => void) => () => void;
+  onMapAction?: (action: AdvisorMapAction) => void;
 }
 
 const bubbleLines = (lines: string[]) =>
@@ -47,7 +50,14 @@ const speechControls = () =>
     ? `<div class="speech-controls"><button type="button" class="speech-read" aria-label="Read this response aloud">Read aloud</button><button type="button" class="speech-pause" aria-label="Pause spoken response">Pause</button><button type="button" class="speech-resume" aria-label="Resume spoken response">Resume</button><button type="button" class="speech-stop" aria-label="Stop spoken response">Stop</button></div>`
     : "";
 
-export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = false, ensureCurrentLocation }: AssistantOptions): void {
+type Recognition = { start(): void; stop(): void; abort(): void; onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; continuous: boolean; interimResults: boolean; lang: string };
+type RecognitionCtor = new () => Recognition;
+const recognitionCtor = (): RecognitionCtor | undefined => (window as unknown as { SpeechRecognition?: RecognitionCtor; webkitSpeechRecognition?: RecognitionCtor }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: RecognitionCtor }).webkitSpeechRecognition;
+
+const activityList = (events: AdvisorToolEvent[]) => events.length ? `<details class="agent-activity" open><summary>HokiePark agent activity</summary><ul>${events.map((event) => `<li class="agent-event ${event.status === "error" ? "error" : event.status === "success" ? "ok" : "running"}">${event.status === "success" ? "✓" : event.status === "error" ? "!" : "…"} ${esc(event.label)}</li>`).join("")}</ul></details>` : "";
+const mapActions = (actions: AdvisorMapAction[] | undefined) => actions?.some((action) => action.type === "show_route") ? `<div class="refs"><button type="button" class="advisor-route">Show walking route on map</button></div>` : "";
+
+export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = false, ensureCurrentLocation, subscribeActivity, onMapAction }: AssistantOptions): void {
   const suggestions = advisor ? ADVISOR_SUGGESTIONS : SUGGESTED_QUESTIONS;
   el.innerHTML = `
     <div class="chat">
@@ -58,14 +68,52 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       <form class="chat-form" id="chat-form" autocomplete="off">
         <label for="chat-q" class="sr-only">Ask a parking question</label>
         <input id="chat-q" type="text" placeholder="${advisor ? "Describe your class and permit&hellip;" : "Ask about parking&hellip;"}" enterkeyhint="send" maxlength="200">
-        <button type="submit" class="send">Send</button>
+        <button type="button" class="mic" aria-label="Ask HokiePark by voice" hidden>Voice input</button><button type="submit" class="send">Send</button>
       </form>
+      <details class="accessibility-settings"><summary>Accessibility settings</summary><label><input type="checkbox" data-a11y="autoRead"> Automatically read AI responses</label><label>Speech speed <select data-a11y="speechRate"><option value="0.75">0.75x</option><option value="1">1.0x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></label><label><input type="checkbox" data-a11y="largeText"> Larger interface text</label><label><input type="checkbox" data-a11y="reduceMotion"> Reduce motion</label></details>
     </div>`;
   const log = el.querySelector<HTMLElement>("#chat-log")!;
   const suggest = el.querySelector<HTMLElement>("#chat-suggest")!;
   const form = el.querySelector<HTMLFormElement>("#chat-form")!;
   const input = el.querySelector<HTMLInputElement>("#chat-q")!;
   const send = el.querySelector<HTMLButtonElement>(".send")!;
+  const mic = el.querySelector<HTMLButtonElement>(".mic")!;
+  const Recognition = recognitionCtor();
+  let recognition: Recognition | null = null;
+  if (Recognition) {
+    mic.hidden = false;
+    mic.addEventListener("click", () => {
+      if (recognition) { recognition.abort(); return; }
+      recognition = new Recognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = navigator.language || "en-US";
+      mic.textContent = "Cancel voice";
+      mic.setAttribute("aria-label", "Cancel voice input");
+      recognition.onresult = (event) => {
+        input.value = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join(" ").trim();
+        input.focus(); // transcript is deliberately editable and never submitted automatically
+      };
+      recognition.onend = recognition.onerror = () => {
+        recognition = null;
+        mic.textContent = "Voice input";
+        mic.setAttribute("aria-label", "Ask HokiePark by voice");
+      };
+      try { recognition.start(); } catch { recognition = null; mic.textContent = "Voice input"; }
+    });
+  }
+  let preferences: AccessibilityPreferences = loadAccessibilityPreferences();
+  applyAccessibilityPreferences(preferences);
+  for (const control of el.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-a11y]")) {
+    const key = control.dataset.a11y as keyof AccessibilityPreferences;
+    if (control instanceof HTMLInputElement) control.checked = preferences[key] === true;
+    else control.value = String(preferences[key]);
+    control.addEventListener("change", () => {
+      preferences = { ...preferences, [key]: control instanceof HTMLInputElement ? control.checked : Number(control.value) } as AccessibilityPreferences;
+      saveAccessibilityPreferences(preferences);
+      applyAccessibilityPreferences(preferences);
+    });
+  }
 
   const add = (cls: string, html: string) => {
     const div = document.createElement("div");
@@ -84,6 +132,15 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
   );
 
   let busy = false;
+  let pending: HTMLElement | null = null;
+  const activity: AdvisorToolEvent[] = [];
+  subscribeActivity?.((event) => {
+    if (!busy || !pending) return;
+    const index = activity.findIndex((item) => item.id === event.id);
+    if (index >= 0) activity[index] = event;
+    else activity.push(event);
+    pending.innerHTML = activityList(activity) || `<span class="ln">Working with HokiePark data&hellip;</span>`;
+  });
   /** Every question asked so far, so follow-up chips never repeat one. */
   const asked: string[] = [];
 
@@ -98,7 +155,8 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     suggest.hidden = true;
     add("me", esc(q));
     const requestedLocation = /\b(current location|my location|where i am)\b/i.test(q);
-    const pending = add("bot pending", `<span class="ln">${requestedLocation ? "Requesting your location&hellip;" : advisor ? "Thinking it through&hellip;" : "Checking the data&hellip;"}</span>`);
+    activity.length = 0;
+    pending = add("bot pending", `<span class="ln">${requestedLocation ? "Requesting your location&hellip;" : advisor ? "Starting HokiePark advisor&hellip;" : "Checking the data&hellip;"}</span>`);
     try {
       if (requestedLocation && ensureCurrentLocation) await ensureCurrentLocation();
       const a: Answer = await answer(q);
@@ -108,13 +166,18 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       // An answer that already lists three "show on map" buttons doesn't need three more chips.
       // Backfill from whichever starter set this mode uses, so advisor mode stays in its own voice.
       const ups = followUpQuestions(a, asked, a.refs.length >= 3 ? 2 : 3, suggestions);
-      pending.innerHTML = sourceTag(a as AdvisorAnswer, advisor) + agentActivity(a as AdvisorAnswer, advisor) + bubbleLines(a.lines) + refButtons(a.refs) + speechControls() + chipRow(ups);
+      pending.innerHTML = sourceTag(a as AdvisorAnswer, advisor) + agentActivity(a as AdvisorAnswer, advisor) + bubbleLines(a.lines) + refButtons(a.refs) + mapActions((a as AdvisorAnswer).mapActions) + speechControls() + chipRow(ups);
+      const routeAction = (a as AdvisorAnswer).mapActions?.find((action): action is Extract<AdvisorMapAction, { type: "show_route" }> => action.type === "show_route");
+      if (routeAction) pending.dataset.mapActions = JSON.stringify(routeAction);
+      else delete pending.dataset.mapActions;
+      if (preferences.autoRead && (a as AdvisorAnswer).source === "ai") speak(a.lines.join(". "), { rate: preferences.speechRate });
     } catch (err) {
       console.error(err);
       pending.className = "msg bot error";
       pending.innerHTML = `<span class="ln">Sorry, I couldn't answer that. Try again, or use the Map and List tabs.</span>`;
     } finally {
       busy = false;
+      pending = null;
       send.disabled = false;
       log.scrollTop = log.scrollHeight;
     }
@@ -138,9 +201,20 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     const response = (e.target as Element).closest<HTMLElement>(".msg.bot");
     if (!response) return;
     const spokenText = [...response.querySelectorAll<HTMLElement>(".ln")].map((line) => line.textContent ?? "").join(". ");
-    if ((e.target as Element).closest(".speech-read")) speak(spokenText);
+    if ((e.target as Element).closest(".speech-read")) speak(spokenText, { rate: preferences.speechRate });
     if ((e.target as Element).closest(".speech-pause")) pauseSpeech();
     if ((e.target as Element).closest(".speech-resume")) resumeSpeech();
     if ((e.target as Element).closest(".speech-stop")) stopSpeech();
+    if ((e.target as Element).closest(".advisor-route")) {
+      const answerIndex = [...log.querySelectorAll<HTMLElement>(".msg.bot")].indexOf(response);
+      // map actions are attached to the same response below, never supplied as model JavaScript.
+      const action = answerIndex >= 0 ? response.dataset.mapActions : undefined;
+      if (action) {
+        try {
+          const route = JSON.parse(action) as AdvisorMapAction;
+          if (route.type === "show_route") onMapAction?.(route);
+        } catch { /* no valid action */ }
+      }
+    }
   });
 }

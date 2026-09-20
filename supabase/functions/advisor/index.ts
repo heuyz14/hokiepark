@@ -16,7 +16,7 @@ var PERMIT_LABEL = Object.fromEntries(PERMITS.map((p) => [p.id, p.label]));
 
 // src/lib/advisor-spec.ts
 var PERMIT_IDS = PERMITS.map((p) => p.id);
-var TOOL_NAMES = ["find_place", "plan_parking", "parking_now", "arrival_advice", "permit_check", "garages_now", "accessible_parking", "calculate_walk_route", "compare_parking_options", "build_arrival_plan"];
+var TOOL_NAMES = ["resolve_destination", "get_lot_details", "get_eligible_lots", "get_parking_forecast", "get_ticket_risk", "get_current_location", "find_place", "plan_parking", "parking_now", "arrival_advice", "permit_check", "garages_now", "accessible_parking", "calculate_walk_route", "compare_parking_options", "build_arrival_plan"];
 var LIMITS = {
   questionChars: 300,
   historyMessages: 24,
@@ -24,7 +24,8 @@ var LIMITS = {
   textChars: 2e3,
   toolResponseChars: 12e3,
   signatureChars: 4e3,
-  maxRounds: 4,
+  maxRounds: 6,
+  maxToolCalls: 15,
   requestBytes: 6e4
 };
 var permitsParam = {
@@ -36,6 +37,36 @@ var accessibleParam = { type: "boolean", description: "True if the driver has a 
 var dayParam = { type: "integer", minimum: 1, maximum: 7, description: "ISO weekday: 1=Monday ... 5=Friday, 6=Saturday, 7=Sunday. Weekends have no classes, so they are treated as a typical weekday." };
 var timeParam = { type: "string", description: "Class start time as 24-hour HH:MM, e.g. 14:00 for 2 pm." };
 var TOOL_DECLARATIONS = [
+  {
+    name: "resolve_destination",
+    description: "Resolve a building name for a parking destination. It returns resolved, ambiguous (with candidates), or not_found. Never guess when several campus buildings match. Use this for a class or destination; use find_place when lots/garages are also relevant.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "Destination name or nickname from the driver." } }, required: ["query"] }
+  },
+  {
+    name: "get_lot_details",
+    description: "Get canonical HokiePark details for one known lot or garage, including its capacity, map identity, permit classes, and simulated availability source. Call find_place first.",
+    parameters: { type: "object", properties: { lot_id: { type: "string", description: "lot or garage id from find_place" } }, required: ["lot_id"] }
+  },
+  {
+    name: "get_eligible_lots",
+    description: "Get parking options whose permit rules are eligible, ineligible, or unknown for a destination. This uses deterministic permit logic only.",
+    parameters: { type: "object", properties: { destination_id: { type: "string", description: "building id from resolve_destination or find_place" }, permits: permitsParam, accessible: accessibleParam }, required: ["destination_id"] }
+  },
+  {
+    name: "get_parking_forecast",
+    description: "Get the simulated forecast for one lot or garage at a given arrival time. Never call it live sensor data.",
+    parameters: { type: "object", properties: { lot_id: { type: "string", description: "lot or garage id from find_place" }, day_of_week: dayParam, arrival_time: timeParam }, required: ["lot_id", "day_of_week", "arrival_time"] }
+  },
+  {
+    name: "get_ticket_risk",
+    description: "Classify parking permit/signage risk for one lot or garage with deterministic permit logic. It never guarantees legality and always retains the posted-signage caveat.",
+    parameters: { type: "object", properties: { lot_id: { type: "string", description: "lot or garage id from find_place" }, permits: permitsParam, accessible: accessibleParam }, required: ["lot_id"] }
+  },
+  {
+    name: "get_current_location",
+    description: "Check whether the driver has granted current location to HokiePark. It returns availability only, never coordinates. Use calculate_walk_route with origin_id current_location after it is available.",
+    parameters: { type: "object", properties: {}, required: [] }
+  },
   {
     name: "find_place",
     description: "Look up a building, garage or lot by name. Nicknames, partial names and timetable codes (e.g. TORG, MCB) work. Returns up to 5 candidates with id, kind and name. Always call this before using an id.",
@@ -74,7 +105,7 @@ var TOOL_DECLARATIONS = [
   {
     name: "calculate_walk_route",
     description: "Calculate a deterministic walking distance and ETA between two known places. Call find_place first for each id. The result says whether a vetted campus walk graph was used or whether it is explicitly a straight-line estimate.",
-    parameters: { type: "object", properties: { origin_id: { type: "string", description: "place id from find_place" }, destination_id: { type: "string", description: "place id from find_place" } }, required: ["origin_id", "destination_id"] }
+    parameters: { type: "object", properties: { origin_id: { type: "string", description: "place id from find_place, or current_location after get_current_location succeeds" }, destination_id: { type: "string", description: "place id from find_place" }, accessible_only: { type: "boolean", description: "Use only campus path edges explicitly marked accessible when true." } }, required: ["origin_id", "destination_id"] }
   },
   {
     name: "compare_parking_options",

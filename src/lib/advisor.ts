@@ -27,14 +27,24 @@ export interface Content {
 }
 export type Transport = (req: { contents: Content[]; context: AdvisorContext }, signal: AbortSignal) => Promise<Content>;
 
-export type FailReason = "input" | "transport" | "timeout" | "rounds" | "empty" | "guard";
+export type FailReason = "input" | "transport" | "timeout" | "rounds" | "tool_limit" | "empty" | "guard";
+export type AdvisorToolEvent = { id: string; name: string; label: string; status: "running" | "success" | "error" };
+export type AdvisorMapAction =
+  | { type: "focus_lot" | "focus_destination"; id: string }
+  | { type: "show_route"; geometry: { latitude: number; longitude: number }[]; routeType: "walk_graph" | "straight_line_estimate" };
 export type AdvisorResult =
-  | { ok: true; lines: string[]; refs: AnswerRef[]; tools: { name: string; ok: boolean }[] }
+  | { ok: true; lines: string[]; refs: AnswerRef[]; tools: { name: string; ok: boolean }[]; mapActions?: AdvisorMapAction[] }
   | { ok: false; reason: FailReason; detail?: string };
-export type AdvisorAnswer = Answer & { source?: "ai" | "basic"; reason?: FailReason; tools?: { name: string; ok: boolean }[] };
+export type AdvisorAnswer = Answer & { source?: "ai" | "basic"; reason?: FailReason; tools?: { name: string; ok: boolean }[]; mapActions?: AdvisorMapAction[] };
 
 export const ADVISOR_TOOL_LABELS: Record<string, string> = {
   find_place: "Found destination",
+  resolve_destination: "Resolved destination",
+  get_lot_details: "Looked up parking details",
+  get_eligible_lots: "Checked eligible lots",
+  get_parking_forecast: "Forecast parking availability",
+  get_ticket_risk: "Checked parking restrictions",
+  get_current_location: "Checked current location",
   plan_parking: "Checked eligible parking",
   parking_now: "Checked current parking",
   arrival_advice: "Built arrival timing advice",
@@ -51,7 +61,22 @@ export interface AdvisorOptions {
   getContext: () => AdvisorContext;
   timeoutMs?: number;
   maxRounds?: number;
+  onToolEvent?: (event: AdvisorToolEvent) => void;
 }
+
+const mapActionsFrom = (results: ToolResult[]): AdvisorMapAction[] => {
+  const actions: AdvisorMapAction[] = [];
+  for (const result of results) {
+    if (!result.ok) continue;
+    const route = result as Record<string, unknown>;
+    const geometry = route.geometry;
+    if (route.route_type && Array.isArray(geometry) && (route.route_type === "walk_graph" || route.route_type === "straight_line_estimate")) {
+      const points = geometry.filter((point): point is { latitude: number; longitude: number } => Boolean(point) && typeof point === "object" && Number.isFinite((point as { latitude?: unknown }).latitude) && Number.isFinite((point as { longitude?: unknown }).longitude));
+      if (points.length >= 2) actions.push({ type: "show_route", geometry: points.slice(0, 100), routeType: route.route_type });
+    }
+  }
+  return actions;
+};
 
 export const ADVISOR_SUGGESTIONS = [
   "I have a 2pm class in Torgersen on Wednesday. Where should I park?",
@@ -122,9 +147,13 @@ export function createAdvisor(opts: AdvisorOptions) {
         }
         const responses: Part[] = [];
         for (const p of calls.slice(0, 4)) {
+          if (toolLog.length >= LIMITS.maxToolCalls) return { ok: false, reason: "tool_limit" };
           const { name, args } = p.functionCall!;
+          const event = { id: `${round}-${toolLog.length}`, name, label: ADVISOR_TOOL_LABELS[name] ?? "Running HokiePark tool" } as const;
+          opts.onToolEvent?.({ ...event, status: "running" });
           const r = runTool(name, args, ctx);
           toolLog.push({ name, ok: r.ok });
+          opts.onToolEvent?.({ ...event, status: r.ok ? "success" : "error" });
           results.push(r);
           const size = JSON.stringify(r).length;
           responses.push({ functionResponse: { name, response: { result: size > LIMITS.toolResponseChars ? { ok: false, error: "result_too_large" } : r } } });
@@ -161,7 +190,7 @@ export function createAdvisor(opts: AdvisorOptions) {
 
       const turn: Content[] = [{ role: "user", parts: [{ text: q }] }, { role: "model", parts: [{ text: body }] }];
       history = [...history, ...turn].slice(-6);
-      return { ok: true, lines, refs, tools: toolLog };
+      return { ok: true, lines, refs, tools: toolLog, mapActions: mapActionsFrom(results) };
     } catch (err) {
       if (ac.signal.aborted) return { ok: false, reason: "timeout" };
       return { ok: false, reason: "transport", detail: (err as Error).message?.slice(0, 120) };
@@ -187,7 +216,7 @@ export function createAdvisor(opts: AdvisorOptions) {
 export function withAdvisor(fallback: Answerer, advisor: { ask(q: string): Promise<AdvisorResult>; remember?(question: string, answer: string): void }): Answerer {
   return async (question) => {
     const r = await advisor.ask(question);
-    if (r.ok) return { lines: r.lines, refs: r.refs, tools: r.tools, source: "ai" } satisfies AdvisorAnswer;
+    if (r.ok) return { lines: r.lines, refs: r.refs, tools: r.tools, mapActions: r.mapActions, source: "ai" } satisfies AdvisorAnswer;
     const a = await fallback(question);
     // the fallback's answer is part of the conversation: without this the advisor forgets what "commuter" was answering
     advisor.remember?.(question, a.lines.filter((l) => l !== SIGNAGE_NOTE).join("\n"));

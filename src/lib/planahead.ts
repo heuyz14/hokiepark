@@ -1,6 +1,7 @@
 import predictions from "../data/predictions.json" with { type: "json" };
 import type { Footprint, Garage, Lot } from "../types.ts";
 import { footprintDistance, walkMinutes, type Located } from "./nearby.ts";
+import { calculateCampusWalkingRoute } from "./walk-network.ts";
 import { openAdaSpaces, openSpaces } from "./occupancy.ts";
 import { lotAccess, type PermitId, type Verdict } from "./permits.ts";
 
@@ -89,6 +90,8 @@ export interface PlanOption {
   name: string;
   meters: number;
   walkMin: number;
+  /** A graph route when campus paths connect both places; otherwise a disclosed estimate. */
+  routeType: "walk_graph" | "straight_line_estimate";
   arriveMinute: number;
   predictedPct: number;
   predictedOpen: number;
@@ -134,14 +137,22 @@ export function planAhead(input: PlanInput, data: { garages: Garage[]; lots: Lot
   const yes: PlanOption[] = [];
   const check: PlanOption[] = [];
   let notValid = 0;
-  const distance = (fp: Footprint | undefined, fallback: Located) => (fp?.length ? footprintDistance(input.building, fp) : footprintDistance(input.building, [[[fallback.lon, fallback.lat]]]));
+  const distance = (fp: Footprint | undefined, fallback: Located) => {
+    // Footprints still choose a sensible parking-side origin. The published pedestrian
+    // network then supplies the actual score distance, rather than a line through buildings.
+    const straight = fp?.length ? footprintDistance(input.building, fp) : footprintDistance(input.building, [[[fallback.lon, fallback.lat]]]);
+    const route = calculateCampusWalkingRoute(fallback, input.building);
+    return { meters: route?.distanceMeters ?? straight, routeType: route ? "walk_graph" as const : "straight_line_estimate" as const };
+  };
 
-  const push = (o: Omit<PlanOption, "label" | "score" | "walkMin" | "arriveMinute" | "predictedOpen">, predictedOpen: number) => {
-    if (o.meters > MAX_WALK_M) return;
-    const walkMin = walkMinutes(o.meters);
-    const label = planLabel(o.predictedPct, predictedOpen);
-    const opt: PlanOption = { ...o, walkMin, arriveMinute, predictedOpen, label, score: planScore(walkMin, o.predictedPct, label) };
-    (o.verdict === "yes" ? yes : check).push(opt);
+  const push = (o: Omit<PlanOption, "label" | "score" | "walkMin" | "arriveMinute" | "predictedOpen" | "meters" | "routeType"> & { distance: ReturnType<typeof distance> }, predictedOpen: number) => {
+    const { distance: routeDistance, ...rest } = o;
+    const meters = routeDistance.meters;
+    if (meters > MAX_WALK_M) return;
+    const walkMin = walkMinutes(meters);
+    const label = planLabel(rest.predictedPct, predictedOpen);
+    const opt: PlanOption = { ...rest, meters, routeType: routeDistance.routeType, walkMin, arriveMinute, predictedOpen, label, score: planScore(walkMin, rest.predictedPct, label) };
+    (rest.verdict === "yes" ? yes : check).push(opt);
   };
 
   for (const g of data.garages) {
@@ -173,7 +184,7 @@ export function planAhead(input: PlanInput, data: { garages: Garage[]; lots: Lot
     const first = group[0]!.v;
     push(
       {
-        kind: "garage", id: g.id, name: g.name, meters: distance(g.footprint, g), predictedPct, capacity, verdict: usable.length ? "yes" : "check",
+        kind: "garage", id: g.id, name: g.name, distance: distance(g.footprint, g), predictedPct, capacity, verdict: usable.length ? "yes" : "check",
         ...(first.note && !usable.length ? { note: first.note } : {}), nowOpen, ...(input.ada ? { adaOpenEstimate: adaOpen } : {}), ...(best ? { bestLevel: best } : {}),
       },
       open,
@@ -189,7 +200,7 @@ export function planAhead(input: PlanInput, data: { garages: Garage[]; lots: Lot
     const pct = forecastPct(lot.id, dow, arriveMinute, file);
     if (pct === null) continue;
     push(
-      { kind: "lot", id: lot.id, name: `${lot.name} lot`, meters: distance(lot.footprint, lot), predictedPct: pct, capacity: lot.capacity, verdict: v.verdict, ...(v.note ? { note: v.note } : {}), nowOpen: openSpaces(lot) },
+      { kind: "lot", id: lot.id, name: `${lot.name} lot`, distance: distance(lot.footprint, lot), predictedPct: pct, capacity: lot.capacity, verdict: v.verdict, ...(v.note ? { note: v.note } : {}), nowOpen: openSpaces(lot) },
       openFrom(lot.capacity, pct),
     );
   }

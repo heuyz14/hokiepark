@@ -36,6 +36,19 @@ test("find_place resolves names, nicknames' partial forms, and timetable codes; 
   assert.equal(runTool("find_place", {}, ctx).ok, false);
 });
 
+test("new deterministic advisor contracts resolve destinations, expose forecast sources, and keep location private", () => {
+  const torg = bid("torgersen");
+  const destination = runTool("resolve_destination", { query: "Torg" }, ctx);
+  assert.deepEqual([destination.ok, destination.status, destination.destination_id], [true, "resolved", torg]);
+  const details = runTool("get_lot_details", { lot_id: "lot-squires" }, ctx);
+  assert.equal(details.ok, true);
+  const forecast = runTool("get_parking_forecast", { lot_id: "lot-squires", day_of_week: 3, arrival_time: "13:45" }, ctx);
+  assert.deepEqual([forecast.ok, forecast.source, forecast.forecast_is_simulated], [true, "simulation", true]);
+  const location = runTool("get_current_location", {}, { ...ctx, currentLocation: { lat: 37.22, lon: -80.42, accuracyMeters: 12 } });
+  assert.deepEqual([location.ok, location.available, "latitude" in location, "longitude" in location], [true, true, false, false]);
+  assert.equal(runTool("get_lot_details", { lot_id: "nope" }, ctx).ok, false);
+});
+
 test("plan_parking returns exactly what the Plan tab computes (one source of truth) and states its arrival assumption", () => {
   const b = BUILDINGS.find((x) => x.id === bid("hancock"))!;
   const direct = planAhead({ building: b, dow: 3, minute: 840, permits: ["cg"], ada: false }, { garages: GARAGES, lots: LOTS });

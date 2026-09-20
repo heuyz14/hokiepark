@@ -1,5 +1,5 @@
 import walkways from "../data/walkways.geo.json" with { type: "json" };
-import { calculateWalkRoute, type WalkEdge, type WalkGraph, type WalkRoute } from "./routing.ts";
+import { calculateWalkRoute, type WalkEdge, type WalkGraph, type WalkRoute, type WalkRouteOptions } from "./routing.ts";
 import type { Located } from "./nearby.ts";
 
 type WalkwayFeature = { geometry?: { type?: string; coordinates?: unknown }; properties?: { ada_status?: string | null } };
@@ -47,8 +47,15 @@ function buildWalkGraph(data: WalkwayData): WalkGraph {
 }
 
 export const VT_WALK_GRAPH = buildWalkGraph(walkways as unknown as WalkwayData);
+const routeCache = new Map<string, WalkRoute | null>();
 
 /** A deterministic route along VT's published sidewalk/pathway lines, or null when not connected. */
-export function calculateCampusWalkingRoute(origin: Located, destination: Located): WalkRoute | null {
-  return calculateWalkRoute(origin, destination, VT_WALK_GRAPH);
+export function calculateCampusWalkingRoute(origin: Located, destination: Located, options: WalkRouteOptions = {}): WalkRoute | null {
+  // Most plan renders compare the same fixed lots and buildings repeatedly. Caching preserves
+  // determinism and keeps the full comparison within an interactive budget.
+  const key = `${origin.lat.toFixed(6)},${origin.lon.toFixed(6)}>${destination.lat.toFixed(6)},${destination.lon.toFixed(6)}:${options.accessibleOnly ? "a" : "s"}`;
+  if (routeCache.has(key)) return routeCache.get(key)!;
+  const route = calculateWalkRoute(origin, destination, VT_WALK_GRAPH, options);
+  routeCache.set(key, route);
+  return route;
 }

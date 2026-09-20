@@ -26,3 +26,8 @@ test("walking route uses the shortest graph path and calculates ETA at 1.3 m/s",
 test("nearest walk node selects the closest node", () => {
   assert.equal(findNearestWalkNode({ lat: 37, lon: -79.9991 }, graph).id, "b");
 });
+
+test("accessible-only routing excludes edges not explicitly marked accessible", () => {
+  const mixed: WalkGraph = { ...graph, adjacency: { a: [{ from: "a", to: "b", distanceMeters: 100, accessible: false }], b: [{ from: "b", to: "c", distanceMeters: 100, accessible: true }], c: [] } };
+  assert.equal(calculateWalkRoute(mixed.nodes.a!, mixed.nodes.c!, mixed, { accessibleOnly: true }), null);
+});

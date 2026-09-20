@@ -12,7 +12,7 @@ Ask stays the place for messy, real-life questions that a form cannot take:
 The **Plan** tab remains the reliable structured path; Ask is the conversational one. Ask never depends on the advisor: any failure falls back to the rule-based assistant, visibly.
 
 ## 2. The rule that makes it safe: the model never supplies facts
-The model only **chooses tools and explains their results**. Seven deterministic tools run in the browser on the app's own data:
+The model only **chooses tools and explains their results**. Deterministic tools run in the browser on the app's own data:
 | Tool | What it returns |
 | --- | --- |
 | `find_place` | building / garage / lot candidates for a name, nickname or timetable code (TORG, MCB, GBJ) |
@@ -22,6 +22,9 @@ The model only **chooses tools and explains their results**. Seven deterministic
 | `permit_check` | whether a permit is valid at a lot or garage (per level), with the reason |
 | `garages_now` | garages ranked by open spaces right now (and on the levels the permit covers) - answers "which garage has the most open spots" |
 | `accessible_parking` | nearest lots with designated accessible spaces and the nearest garage with accessible spaces open, near a place or campus-wide |
+| `resolve_destination` | building-only result with explicit `resolved`, `ambiguous`, or `not_found` status |
+| `get_lot_details`, `get_eligible_lots`, `get_parking_forecast`, `get_ticket_risk` | stable canonical facts for UI and agent use; forecast sources are always marked simulation |
+| `get_current_location` | availability only; coordinates remain local to route execution |
 Guards, all enforced in code and mutation-tested:
 1. **Number guard:** every number in the answer must appear in a tool result, the driver's own message, or the context line (the current time). Otherwise the answer is discarded and the rule-based one is used.
 2. **Place guard:** the final `PLACES:` line may only name places a tool actually returned.
@@ -37,7 +40,7 @@ browser Ask tab ── agent loop (src/lib/advisor.ts) ── runs tools locally
 Supabase Edge Function `advisor` (supabase/functions/advisor)  ── secret OPENROUTER_API_KEY (or GEMINI_API_KEY)
       │  adds the system prompt + tool declarations itself, validates and rate-limits, relays ONE model turn
       ▼
-OpenRouter chat completions (OpenAI format) or Gemini generateContent  ->  next model turn (text or function calls)  ->  back to the browser, which runs the tools and loops (max 4 rounds)
+OpenRouter chat completions (OpenAI format) or Gemini generateContent  ->  next model turn (text or function calls)  ->  back to the browser, which runs the tools and loops (max 6 rounds / 15 calls)
 ```
 Why the loop runs in the browser: the tools need the app's data (buildings, lots, permit rules, forecast, live counts), so nothing is duplicated on the server. The model's turns are stored and re-sent verbatim, which also preserves any "thought signature" a newer Gemini model requires.
 
@@ -51,7 +54,7 @@ The routing core uses deterministic A* over Virginia Tech Facilities’ public *
 
 Browser location is obtained only after the normal map permission request and lives only in short-lived app memory. It can be used by local deterministic route tools, but `httpTransport` strips it from requests to the advisor relay/model; a regression test verifies this boundary.
 
-Ask responses show a compact, collapsible list of the real tools that completed (not hidden model reasoning) and browser-native read-aloud, pause, resume, and stop controls. Speech runs only in supported browsers and never reads agent activity or raw coordinates.
+Ask responses stream a compact list of the real tools running and then collapse into their completed state (not hidden model reasoning). Browser-native read-aloud, pause, resume, and stop controls support persisted speech speed and optional auto-read. The accessibility panel also persists larger text and reduced-motion preferences. Optional browser voice input only fills the editable chat field; it never submits a partial transcript. Speech never reads agent activity or raw coordinates.
 
 ## 4. Providers, and turning it on (your steps, about 20 minutes)
 The relay translates the app's one turn format to the provider's API and back (`supabase/functions/advisor/providers.ts`), so the client, tools and guards never change. **OpenRouter is used when `OPENROUTER_API_KEY` is set; otherwise Gemini if `GEMINI_API_KEY` is set.**

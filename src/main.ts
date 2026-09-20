@@ -47,10 +47,23 @@ function boot() {
   // Plan-ahead questions ("2pm class at Hancock") are answered from the Databricks forecast; everything else goes to the normal assistant.
   const rules = withPlanAhead(makeLocalAnswerer(askContext), askContext);
   // Optional Gemini advisor (docs/advisor/ADVISOR.md): it only picks tools and explains their results; any failure falls back to `rules`.
-  const answer = ADVISOR_CONFIG
-    ? withAdvisor(rules, createAdvisor({ transport: httpTransport(ADVISOR_CONFIG), getContext: () => ({ now: nowOf(), permits: store.get().permits, ada: store.get().ada, currentLocation }) }))
-    : rules;
-  createAssistant($("view-ask"), { answer, onSelect: (sel) => select(sel, "assistant", "map"), advisor: ADVISOR_CONFIG !== null, ensureCurrentLocation: () => map.locate() });
+  let activityListener: ((event: import("./lib/advisor.ts").AdvisorToolEvent) => void) | undefined;
+  const advisorEngine = ADVISOR_CONFIG
+    ? createAdvisor({ transport: httpTransport(ADVISOR_CONFIG), getContext: () => ({ now: nowOf(), permits: store.get().permits, ada: store.get().ada, currentLocation }), onToolEvent: (event) => activityListener?.(event) })
+    : null;
+  const answer = advisorEngine ? withAdvisor(rules, advisorEngine) : rules;
+  createAssistant($("view-ask"), {
+    answer,
+    onSelect: (sel) => select(sel, "assistant", "map"),
+    advisor: ADVISOR_CONFIG !== null,
+    ensureCurrentLocation: () => map.locate(),
+    subscribeActivity: (listener) => { activityListener = listener; return () => { if (activityListener === listener) activityListener = undefined; }; },
+    onMapAction: (action) => {
+      if (action.type !== "show_route") return;
+      map.showRoute(action.geometry.map((point) => ({ lat: point.latitude, lon: point.longitude })), action.routeType);
+      store.set({ view: "map", source: "assistant" });
+    },
+  });
   const plan = createPlanView($("view-plan"), {
     getPermits: () => ({ permits: store.get().permits, ada: store.get().ada }),
     onPermits: (permits, ada) => {

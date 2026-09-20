@@ -35,7 +35,7 @@ const card = (o: PlanOption, n: number | null): string => {
   const head = `<div class="plan-head"><strong>${n ? `${n}. ` : ""}${esc(o.name)}</strong>${
     o.verdict === "yes" ? `<span class="pill ${LABEL_CLASS[o.label]}">${esc(o.label)}</span>` : `<span class="acc-tag acc-check">Check sign</span>`
   }</div>`;
-  const where = `<p class="plan-sub">${esc(formatMeters(o.meters))} &middot; about ${o.walkMin} min walk</p>`;
+  const where = `<p class="plan-sub">${esc(formatMeters(o.meters))} &middot; about ${o.walkMin} min ${o.routeType === "walk_graph" ? "walk via campus paths" : "straight-line walk estimate"}</p>`;
   const body =
     o.verdict === "yes"
       ? `<p class="plan-main">Forecast: about <strong>${o.predictedOpen}</strong> of ${o.capacity} open (${o.predictedPct}% full) at ${esc(formatMinute(o.arriveMinute))}</p>` +
@@ -43,7 +43,7 @@ const card = (o: PlanOption, n: number | null): string => {
         (o.adaOpenEstimate !== undefined ? `<p class="plan-sub">About ${o.adaOpenEstimate} accessible spaces open</p>` : "") +
         `<p class="plan-sub">Right now on the map: ${o.nowOpen} open</p>`
       : `<p class="plan-sub">${esc(o.note ?? "We can't confirm your permit here - check the posted sign.")}</p>`;
-  return `<li class="plan-card">${head}${where}${body}<button type="button" class="ref" data-kind="${o.kind}" data-id="${esc(o.id)}">Show on map</button><button type="button" class="ref" data-route-kind="${o.kind}" data-route-id="${esc(o.id)}">Show walk estimate</button></li>`;
+  return `<li class="plan-card">${head}${where}${body}<button type="button" class="ref" data-kind="${o.kind}" data-id="${esc(o.id)}">Show on map</button><button type="button" class="ref" data-route-kind="${o.kind}" data-route-id="${esc(o.id)}">Show walking route</button></li>`;
 };
 
 export function renderPlanResult(r: PlanResult, input: { building: string; minute: number }): string {

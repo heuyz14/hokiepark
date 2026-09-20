@@ -34,7 +34,12 @@ export function findNearestWalkNode(point: Located, graph: WalkGraph): WalkNode 
 }
 
 /** A* over non-negative, directed pedestrian edges. Returns null when graph areas are disconnected. */
-export function calculateWalkRoute(origin: Located, destination: Located, graph: WalkGraph): WalkRoute | null {
+export interface WalkRouteOptions {
+  /** Use only edges the campus source explicitly marks as accessible. */
+  accessibleOnly?: boolean;
+}
+
+export function calculateWalkRoute(origin: Located, destination: Located, graph: WalkGraph, options: WalkRouteOptions = {}): WalkRoute | null {
   const start = findNearestWalkNode(origin, graph);
   const goal = findNearestWalkNode(destination, graph);
   const open = new Set([start.id]);
@@ -55,6 +60,7 @@ export function calculateWalkRoute(origin: Located, destination: Located, graph:
     }
     open.delete(currentId);
     for (const edge of graph.adjacency[currentId] ?? []) {
+      if (options.accessibleOnly && !edge.accessible) continue;
       if (edge.distanceMeters < 0 || !graph.nodes[edge.to]) continue;
       const tentative = (gScore.get(currentId) ?? Infinity) + edge.distanceMeters;
       if (tentative >= (gScore.get(edge.to) ?? Infinity)) continue;

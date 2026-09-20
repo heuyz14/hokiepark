@@ -6,7 +6,7 @@ import { PERMIT_IDS, type AdvisorContext, type ToolName } from "./advisor-spec.t
 import { footprintDistance, haversineMeters, walkMinutes, type Located } from "./nearby.ts";
 import { garageTotals, openAdaSpaces, openSpaces } from "./occupancy.ts";
 import { nearest } from "./nearby.ts";
-import { ARRIVE_BEFORE_MIN, FORECAST, forecastSource, planAhead, type PlanOption } from "./planahead.ts";
+import { ARRIVE_BEFORE_MIN, FORECAST, forecastPct, forecastSource, planAhead, type PlanOption } from "./planahead.ts";
 import { classSummary, garageAccess, lotAccess, PERMIT_LABEL, type PermitId } from "./permits.ts";
 import { formatMinute, DAY_NAME } from "./planask.ts";
 import { buildArrivalPlan } from "./arrival-plan.ts";
@@ -109,6 +109,79 @@ function findPlaceTool(a: Args): ToolResult {
   if (typeof a.query !== "string" || !a.query.trim()) return fail("missing_query");
   const results = searchPlaces(a.query.slice(0, 80));
   return results.length ? { ok: true, candidates: results } : { ok: true, candidates: [], hint: "No match. Ask the driver for the building's full name." };
+}
+
+/** Building-only resolution deliberately refuses to turn a partial name into a guess. */
+function resolveDestinationTool(a: Args): ToolResult {
+  if (typeof a.query !== "string" || !a.query.trim()) return fail("missing_query");
+  const query = a.query.slice(0, 80);
+  // A compact, data-backed nickname helps the natural phrase used in the demo without
+  // inventing a campus place. The target still has to exist in BUILDINGS.
+  const aliases: Record<string, string> = { "the gym": "war memorial gym", gym: "war memorial gym" };
+  const candidates = searchPlaces(aliases[norm(query)] ?? query, 8).filter((p) => p.kind === "building");
+  if (!candidates.length) return { ok: true, status: "not_found" };
+  const exact = candidates.filter((p) => norm(p.name) === norm(query) || p.matched === "building code");
+  if (exact.length === 1) return { ok: true, status: "resolved", destination_id: exact[0]!.id, name: exact[0]!.name };
+  if (candidates.length === 1) return { ok: true, status: "resolved", destination_id: candidates[0]!.id, name: candidates[0]!.name };
+  return { ok: true, status: "ambiguous", candidates: candidates.map(({ id, name }) => ({ id, name })) };
+}
+
+function lotDetailsTool(a: Args): ToolResult {
+  const place = byId.get(String(a.lot_id));
+  if (!place || place.kind === "building") return fail("lot_not_found", "Use a lot or garage id returned by find_place.");
+  if (place.kind === "lot") {
+    const lot = LOTS.find((x) => x.id === place.id)!;
+    return { ok: true, id: lot.id, name: place.name, kind: "lot", capacity: lot.capacity, permit_classes: lot.classes, availability_source: "simulation", has_accessible_spaces: lot.hasADA, coordinates: { latitude: lot.lat, longitude: lot.lon } };
+  }
+  const garage = GARAGES.find((x) => x.id === place.id)!;
+  const total = garageTotals(garage);
+  return { ok: true, id: garage.id, name: garage.name, kind: "garage", capacity: total.capacity, permit_classes: [...new Set(garage.levels.flatMap((level) => level.classes))], availability_source: "simulation", has_accessible_spaces: total.adaCapacity > 0, coordinates: { latitude: garage.lat, longitude: garage.lon } };
+}
+
+function eligibleLotsTool(a: Args, ctx: AdvisorContext): ToolResult {
+  const building = BUILDINGS.find((x) => x.id === a.destination_id);
+  if (!building) return fail("unknown_building", "Use a building id from resolve_destination or find_place.");
+  const w = who(a, ctx);
+  if ("err" in w) return w.err;
+  const held = { ada: w.ada };
+  const rows = ALL.filter((p) => p.kind !== "building").map((place) => {
+    const verdict = place.kind === "lot"
+      ? lotAccess(LOTS.find((x) => x.id === place.id)!, w.permits, held)
+      : garageAccess(GARAGES.find((x) => x.id === place.id)!.levels, w.permits, held);
+    return { id: place.id, name: place.name, kind: place.kind, permit_eligible: verdict.verdict === "yes" ? true : verdict.verdict === "no" ? false : null, restriction_notes: verdict.note ? [verdict.note] : [] };
+  });
+  return { ok: true, destination: building.name, permit_known: w.permits.length > 0 || w.ada, lots: rows };
+}
+
+function parkingForecastTool(a: Args): ToolResult {
+  const place = byId.get(String(a.lot_id));
+  const day = parseDay(a.day_of_week);
+  const minute = parseTime(a.arrival_time);
+  if (!place || place.kind === "building") return fail("lot_not_found");
+  if (day === null || minute === null) return fail("invalid_time", "Use ISO weekday 1-7 and 24-hour HH:MM.");
+  const units = place.kind === "lot" ? [{ id: place.id, capacity: LOTS.find((x) => x.id === place.id)!.capacity }] : GARAGES.find((x) => x.id === place.id)!.levels.map((level, index) => ({ id: `${place.id}:${index}`, capacity: level.capacity }));
+  let capacity = 0;
+  let open = 0;
+  for (const unit of units) {
+    const pct = forecastPct(unit.id, day, minute);
+    if (pct === null) continue;
+    capacity += unit.capacity;
+    open += Math.max(0, Math.round(unit.capacity * (1 - pct / 100)));
+  }
+  if (!capacity) return fail("forecast_unavailable");
+  return { ok: true, lot_id: place.id, name: place.name, estimated_open_spaces: open, occupancy_probability: Math.round((1 - open / capacity) * 100) / 100, source: "simulation", forecast_is_simulated: true };
+}
+
+function ticketRiskTool(a: Args, ctx: AdvisorContext): ToolResult {
+  const checked = permitTool({ ...a, place_id: a.lot_id }, ctx);
+  if (!checked.ok) return checked;
+  const verdict = checked.verdict as string;
+  const risk = verdict === "yes" ? "low" : verdict === "no" ? "high" : "unknown";
+  return { ok: true, eligible: verdict === "yes" ? true : verdict === "no" ? false : null, risk, reasons: [typeof checked.note === "string" ? checked.note : "Follow posted parking signage."], signage_reminder: "Always follow posted parking signage." };
+}
+
+function currentLocationTool(_a: Args, ctx: AdvisorContext): ToolResult {
+  return { ok: true, available: Boolean(ctx.currentLocation), ...(ctx.currentLocation?.accuracyMeters !== undefined ? { accuracy_meters: ctx.currentLocation.accuracyMeters } : {}) };
 }
 
 function planTool(a: Args, ctx: AdvisorContext): ToolResult {
@@ -314,7 +387,9 @@ function walkRouteTool(a: Args, ctx: AdvisorContext): ToolResult {
   if (a.origin_id === "current_location" && !current) return fail("location_unavailable", "Ask the driver to use the map's location button, then try again.");
   if (!origin && !current) return fail("unknown_place", "Use place ids returned by find_place.");
   const source: Located = current ?? origin!;
-  const routed = calculateCampusWalkingRoute(source, destination);
+  const accessibleOnly = a.accessible_only === true;
+  if (a.accessible_only !== undefined && typeof a.accessible_only !== "boolean") return fail("invalid_accessible_route");
+  const routed = calculateCampusWalkingRoute(source, destination, { accessibleOnly });
   const distance = routed?.distanceMeters ?? Math.round(haversineMeters(source, destination));
   return {
     ok: true,
@@ -324,7 +399,7 @@ function walkRouteTool(a: Args, ctx: AdvisorContext): ToolResult {
     duration_seconds: routed?.durationSeconds ?? Math.round(distance / 1.3),
     walking_minutes: Math.max(1, Math.ceil((routed?.durationSeconds ?? Math.round(distance / 1.3)) / 60)),
     route_type: routed ? "walk_graph" : "straight_line_estimate",
-    ...(routed ? { geometry: routed.geometry.filter((_, index, all) => index % Math.ceil(all.length / 100) === 0 || index === all.length - 1).map((point) => ({ latitude: point.lat, longitude: point.lon })), source: "VT Facilities Sidewalks and Pathways" } : { note: "No connected campus walkway route was found; this is a straight-line walking estimate, not turn-by-turn navigation." }),
+    ...(routed ? { geometry: routed.geometry.filter((_, index, all) => index % Math.ceil(all.length / 100) === 0 || index === all.length - 1).map((point) => ({ latitude: point.lat, longitude: point.lon })), source: "VT Facilities Sidewalks and Pathways", ...(accessibleOnly ? { accessible_route_requested: true } : {}) } : { note: accessibleOnly ? "No connected explicitly-accessible campus route was found; this is a straight-line estimate." : "No connected campus walkway route was found; this is a straight-line walking estimate, not turn-by-turn navigation." }),
   };
 }
 
@@ -383,6 +458,12 @@ export function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolR
   try {
     switch (name as ToolName) {
       case "find_place": return findPlaceTool(a);
+      case "resolve_destination": return resolveDestinationTool(a);
+      case "get_lot_details": return lotDetailsTool(a);
+      case "get_eligible_lots": return eligibleLotsTool(a, ctx);
+      case "get_parking_forecast": return parkingForecastTool(a);
+      case "get_ticket_risk": return ticketRiskTool(a, ctx);
+      case "get_current_location": return currentLocationTool(a, ctx);
       case "plan_parking": return planTool(a, ctx);
       case "parking_now": return nowTool(a, ctx);
       case "arrival_advice": return arrivalTool(a, ctx);
