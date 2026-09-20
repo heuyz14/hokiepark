@@ -27,7 +27,10 @@ class FakeSynth {
   }
   pause() { this.paused = true; }
   resume() { this.paused = false; }
-  getVoices() { return [{ voiceURI: "test-voice", name: "Test", lang: "en-US", default: true }]; }
+  getVoices() { return [
+    { voiceURI: "voice-a", name: "Alex", lang: "en-US", default: true },
+    { voiceURI: "voice-b", name: "Bryn", lang: "en-GB", default: false },
+  ]; }
 }
 
 let synth: FakeSynth;
@@ -108,4 +111,41 @@ test("pause and resume pass through", () => {
   assert.equal(synth.paused, true);
   speech.resumeSpeech();
   assert.equal(synth.paused, false);
+});
+
+test("changing the voice mid-sentence resumes the remainder in the new voice", () => {
+  const text = "Coliseum West has a commuter section you can park in today.";
+  let ended = 0;
+  speech.speak(text, { rate: 1.25, voiceURI: "voice-a", onEnd: () => ended++ });
+  assert.equal((synth.spoken[0]!.voice as { voiceURI: string }).voiceURI, "voice-a");
+  synth.spoken[0]!.onboundary!({ charIndex: 14 });
+
+  assert.equal(speech.setSpeechVoice("voice-b"), true);
+  assert.equal(ended, 0, "swapping voices is not a finish");
+  const resumed = synth.spoken[1]!;
+  assert.equal((resumed.voice as { voiceURI: string }).voiceURI, "voice-b");
+  assert.equal(resumed.text, text.slice(14), "picks up where the previous voice reached");
+  assert.equal(resumed.rate, 1.25, "the chosen speed survives a voice change");
+});
+
+test("returning to System Default clears the chosen voice", () => {
+  speech.speak("back to default please", { voiceURI: "voice-b" });
+  synth.spoken[0]!.onboundary!({ charIndex: 5 });
+  speech.setSpeechVoice(undefined);
+  assert.equal(synth.spoken[1]!.voice, null, "an empty selection must not keep speaking in the old voice");
+});
+
+test("speed and voice changes compose without losing each other", () => {
+  speech.speak("one two three four five six seven", { rate: 1, voiceURI: "voice-a" });
+  synth.spoken[0]!.onboundary!({ charIndex: 4 });
+  speech.setSpeechVoice("voice-b");
+  speech.setSpeechRate(1.5);
+  const last = synth.spoken[synth.spoken.length - 1]!;
+  assert.equal(last.rate, 1.5);
+  assert.equal((last.voice as { voiceURI: string }).voiceURI, "voice-b");
+});
+
+test("changing the voice with nothing playing just reports false", () => {
+  assert.equal(speech.setSpeechVoice("voice-b"), false);
+  assert.equal(synth.spoken.length, 0);
 });

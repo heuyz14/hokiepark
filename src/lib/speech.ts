@@ -20,7 +20,7 @@ let restarting = false;
 function play(text: string, from: number, options: SpeechOptions): void {
   const utterance = new SpeechSynthesisUtterance(text.slice(from));
   utterance.rate = options.rate ?? 1;
-  if (options.voiceURI) utterance.voice = window.speechSynthesis.getVoices().find((voice) => voice.voiceURI === options.voiceURI) ?? null;
+  utterance.voice = options.voiceURI ? window.speechSynthesis.getVoices().find((voice) => voice.voiceURI === options.voiceURI) ?? null : null;
   utterance.onboundary = (event: SpeechSynthesisEvent) => {
     if (current) current.offset = from + (event.charIndex ?? 0);
   };
@@ -46,13 +46,14 @@ export function speak(text: string, options: SpeechOptions = {}): boolean {
 export const isSpeaking = (): boolean => current !== null;
 
 /**
- * Apply a new rate immediately, picking up roughly where the voice had reached. Returns false when
- * nothing is playing, in which case the caller only needs to remember the rate for next time.
+ * Change how the current response is being spoken, picking up roughly where the voice had reached.
+ * Returns false when nothing is playing, in which case the caller only needs to remember the
+ * setting for next time.
  */
-export function setSpeechRate(rate: number): boolean {
+export function updateSpeech(patch: Partial<Omit<SpeechOptions, "onEnd">>): boolean {
   if (!isSpeechSupported() || !current) return false;
   const { text, offset, options } = current;
-  const next = { ...options, rate };
+  const next = { ...options, ...patch };
   restarting = true;
   window.speechSynthesis.cancel();
   restarting = false;
@@ -60,6 +61,12 @@ export function setSpeechRate(rate: number): boolean {
   play(text, offset, next);
   return true;
 }
+
+/** Speed up or slow down the response being read right now. */
+export const setSpeechRate = (rate: number): boolean => updateSpeech({ rate });
+
+/** Switch voice mid-response. `undefined` returns to the system default. */
+export const setSpeechVoice = (voiceURI: string | undefined): boolean => updateSpeech({ voiceURI });
 
 export function pauseSpeech(): void {
   if (isSpeechSupported()) window.speechSynthesis.pause();

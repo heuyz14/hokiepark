@@ -1,7 +1,7 @@
 import type { Answer, AnswerRef, Answerer } from "../lib/assistant.ts";
 import { followUpQuestions, SUGGESTED_QUESTIONS } from "../lib/assistant.ts";
 import { ADVISOR_SUGGESTIONS, ADVISOR_TOOL_LABELS, type AdvisorAnswer, type AdvisorMapAction, type AdvisorToolEvent } from "../lib/advisor.ts";
-import { isSpeechSupported, pauseSpeech, resumeSpeech, setSpeechRate, speak, stopSpeech } from "../lib/speech.ts";
+import { isSpeechSupported, pauseSpeech, resumeSpeech, setSpeechRate, setSpeechVoice, speak, stopSpeech } from "../lib/speech.ts";
 import { applyAccessibilityPreferences, loadAccessibilityPreferences, saveAccessibilityPreferences, type AccessibilityPreferences } from "../lib/accessibility.ts";
 import type { Selection } from "../types.ts";
 import { esc } from "./format.ts";
@@ -123,6 +123,8 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       preferences = { ...preferences, [key]: control instanceof HTMLInputElement ? control.checked : key === "voiceURI" ? control.value || undefined : Number(control.value) } as AccessibilityPreferences;
       saveAccessibilityPreferences(preferences);
       applyAccessibilityPreferences(preferences);
+      // A voice picked mid-response swaps in straight away, like the speed control.
+      if (key === "voiceURI") setSpeechVoice(preferences.voiceURI);
     });
   }
   const voiceSelect = el.querySelector<HTMLSelectElement>('select[data-a11y="voiceURI"]')!;
