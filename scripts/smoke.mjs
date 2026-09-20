@@ -67,6 +67,8 @@ const cleanup = () => {
   try { server.close(); } catch {}
   // Delete this run's Chrome profile. Left behind, each one (with the map's tile cache) is large, and dozens of runs once filled the disk.
   try { rmSync(userDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch {}
+  // Chrome's helper processes can outlive the main one by a moment and recreate files, so sweep once more after they are gone.
+  try { spawn("sh", ["-c", `sleep 3; rm -rf "$1"`, "sweep", userDir], { detached: true, stdio: "ignore" }).unref(); } catch {}
 };
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(130));
 process.on("exit", cleanup);
@@ -174,6 +176,12 @@ await click('.marker-garage[data-id="perry-street"]');
 await sleep(800);
 check("tap garage opens sheet", (await ev(`document.getElementById('sheet').hidden`)) === false);
 check("sheet title is Perry Street Garage", (await ev(`document.getElementById('sheet-title')?.textContent`)) === "Perry Street Garage");
+// REGRESSION (found at 375x667): an open bottom sheet must never cover the map controls. Each control's centre must be
+// the control itself, not the sheet floating over it.
+for (const cid of ["zoom-in", "zoom-out", "locate-me", "zoom-reset"]) {
+  const uncovered = await ev(`(()=>{const b=document.getElementById(${JSON.stringify(cid)});if(!b)return null;const r=b.getBoundingClientRect();const e=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !!e&&b.contains(e)})()`);
+  check(`open sheet does not cover the #${cid} button`, uncovered === true);
+}
 check("sheet has 5 level rows", (await ev(`document.querySelectorAll('#sheet .level').length`)) === 5);
 await shot("2-garage-sheet");
 await ev(`document.getElementById('sheet').scrollTop = 9999`); await shot("2b-garage-sheet-scrolled");
