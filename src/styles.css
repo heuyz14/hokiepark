@@ -341,3 +341,21 @@ h1, h2, h3, p { margin: 0; }
 .src { display: inline-block; margin-bottom: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; }
 .src-ai { background: #efe6ff; color: #4b2a8a; }
 .src-basic { background: #f1ecee; color: var(--muted); }
+
+/* --- Destination picker: a listbox that opens on tap, so you can browse without knowing a name --- */
+.combo { position: relative; }
+.combo-list {
+  position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px);
+  max-height: min(46vh, 320px); overflow-y: auto; -webkit-overflow-scrolling: touch;
+  margin: 0; padding: 4px; list-style: none;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 28px rgb(0 0 0 / 0.22);
+}
+.combo-opt {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  min-height: 44px; padding: 9px 10px; border-radius: 9px; cursor: pointer;
+}
+.combo-opt:hover, .combo-opt.is-active { background: #fdf1f5; }
+.combo-opt.is-active { box-shadow: inset 0 0 0 2px var(--maroon); }
+.combo-name { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.combo-code { flex: none; font-size: 11.5px; font-weight: 700; letter-spacing: 0.3px; color: var(--muted); }
+.combo-empty { padding: 12px 10px; font-size: 13px; color: var(--muted); }

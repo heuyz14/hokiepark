@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BUILDINGS, GARAGES, LOTS } from "../src/data/index.ts";
 import { ARRIVE_BEFORE_MIN, FORECAST, bucketOf, effectiveDow, forecastPct, planAhead, planLabel, planScore, type PredictionFile } from "../src/lib/planahead.ts";
+import { buildingOptions } from "../src/ui/plan.ts";
 import { lotAccess } from "../src/lib/permits.ts";
 
 const building = (n: string) => BUILDINGS.find((b) => b.name.toLowerCase().includes(n))!;
@@ -129,4 +130,14 @@ test("a tiny custom forecast file flows through (the function does not depend on
   const file: PredictionFile = { ...FORECAST, units: FORECAST.units.map((u) => ({ ...u, pct: Object.fromEntries(Object.keys(u.pct).map((d) => [d, new Array<number>(96).fill(100)])) })) };
   const r = planAhead({ building: building("hancock"), dow: 3, minute: 840, permits: ["cg"], ada: false }, data, file);
   assert.ok(r.recommended.every((o) => o.label === "Risky" && o.predictedOpen === 0));
+});
+
+test("the destination picker lists every building A-Z before anything is typed", () => {
+  const opts = buildingOptions();
+  assert.equal(opts.length, BUILDINGS.length, "every building must be browsable without typing");
+  const names = opts.map((o) => o.building.name);
+  assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b, "en")), "must be alphabetical");
+  // codes ride along so "HAN" is findable next to the full name
+  const hancock = opts.find((o) => /Hancock/i.test(o.building.name));
+  if (hancock) assert.ok(Array.isArray(hancock.codes));
 });

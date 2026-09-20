@@ -339,6 +339,23 @@ await shot("8c-ask-to-map");
 // Plan tab: destination + day + class time + permit -> forecast cards (Databricks predictions.json), permit rules respected
 await click('.tabbar [data-view="plan"]'); await sleep(200); await shot("8d-plan");
 check("Plan tab shows the form and 4 tabs exist", (await ev(`!document.getElementById('view-plan').hidden && !!document.getElementById('plan-form')`)) && (await ev(`document.querySelectorAll('.tabbar button').length`)) === 4);
+
+// Destination picker: browsable without typing, because a visitor may not know the building's name.
+check("building list is closed until the field is touched", (await ev(`document.getElementById('plan-bldg-list').hidden`)) === true);
+await click('#plan-bldg'); await sleep(250);
+const comboOpen = await ev(`!document.getElementById('plan-bldg-list').hidden`);
+const comboCount = await ev(`document.querySelectorAll('#plan-bldg-list .combo-opt').length`);
+const comboFirst = await ev(`[...document.querySelectorAll('#plan-bldg-list .combo-name')].slice(0,3).map(n=>n.textContent)`);
+check("tapping the destination field opens the full building list", comboOpen && comboCount >= 90, `open=${comboOpen} options=${comboCount}`);
+check("building list is alphabetical", JSON.stringify(comboFirst) === JSON.stringify([...comboFirst].sort((a, b) => a.localeCompare(b, "en"))), JSON.stringify(comboFirst));
+check("combobox reports its expanded state", (await ev(`document.getElementById('plan-bldg').getAttribute('aria-expanded')`)) === "true");
+await ev(`(()=>{const i=document.getElementById('plan-bldg');i.value='han';i.dispatchEvent(new Event('input',{bubbles:true}))})()`); await sleep(220);
+const comboFiltered = await ev(`[...document.querySelectorAll('#plan-bldg-list .combo-name')].map(n=>n.textContent)`);
+check("typing filters the list", comboFiltered.length > 0 && comboFiltered.length < comboCount && comboFiltered.some((n) => /Hancock/i.test(n)), JSON.stringify(comboFiltered.slice(0, 4)));
+await click('#plan-bldg-list .combo-opt'); await sleep(220);
+check("choosing an option fills the field and closes the list",
+  (await ev(`document.getElementById('plan-bldg-list').hidden`)) === true && /\w/.test(await ev(`document.getElementById('plan-bldg').value`)),
+  await ev(`document.getElementById('plan-bldg').value`));
 await ev(`(()=>{const i=document.getElementById('plan-bldg');i.value='TORG';i.dispatchEvent(new Event('change'));document.getElementById('plan-day').value='3';document.getElementById('plan-time').value='14:00';})()`);
 await ev(`document.getElementById('plan-form').requestSubmit()`); await sleep(250);
 check("Plan without a permit asks for one and recommends nothing", /Choose your permit/.test(await ev(`document.getElementById('plan-out').innerText`)) && (await ev(`document.querySelectorAll('#plan-out .plan-card').length`)) === 0);

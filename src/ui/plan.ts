@@ -4,7 +4,7 @@ import { forecastSource, planAhead, type PlanOption, type PlanResult } from "../
 import { DAY_NAME, formatMinute } from "../lib/planask.ts";
 import { formatMeters } from "../lib/nearby.ts";
 import { PERMITS, SIGNAGE_NOTE, type PermitId } from "../lib/permits.ts";
-import { resolveBuilding as findBuilding } from "../lib/search.ts";
+import { filterBuildings, resolveBuilding as findBuilding } from "../lib/search.ts";
 import type { Building, Selection } from "../types.ts";
 import { esc } from "./format.ts";
 
@@ -58,6 +58,22 @@ export function renderPlanResult(r: PlanResult, input: { building: string; minut
     <p class="fine">${esc(SIGNAGE_NOTE)}</p>`;
 }
 
+export interface BuildingOption {
+  building: Building;
+  codes: readonly string[];
+}
+
+/**
+ * Every building A-Z, with its official Banner codes. This is what the picker shows before the
+ * driver types anything: on a phone, tapping a field and being told "start typing" is a dead end
+ * if you don't already know what the building is called.
+ */
+export function buildingOptions(buildings: readonly Building[] = BUILDINGS): BuildingOption[] {
+  return [...buildings]
+    .sort((a, b) => a.name.localeCompare(b.name, "en"))
+    .map((building) => ({ building, codes: buildingCodes(building.num) }));
+}
+
 export function createPlanView(el: HTMLElement, opts: PlanViewOptions): PlanViewController {
   const clock = opts.now ?? (() => new Date());
   const t0 = clock();
@@ -66,11 +82,11 @@ export function createPlanView(el: HTMLElement, opts: PlanViewOptions): PlanView
       <form class="plan-form" id="plan-form" autocomplete="off" novalidate>
         <h2 class="plan-lead">Where should I park for class?</h2>
         <label for="plan-bldg">Destination building</label>
-        <input id="plan-bldg" type="text" list="plan-bldgs" placeholder="e.g. Hancock Hall or HAN" spellcheck="false" autocapitalize="off">
-        <datalist id="plan-bldgs">${BUILDINGS.flatMap((b) => {
-          const codes = buildingCodes(b.num);
-          return [`<option value="${esc(b.name)}"${codes.length ? ` label="${esc(codes.join(", "))}"` : ""}></option>`, ...codes.map((code) => `<option value="${esc(code)}" label="${esc(b.name)}"></option>`)];
-        }).join("")}</datalist>
+        <div class="combo">
+          <input id="plan-bldg" type="text" role="combobox" aria-expanded="false" aria-controls="plan-bldg-list" aria-autocomplete="list"
+            placeholder="Tap to pick, or type a name or code" spellcheck="false" autocapitalize="off">
+          <ul id="plan-bldg-list" class="combo-list" role="listbox" aria-label="Campus buildings" hidden></ul>
+        </div>
         <div class="plan-when-row">
           <div><label for="plan-day">Day</label>
             <select id="plan-day">${[1, 2, 3, 4, 5].map((d) => `<option value="${d}"${d === defaultDay(t0) ? " selected" : ""}>${DAY_NAME[d]}</option>`).join("")}</select></div>
@@ -85,6 +101,7 @@ export function createPlanView(el: HTMLElement, opts: PlanViewOptions): PlanView
     </div>`;
 
   const bldg = el.querySelector<HTMLInputElement>("#plan-bldg")!;
+  const list = el.querySelector<HTMLElement>("#plan-bldg-list")!;
   const day = el.querySelector<HTMLSelectElement>("#plan-day")!;
   const time = el.querySelector<HTMLInputElement>("#plan-time")!;
   const chips = el.querySelector<HTMLElement>("#plan-permit-chips")!;
@@ -102,6 +119,82 @@ export function createPlanView(el: HTMLElement, opts: PlanViewOptions): PlanView
   function resolveBuilding(): Building | null {
     return findBuilding(BUILDINGS, bldg.value);
   }
+
+  // --- destination picker: a listbox that opens on tap, not only once you've typed ---
+  const ALL = buildingOptions();
+  let shown: BuildingOption[] = [];
+  let active = -1;
+
+  const optionId = (i: number) => `plan-bldg-opt-${i}`;
+
+  function paint() {
+    list.innerHTML = shown.length
+      ? shown
+          .map(
+            (o, i) =>
+              `<li role="option" id="${optionId(i)}" class="combo-opt${i === active ? " is-active" : ""}" aria-selected="${i === active}" data-i="${i}">` +
+              `<span class="combo-name">${esc(o.building.name)}</span>${o.codes.length ? `<span class="combo-code">${esc(o.codes.join(", "))}</span>` : ""}</li>`,
+          )
+          .join("")
+      : `<li class="combo-empty" role="presentation">No building matches that. Try a shorter name, or a code like HAN.</li>`;
+    bldg.setAttribute("aria-activedescendant", active >= 0 && shown.length ? optionId(active) : "");
+  }
+
+  function open(query = bldg.value) {
+    const q = query.trim();
+    const hits = q ? filterBuildings(BUILDINGS, q) : [];
+    // Typing filters; an empty box shows the whole campus A-Z.
+    shown = q ? ALL.filter((o) => hits.some((h) => h.id === o.building.id)) : ALL;
+    active = -1;
+    paint();
+    list.hidden = false;
+    bldg.setAttribute("aria-expanded", "true");
+  }
+
+  function close() {
+    list.hidden = true;
+    bldg.setAttribute("aria-expanded", "false");
+    bldg.setAttribute("aria-activedescendant", "");
+    active = -1;
+  }
+
+  function choose(i: number) {
+    const o = shown[i];
+    if (!o) return;
+    bldg.value = o.building.name;
+    close();
+    if (searched) run();
+  }
+
+  function move(step: number) {
+    if (list.hidden) return open();
+    if (!shown.length) return;
+    active = (active + step + shown.length) % shown.length;
+    paint();
+    list.querySelector(".is-active")?.scrollIntoView({ block: "nearest" });
+  }
+
+  bldg.addEventListener("focus", () => open());
+  bldg.addEventListener("click", () => open());
+  bldg.addEventListener("input", () => open());
+  bldg.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
+    else if (e.key === "Enter" && !list.hidden && active >= 0) { e.preventDefault(); choose(active); }
+    else if (e.key === "Escape" && !list.hidden) { e.preventDefault(); close(); }
+    else if (e.key === "Tab") close();
+  });
+  // mousedown, not click: the input blurs first and would close the list out from under the tap.
+  list.addEventListener("mousedown", (e) => {
+    const li = (e.target as Element).closest<HTMLElement>("[data-i]");
+    if (!li) return;
+    e.preventDefault();
+    choose(Number(li.dataset.i));
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (!list.hidden && !el.contains(e.target as Node)) close();
+  }, true);
+  bldg.addEventListener("blur", () => setTimeout(close, 120));
 
   function showError(msg: string) {
     err.textContent = msg;
