@@ -11,7 +11,7 @@ import { LIMITS, PERMIT_IDS, TOOL_DECLARATIONS, TOOL_NAMES, systemPrompt, type A
 
 export interface Env {
   GEMINI_API_KEY?: string;
-  /** Model id. Check Google AI Studio for a current one; model ids change over time. */
+  /** Model id, or several separated by commas (tried in order when one is overloaded, over quota, or retired). Check Google AI Studio for current ids. */
   GEMINI_MODEL?: string;
   /** Comma-separated allowed browser origins, e.g. "https://heuyz14.github.io". Unset = any origin (fine for local testing only). */
   ALLOWED_ORIGINS?: string;
@@ -26,6 +26,8 @@ export interface Deps {
   fetch: typeof fetch;
   now: () => number;
   limiter: Limiter;
+  /** Pause between retries (injectable so tests do not wait). */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
@@ -180,29 +182,50 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
   const v = validateBody(parsed);
   if ("error" in v) return json(400, { error: v.error }, cors);
 
-  const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
-  let res: Response;
-  try {
-    res = await deps.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt(v.context) }] },
-        contents: v.contents,
-        tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-        toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-        generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
-      }),
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch {
-    return json(504, { error: "upstream_timeout" }, cors);
+  const models = (env.GEMINI_MODEL ?? "").split(",").map((m) => m.trim()).filter(Boolean).slice(0, 3);
+  if (!models.length) models.push(DEFAULT_MODEL);
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const payload = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt(v.context) }] },
+    contents: v.contents,
+    tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+    toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+    generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
+  });
+  // Try each model in order. Overload (503), quota (429), server errors and a retired name (404) move on to the next model;
+  // a lone model gets one short retry on overload. Anything else (bad key, bad request) is final.
+  const RETRYABLE = new Set([404, 429, 500, 503]);
+  let res: Response | null = null;
+  let usedModel = models[0]!;
+  for (let i = 0; i < models.length; i++) {
+    usedModel = models[i]!;
+    for (let attempt = 0; attempt < (models.length === 1 ? 2 : 1); attempt++) {
+      try {
+        res = await deps.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(usedModel)}:generateContent`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+          body: payload,
+          signal: AbortSignal.timeout(8_000),
+        });
+      } catch {
+        res = null;
+        if (i === models.length - 1) return json(504, { error: "upstream_timeout" }, cors);
+        break;
+      }
+      if (res.status === 503 && attempt === 0 && models.length === 1) {
+        await sleep(700);
+        continue;
+      }
+      break;
+    }
+    if (res && (res.ok || !RETRYABLE.has(res.status))) break;
   }
+  if (!res) return json(504, { error: "upstream_timeout" }, cors);
   if (!res.ok) {
     // Surface Gemini's own error code and message (key redacted, length-capped) so a bad model name / key / quota is diagnosable
     // from the app or `npm run check:advisor`, without ever echoing the request, the key, or the raw upstream body.
     const detail = await upstreamDetail(res, env.GEMINI_API_KEY);
-    return json(res.status === 429 ? 503 : 502, { error: res.status === 429 ? "quota" : "upstream_rejected", ...detail }, cors);
+    return json(res.status === 429 ? 503 : 502, { error: res.status === 429 ? "quota" : "upstream_rejected", upstream_model: usedModel, ...detail }, cors);
   }
 
   let data: unknown;

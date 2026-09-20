@@ -20,6 +20,7 @@ function deps(reply: () => Response | Promise<Response> = () => Response.json({ 
     }) as typeof fetch,
     now: () => t,
     limiter: createLimiter(),
+    sleep: async () => {},
   };
   return { d, sent };
 }
@@ -51,13 +52,50 @@ test("upstream errors surface Gemini's status, code and message with the key RED
   const res = await handle(post(good), env, deps(() => new Response(JSON.stringify(body), { status: 404 })).d);
   const j = (await res.json()) as any;
   assert.deepEqual([res.status, j.error, j.upstream_status, j.upstream_code], [502, "upstream_rejected", 404, "NOT_FOUND"]);
+  assert.equal(j.upstream_model, "gemini-2.5-flash");
   assert.ok(!JSON.stringify(j).includes(KEY), "the key is redacted");
   assert.match(j.upstream_message, /\[redacted\]/);
   assert.ok(j.upstream_message.length <= 200);
   const quota = await handle(post(good), env, deps(() => new Response(JSON.stringify({ error: { status: "RESOURCE_EXHAUSTED", message: "slow down" } }), { status: 429 })).d);
   assert.deepEqual([quota.status, ((await quota.json()) as any).upstream_code], [503, "RESOURCE_EXHAUSTED"]);
   const junk = await handle(post(good), env, deps(() => new Response("<html>oops</html>", { status: 500 })).d);
-  assert.deepEqual(await junk.json(), { error: "upstream_rejected", upstream_status: 500 });
+  assert.deepEqual(await junk.json(), { error: "upstream_rejected", upstream_model: "gemini-2.5-flash", upstream_status: 500 });
+});
+
+test("MODEL FALLBACK: an overloaded/over-quota/retired first model falls through to the next; the response comes from the first that works", async () => {
+  const urls: string[] = [];
+  const replies = [503, 429, 200];
+  const d: Deps = { now: () => 0, limiter: createLimiter(), sleep: async () => {}, fetch: (async (url: string) => {
+    urls.push(String(url));
+    const code = replies.shift()!;
+    return code === 200 ? Response.json({ candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] }) : new Response(JSON.stringify({ error: { status: "UNAVAILABLE", message: "busy" } }), { status: code });
+  }) as unknown as typeof fetch };
+  const res = await handle(post(good), { ...env, GEMINI_MODEL: "model-a, model-b ,model-c,model-d" }, d);
+  assert.equal(res.status, 200);
+  assert.deepEqual(urls.map((u) => /models\/([^:]+):/.exec(u)![1]), ["model-a", "model-b", "model-c"], "tries in order, at most 3 models");
+});
+
+test("MODEL FALLBACK: when every model fails the last error is reported with the model name; a bad key does NOT fall through", async () => {
+  const d1: Deps = { now: () => 0, limiter: createLimiter(), sleep: async () => {}, fetch: (async () => new Response(JSON.stringify({ error: { status: "UNAVAILABLE", message: "busy" } }), { status: 503 })) as unknown as typeof fetch };
+  const r1 = await handle(post(good), { ...env, GEMINI_MODEL: "a,b" }, d1);
+  const j1 = (await r1.json()) as any;
+  assert.deepEqual([r1.status, j1.upstream_model, j1.upstream_status], [502, "b", 503]);
+  let calls = 0;
+  const d2: Deps = { now: () => 0, limiter: createLimiter(), sleep: async () => {}, fetch: (async () => (calls++, new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", message: "API key not valid" } }), { status: 400 }))) as unknown as typeof fetch };
+  const r2 = await handle(post(good), { ...env, GEMINI_MODEL: "a,b" }, d2);
+  assert.equal(r2.status, 502);
+  assert.equal(calls, 1, "a 400 (bad key/request) is final; the next model would fail the same way");
+});
+
+test("a lone model gets one short retry on a 503 overload, and only one", async () => {
+  let calls = 0;
+  const flaky: Deps = { now: () => 0, limiter: createLimiter(), sleep: async () => {}, fetch: (async () => (++calls === 1 ? new Response("{}", { status: 503 }) : Response.json({ candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] }))) as unknown as typeof fetch };
+  assert.equal((await handle(post(good), env, flaky)).status, 200);
+  assert.equal(calls, 2);
+  let calls2 = 0;
+  const down: Deps = { now: () => 0, limiter: createLimiter(), sleep: async () => {}, fetch: (async () => (calls2++, new Response("{}", { status: 503 }))) as unknown as typeof fetch };
+  assert.equal((await handle(post(good), env, down)).status, 502);
+  assert.equal(calls2, 2);
 });
 
 test("a caller cannot override the system prompt, the tools, or the model", async () => {

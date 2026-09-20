@@ -219,27 +219,46 @@ async function handle(req, env, deps) {
   }
   const v = validateBody(parsed);
   if ("error" in v) return json(400, { error: v.error }, cors);
-  const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
-  let res;
-  try {
-    res = await deps.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt(v.context) }] },
-        contents: v.contents,
-        tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-        toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-        generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
-      }),
-      signal: AbortSignal.timeout(1e4)
-    });
-  } catch {
-    return json(504, { error: "upstream_timeout" }, cors);
+  const models = (env.GEMINI_MODEL ?? "").split(",").map((m) => m.trim()).filter(Boolean).slice(0, 3);
+  if (!models.length) models.push(DEFAULT_MODEL);
+  const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const payload = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt(v.context) }] },
+    contents: v.contents,
+    tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+    toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+    generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
+  });
+  const RETRYABLE = /* @__PURE__ */ new Set([404, 429, 500, 503]);
+  let res = null;
+  let usedModel = models[0];
+  for (let i = 0; i < models.length; i++) {
+    usedModel = models[i];
+    for (let attempt = 0; attempt < (models.length === 1 ? 2 : 1); attempt++) {
+      try {
+        res = await deps.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(usedModel)}:generateContent`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+          body: payload,
+          signal: AbortSignal.timeout(8e3)
+        });
+      } catch {
+        res = null;
+        if (i === models.length - 1) return json(504, { error: "upstream_timeout" }, cors);
+        break;
+      }
+      if (res.status === 503 && attempt === 0 && models.length === 1) {
+        await sleep(700);
+        continue;
+      }
+      break;
+    }
+    if (res && (res.ok || !RETRYABLE.has(res.status))) break;
   }
+  if (!res) return json(504, { error: "upstream_timeout" }, cors);
   if (!res.ok) {
     const detail = await upstreamDetail(res, env.GEMINI_API_KEY);
-    return json(res.status === 429 ? 503 : 502, { error: res.status === 429 ? "quota" : "upstream_rejected", ...detail }, cors);
+    return json(res.status === 429 ? 503 : 502, { error: res.status === 429 ? "quota" : "upstream_rejected", upstream_model: usedModel, ...detail }, cors);
   }
   let data;
   try {

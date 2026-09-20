@@ -62,8 +62,13 @@ const scenarios = [
   "Can I park at the Squires lot with my permit?",
   "What's the weather like in Blacksburg?", // should be declined politely, no tools
 ];
+const PAUSE_MS = Number(process.env.ADVISOR_CHECK_PAUSE_MS ?? 20_000); // free-tier Gemini allows only a few requests per minute
 let ai = 0;
-for (const q of scenarios) {
+for (const [n, q] of scenarios.entries()) {
+  if (n > 0) {
+    console.log(`(waiting ${PAUSE_MS / 1000}s so the free-tier rate limit is not tripped)`);
+    await new Promise((r) => setTimeout(r, PAUSE_MS));
+  }
   const advisor = createAdvisor({ transport: httpTransport(c), getContext: () => ctx });
   const t0 = Date.now();
   const r = await advisor.ask(q);
