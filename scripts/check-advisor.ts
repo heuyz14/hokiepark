@@ -32,7 +32,10 @@ const ping = await fetch(c.url, {
 }).catch((e) => die(`cannot reach the function: ${(e as Error).message}`));
 const pingRes = ping as Response;
 if (pingRes.status === 404) die("function not found (404). Deploy it: Supabase -> Edge Functions -> new function named 'advisor'.");
-if (pingRes.status === 401) die("401: the function gateway rejected the key. New Supabase functions accept only sb_publishable_... keys: set HOKIEPARK_ADVISOR_KEY in .env.local to the Publishable key from Project Settings -> API Keys.");
+if (pingRes.status === 401) {
+  const detail = (await pingRes.text().catch(() => "")).slice(0, 220);
+  die(`401 from Supabase before the advisor code ran: ${detail}\n  - "Invalid JWT" / "UNAUTHORIZED..." with a publishable key: Edge Functions -> advisor -> Settings -> turn OFF "Verify JWT" (the advisor validates and rate-limits requests itself), then redeploy.\n  - "INVALID_API_KEY ... legacy": the function code is still the placeholder, or set HOKIEPARK_ADVISOR_KEY to the sb_publishable_ key.\n  - Alternatively remove HOKIEPARK_ADVISOR_KEY from .env.local so the legacy anon JWT is used (works when Verify JWT is ON).`);
+}
 if (pingRes.status === 500) die("500 not_configured: set the GEMINI_API_KEY secret on the function.");
 if (pingRes.status === 502 || pingRes.status === 503 || pingRes.status === 504) die(`upstream problem (${pingRes.status}): check GEMINI_API_KEY, GEMINI_MODEL and your Gemini quota in Google AI Studio.`);
 if (!pingRes.ok) die(`unexpected HTTP ${pingRes.status}`);
