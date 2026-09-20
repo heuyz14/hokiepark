@@ -61,7 +61,8 @@ const mapActions = (actions: AdvisorMapAction[] | undefined) => actions?.some((a
 
 export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = false, ensureCurrentLocation, subscribeActivity, onMapAction }: AssistantOptions): void {
   // Keep the cold-start surface focused; follow-up suggestions still provide more paths after an answer.
-  const suggestions = (advisor ? ADVISOR_SUGGESTIONS : SUGGESTED_QUESTIONS).slice(0, 2);
+  const suggestionPool = advisor ? ADVISOR_SUGGESTIONS : SUGGESTED_QUESTIONS;
+  const suggestions = suggestionPool.slice(0, 1);
   el.innerHTML = `
     <div class="chat">
       <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
@@ -204,7 +205,7 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
       for (const old of log.querySelectorAll(".followups")) old.remove();
       // An answer that already lists three "show on map" buttons doesn't need three more chips.
       // Backfill from whichever starter set this mode uses, so advisor mode stays in its own voice.
-      const ups = followUpQuestions(a, asked, a.refs.length >= 3 ? 2 : 3, suggestions);
+      const ups = followUpQuestions(a, asked, a.refs.length >= 3 ? 2 : 3, suggestionPool);
       pending.innerHTML = sourceTag(a as AdvisorAnswer, advisor) + agentActivity(a as AdvisorAnswer, advisor) + bubbleLines(a.lines) + refButtons(a.refs) + mapActions((a as AdvisorAnswer).mapActions) + speechControls() + chipRow(ups);
       const routeAction = (a as AdvisorAnswer).mapActions?.find((action): action is Extract<AdvisorMapAction, { type: "show_route" }> => action.type === "show_route");
       if (routeAction) pending.dataset.mapActions = JSON.stringify(routeAction);
