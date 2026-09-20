@@ -466,6 +466,10 @@ if (!LIVE) {
   // 1) a database change reaches map, list, sheet and assistant
   mock.rows.find((r) => r.garage_id === "perry-street" && r.level_index === 1).occupied = 260; // 230 -> 260: Perry open 310 -> 280
   check("live: DB change updates the map marker", await waitFor(async () => /280 of 1350/.test(await markerLabel("perry-street"))), await markerLabel("perry-street"));
+  // regression: a live refresh must not strip MapLibre's marker class (that made garage markers render in the wrong place and drift when panning)
+  check("live: garage markers keep MapLibre's positioning after a live refresh (position:absolute, maplibregl-marker)",
+    await ev(`[...document.querySelectorAll('.marker-garage')].every((el)=>el.classList.contains('maplibregl-marker')&&getComputedStyle(el).position==='absolute')`),
+    await ev(`[...document.querySelectorAll('.marker-garage')].map((el)=>el.className+' | '+getComputedStyle(el).position).join(' || ')`));
   await audit("after live update");
 
   // 2) an open sheet updates in place and keeps its scroll position

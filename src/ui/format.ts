@@ -27,3 +27,13 @@ export const statusPill = (status: AvailabilityStatus, text?: string) =>
   `<span class="pill pill-${status}">${esc(text ?? STATUS_LABEL[status])}</span>`;
 
 export { formatMeters as meters } from "../lib/nearby.ts";
+
+/**
+ * Replace an element's classes with `next` while KEEPING the ones a library added to it. MapLibre puts `maplibregl-marker` on every marker
+ * element; that class is what makes it `position: absolute; top: 0; left: 0`. Overwriting `className` wholesale drops it, and the marker then
+ * renders at the wrong place (and drifts as the map moves) because the app's own `.marker { position: relative }` takes over.
+ */
+export function withLibraryClasses(current: Iterable<string>, next: string): string {
+  const keep = [...current].filter((c) => c.startsWith("maplibregl-"));
+  return [...keep, ...next.split(/\s+/).filter(Boolean)].join(" ");
+}

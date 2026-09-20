@@ -5,7 +5,7 @@ import type { Building, Footprint, Garage, Lot, Selection } from "../types.ts";
 import { footprintBounds, footprintToGeoJSON } from "../lib/geojson.ts";
 import { garageStatus, garageTotals } from "../lib/occupancy.ts";
 import { classSummary, garageAccess, lotAccess, type LotClass, type PermitId } from "../lib/permits.ts";
-import { esc, CATEGORY_COLOR } from "./format.ts";
+import { esc, CATEGORY_COLOR, withLibraryClasses } from "./format.ts";
 
 export interface MapController {
   /** Highlight a selection. `fly` recenters/zooms on it; otherwise only nudges it out from under the sheet. */
@@ -408,7 +408,7 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void): 
           const selected = div.classList.contains("is-selected") ? " is-selected" : "";
           const filtering = activePermits.length > 0 || activeAda;
           const access = filtering ? ` acc-${garageAccess(g.levels, activePermits, { ada: activeAda }).verdict}` : "";
-          div.className = `marker marker-garage st-${st}${selected}${access}`;
+          div.className = withLibraryClasses(div.classList, `marker marker-garage st-${st}${selected}${access}`);
           div.setAttribute("aria-label", garageLabel(g));
           div.innerHTML = garageMarkerHtml(g);
         }

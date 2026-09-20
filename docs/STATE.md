@@ -221,5 +221,9 @@ The other session is moving `scripts/*` into `scripts/{build,data,verify}/`, `do
 - Cross-links in README and docs (`docs/SUPABASE.md`, the runbook, `supabase/optional/schedule_simulator.sql`, comments in scripts/tests) name files by path: grep before merging.
 - Do not merge until `npm run smoke -- 375 667` AND `npm run smoke:live` pass on the branch. Session e7 holds no pending edits in `scripts/`, `docs/` or `data/` and will not push there until the restructure is merged.
 
+## Bug fixed: garage markers in the wrong place (2026-09-20)
+- Report: garage pills drifted far from the real garages and moved wrongly when panning (screenshot from the user). Cause: `refreshGarages()` (runs on every live-feed update) set `div.className = ...`, wiping MapLibre's `maplibregl-marker` class, which is what makes a marker `position: absolute; top: 0; left: 0`; the app's own `.marker { position: relative }` then took over. Lot markers were never re-classed, so only garages were wrong (and only after the first live update).
+- Fix: `withLibraryClasses()` (ui/format.ts) keeps `maplibregl-*` classes when refreshing. Regression coverage: unit test (`tests/marker-classes.test.ts`) and a browser check in `smoke:live` that garage markers are `position:absolute` with `maplibregl-marker` after a live refresh; verified to FAIL with the bug reintroduced and pass with the fix.
+
 ## Commands
 `npm run data` | `npm run build` | `npm run dev` (watch) | `npm test` | `npm run typecheck` | `npm run check` (all three) | `npm run timetable` (re-pull term) | `npm run curves` (regenerate curves SQL)
