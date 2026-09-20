@@ -28,22 +28,29 @@ if (!cfg) die("Set HOKIEPARK_SUPABASE_URL and HOKIEPARK_SUPABASE_ANON_KEY in .en
 const c = cfg!;
 console.log(`function: ${new URL(c.url).host}${new URL(c.url).pathname}`);
 
-// 1) is the ADVISOR deployed? An invalid body is rejected by the advisor code itself with a 400 JSON error and costs no model request.
-const probe = await fetch(c.url, {
-  method: "POST",
-  headers: { "content-type": "application/json", apikey: c.anonKey, authorization: `Bearer ${c.anonKey}` },
-  body: "{}",
-}).catch((e) => die(`cannot reach the function: ${(e as Error).message}`));
-const pr = probe as Response;
-const prText = await pr.text();
-if (pr.status === 404) die("function not found (404). Deploy it: Supabase -> Edge Functions -> new function named 'advisor'.");
-if (pr.status === 401) {
-  die(`401 from Supabase before the advisor code ran: ${prText.slice(0, 220)}\n  - "Invalid JWT" / "UNAUTHORIZED..." with a publishable key: Edge Functions -> advisor -> Settings -> turn OFF "Verify JWT" (the advisor validates and rate-limits requests itself), then redeploy.\n  - "INVALID_API_KEY ... legacy": the function code is still the placeholder, or set HOKIEPARK_ADVISOR_KEY to the sb_publishable_ key.\n  - Alternatively remove HOKIEPARK_ADVISOR_KEY from .env.local so the legacy anon JWT is used (works when Verify JWT is ON).`);
+// 1) is the ADVISOR deployed, and which model provider does it use? GET is a free diagnostic (names only, no model request).
+const headers = { "content-type": "application/json", apikey: c.anonKey, authorization: `Bearer ${c.anonKey}` };
+const health = await fetch(c.url, { method: "GET", headers }).catch((e) => die(`cannot reach the function: ${(e as Error).message}`));
+const hr = health as Response;
+const hText = await hr.text();
+if (hr.status === 404) die("function not found (404). Deploy it: Supabase -> Edge Functions -> new function named 'advisor'.");
+if (hr.status === 401) {
+  die(`401 from Supabase before the advisor code ran: ${hText.slice(0, 220)}\n  - "Invalid JWT" / "UNAUTHORIZED..." with a publishable key: Edge Functions -> advisor -> Settings -> turn OFF "Verify JWT" (the advisor validates and rate-limits requests itself), then redeploy.\n  - "INVALID_API_KEY ... legacy": the function code is still the placeholder, or set HOKIEPARK_ADVISOR_KEY to the sb_publishable_ key.\n  - Alternatively remove HOKIEPARK_ADVISOR_KEY from .env.local so the legacy anon JWT is used (works when Verify JWT is ON).`);
 }
-if (pr.status === 200 && /"message"\s*:\s*"Hello/.test(prText)) die("the function answered with Supabase's default placeholder, not the advisor. Replace ALL the code in Edge Functions -> advisor with supabase/functions/advisor/index.ts (pbcopy < that file) and click Deploy.");
-if (pr.status === 500 && /not_configured/.test(prText)) die("500 not_configured: set the OPENROUTER_API_KEY secret (or GEMINI_API_KEY) on the function, then redeploy.");
-if (pr.status !== 400 || !/bad context|body must be an object/.test(prText)) die(`unexpected response from the function (HTTP ${pr.status}): ${prText.slice(0, 160)}`);
-console.log("PASS  the advisor function is deployed (its own validation answered)");
+let info: { service?: string; provider?: string | null; models?: string[]; gemini_key_also_set?: boolean } | null = null;
+try {
+  info = JSON.parse(hText);
+} catch {
+  /* not JSON */
+}
+if (info?.service !== "hokiepark-advisor") {
+  if (/"message"\s*:\s*"Hello/.test(hText)) die("the function is Supabase's default placeholder, not the advisor. Replace ALL the code in Edge Functions -> advisor with supabase/functions/advisor/index.ts (pbcopy < that file) and click Deploy.");
+  die(`the deployed function does not report its status (HTTP ${hr.status}: ${hText.slice(0, 120)}). It is an OLD version: re-paste the current supabase/functions/advisor/index.ts (pbcopy < that file) and Deploy.`);
+}
+const meta = info as NonNullable<typeof info>;
+if (!meta.provider) die("the function is deployed but has no model key: set the OPENROUTER_API_KEY secret (or GEMINI_API_KEY) in Edge Functions -> Secrets, then redeploy.");
+console.log(`PASS  the advisor function is deployed. provider: ${meta.provider}; models: ${(meta.models ?? []).join(", ")}${meta.gemini_key_also_set ? " (a GEMINI key is also set but OpenRouter takes precedence)" : ""}`);
+if (meta.provider === "gemini") console.log("NOTE  provider is GEMINI, not OpenRouter: the OPENROUTER_API_KEY secret is missing or not applied. Add it in Edge Functions -> Secrets and redeploy.");
 
 // 2) real scenarios through the real agent loop and the real tools
 const ctx = { now: { dow: 6, minute: 15 * 60 }, permits: [] as never[], ada: false };

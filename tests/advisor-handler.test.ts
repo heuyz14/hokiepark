@@ -114,7 +114,7 @@ test("GEMINI_MODEL selects the model (url-encoded)", async () => {
 
 test("not configured, wrong method, bad JSON, oversized bodies", async () => {
   assert.equal((await handle(post(good), {}, deps().d)).status, 500);
-  assert.equal((await handle(new Request("https://x/y", { method: "GET" }), env, deps().d)).status, 405);
+  assert.equal((await handle(new Request("https://x/y", { method: "PUT" }), env, deps().d)).status, 405);
   assert.equal((await handle(post("{nope"), env, deps().d)).status, 400);
   assert.equal((await handle(post({ ...good, pad: "x".repeat(70_000) }), env, deps().d)).status, 413);
 });
@@ -192,4 +192,16 @@ test("the committed single-file bundle is in sync with the sources (run `npm run
   assert.doesNotMatch(built, /AIza|sb_secret|service_role/);
   assert.match(built, /Deno\.serve/);
   assert.ok(built.length < 60_000);
+});
+
+test("GET is a free health check: reports provider and model ids (never a key) and makes no model request", async () => {
+  const { d, sent } = deps();
+  const g = (await (await handle(new Request("https://x/y"), env, d)).json()) as any;
+  assert.deepEqual([g.service, g.provider, g.models], ["hokiepark-advisor", "gemini", ["gemini-2.5-flash (default)"]]);
+  const o = (await (await handle(new Request("https://x/y"), { OPENROUTER_API_KEY: "sk-or-secret", OPENROUTER_MODEL: "a:free, b:free", GEMINI_API_KEY: "g" }, d)).json()) as any;
+  assert.deepEqual([o.provider, o.models, o.gemini_key_also_set], ["openrouter", ["a:free", "b:free"], true]);
+  const none = (await (await handle(new Request("https://x/y"), {}, d)).json()) as any;
+  assert.deepEqual([none.provider, none.models], [null, []]);
+  assert.ok(!JSON.stringify([g, o, none]).match(/sk-or-secret|AIza/));
+  assert.equal(sent.length, 0, "no upstream request");
 });

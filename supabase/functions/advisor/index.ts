@@ -371,8 +371,13 @@ async function handle(req, env, deps) {
   const cors = corsHeaders(req, env);
   if (!cors) return json(403, { error: "origin_not_allowed" });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-  if (req.method !== "POST") return json(405, { error: "method_not_allowed" }, cors);
   const provider = env.OPENROUTER_API_KEY ? "openrouter" : env.GEMINI_API_KEY ? "gemini" : null;
+  if (req.method === "GET") {
+    const raw2 = provider === "openrouter" ? env.OPENROUTER_MODEL : env.GEMINI_MODEL;
+    const models = (raw2 ?? "").split(",").map((m) => m.trim()).filter(Boolean).slice(0, 3);
+    return json(200, { service: "hokiepark-advisor", provider, models: models.length ? models : provider === "openrouter" ? ["openrouter/free (default)"] : provider ? ["gemini-2.5-flash (default)"] : [], gemini_key_also_set: Boolean(env.GEMINI_API_KEY && env.OPENROUTER_API_KEY) }, cors);
+  }
+  if (req.method !== "POST") return json(405, { error: "method_not_allowed" }, cors);
   if (!provider) return json(500, { error: "not_configured" }, cors);
   const len = Number(req.headers.get("content-length") ?? 0);
   if (len > LIMITS.requestBytes) return json(413, { error: "too_large" }, cors);
