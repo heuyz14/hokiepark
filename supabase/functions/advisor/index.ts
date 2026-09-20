@@ -184,6 +184,16 @@ function sanitizeModelParts(raw) {
   }
   return out;
 }
+async function upstreamDetail(res, key) {
+  const out = { upstream_status: res.status };
+  try {
+    const j = await res.json();
+    if (typeof j.error?.status === "string") out.upstream_code = j.error.status.slice(0, 40);
+    if (typeof j.error?.message === "string") out.upstream_message = j.error.message.split(key).join("[redacted]").slice(0, 200);
+  } catch {
+  }
+  return out;
+}
 async function handle(req, env, deps) {
   const cors = corsHeaders(req, env);
   if (!cors) return json(403, { error: "origin_not_allowed" });
@@ -227,8 +237,10 @@ async function handle(req, env, deps) {
   } catch {
     return json(504, { error: "upstream_timeout" }, cors);
   }
-  if (res.status === 429) return json(503, { error: "quota" }, cors);
-  if (!res.ok) return json(502, { error: "upstream_rejected" }, cors);
+  if (!res.ok) {
+    const detail = await upstreamDetail(res, env.GEMINI_API_KEY);
+    return json(res.status === 429 ? 503 : 502, { error: res.status === 429 ? "quota" : "upstream_rejected", ...detail }, cors);
+  }
   let data;
   try {
     data = await res.json();

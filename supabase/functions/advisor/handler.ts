@@ -139,6 +139,18 @@ export function sanitizeModelParts(raw: unknown): Record<string, unknown>[] {
   return out;
 }
 
+export async function upstreamDetail(res: Response, key: string): Promise<{ upstream_status: number; upstream_code?: string; upstream_message?: string }> {
+  const out: { upstream_status: number; upstream_code?: string; upstream_message?: string } = { upstream_status: res.status };
+  try {
+    const j = (await res.json()) as { error?: { status?: unknown; message?: unknown } };
+    if (typeof j.error?.status === "string") out.upstream_code = j.error.status.slice(0, 40);
+    if (typeof j.error?.message === "string") out.upstream_message = j.error.message.split(key).join("[redacted]").slice(0, 200);
+  } catch {
+    /* non-JSON upstream body: the status alone will do */
+  }
+  return out;
+}
+
 export async function handle(req: Request, env: Env, deps: Deps): Promise<Response> {
   const cors = corsHeaders(req, env);
   if (!cors) return json(403, { error: "origin_not_allowed" });
@@ -186,8 +198,12 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
   } catch {
     return json(504, { error: "upstream_timeout" }, cors);
   }
-  if (res.status === 429) return json(503, { error: "quota" }, cors);
-  if (!res.ok) return json(502, { error: "upstream_rejected" }, cors);
+  if (!res.ok) {
+    // Surface Gemini's own error code and message (key redacted, length-capped) so a bad model name / key / quota is diagnosable
+    // from the app or `npm run check:advisor`, without ever echoing the request, the key, or the raw upstream body.
+    const detail = await upstreamDetail(res, env.GEMINI_API_KEY);
+    return json(res.status === 429 ? 503 : 502, { error: res.status === 429 ? "quota" : "upstream_rejected", ...detail }, cors);
+  }
 
   let data: unknown;
   try {

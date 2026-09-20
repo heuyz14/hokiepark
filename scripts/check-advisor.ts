@@ -37,7 +37,15 @@ if (pingRes.status === 401) {
   die(`401 from Supabase before the advisor code ran: ${detail}\n  - "Invalid JWT" / "UNAUTHORIZED..." with a publishable key: Edge Functions -> advisor -> Settings -> turn OFF "Verify JWT" (the advisor validates and rate-limits requests itself), then redeploy.\n  - "INVALID_API_KEY ... legacy": the function code is still the placeholder, or set HOKIEPARK_ADVISOR_KEY to the sb_publishable_ key.\n  - Alternatively remove HOKIEPARK_ADVISOR_KEY from .env.local so the legacy anon JWT is used (works when Verify JWT is ON).`);
 }
 if (pingRes.status === 500) die("500 not_configured: set the GEMINI_API_KEY secret on the function.");
-if (pingRes.status === 502 || pingRes.status === 503 || pingRes.status === 504) die(`upstream problem (${pingRes.status}): check GEMINI_API_KEY, GEMINI_MODEL and your Gemini quota in Google AI Studio.`);
+if (pingRes.status === 502 || pingRes.status === 503 || pingRes.status === 504) {
+  const j = (await pingRes.json().catch(() => ({}))) as { error?: string; upstream_status?: number; upstream_code?: string; upstream_message?: string };
+  const hint = j.upstream_status === 404 || /not found|not supported/i.test(j.upstream_message ?? "")
+    ? "The model name is probably wrong or retired: set the GEMINI_MODEL secret to a current model id from Google AI Studio."
+    : j.upstream_status === 400 && /api key/i.test(j.upstream_message ?? "") || j.upstream_status === 403
+      ? "Gemini refused the key: re-create it in Google AI Studio and update the GEMINI_API_KEY secret (no spaces or quotes)."
+      : j.error === "quota" ? "Gemini quota or rate limit hit: wait a minute, or pick another model." : "Check GEMINI_API_KEY, GEMINI_MODEL and quota in Google AI Studio.";
+  die(`Gemini problem (function returned ${pingRes.status} ${j.error ?? ""}): upstream ${j.upstream_status ?? "?"} ${j.upstream_code ?? ""} ${j.upstream_message ?? ""}\n  ${hint}`);
+}
 if (!pingRes.ok) die(`unexpected HTTP ${pingRes.status}`);
 const pingBody = (await pingRes.json().catch(() => null)) as { content?: { parts?: unknown[] }; message?: string } | null;
 if (typeof pingBody?.message === "string" && !pingBody.content) {
