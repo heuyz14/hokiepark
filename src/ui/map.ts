@@ -195,12 +195,21 @@ export function createMap(el: HTMLElement, onSelect: (sel: Selection) => void, o
     clearTimeout(timeout);
     el.removeAttribute("aria-busy");
 
-    // Put all colored geography below the basemap's labels. Street and building names therefore
-    // remain readable even when a permit highlight covers the same area.
-    const belowLabels = map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id;
+    // Put all colored geography below the basemap's labels, so street and building names stay
+    // readable even when a permit highlight covers the same area - but ABOVE the basemap's own
+    // building fill. That layer only switches on at z13, so anchoring to the first symbol layer
+    // (which sits well before it) let OSM's grey buildings bury the category colours the moment
+    // you zoomed in. Anchor past the building layers instead, and drop the 3D extrusions: VT
+    // publishes no building heights, so this map is deliberately 2D (spec Section 3).
+    const styleLayers = map.getStyle().layers ?? [];
+    const lastBuildingIndex = styleLayers.reduce((found, layer, i) => (/^building/.test(layer.id) ? i : found), -1);
+    const belowLabels =
+      styleLayers.find((layer, i) => layer.type === "symbol" && i > lastBuildingIndex)?.id ??
+      styleLayers.find((layer) => layer.type === "symbol")?.id;
+    for (const flat of ["building-3d"]) if (map.getLayer(flat)) map.setLayoutProperty(flat, "visibility", "none");
 
     map.addSource("buildings", { type: "geojson", data: toFeatureCollection(BUILDINGS, (b) => ({ category: b.category })) });
-    map.addLayer({ id: "buildings-fill", type: "fill", source: "buildings", paint: { "fill-color": ["match", ["get", "category"], "academic", CAT_COLOR.academic, "residential", CAT_COLOR.residential, "support", CAT_COLOR.support, "athletic", CAT_COLOR.athletic, "#999"], "fill-opacity": 0.66 } }, belowLabels);
+    map.addLayer({ id: "buildings-fill", type: "fill", source: "buildings", paint: { "fill-color": ["match", ["get", "category"], "academic", CAT_COLOR.academic, "residential", CAT_COLOR.residential, "support", CAT_COLOR.support, "athletic", CAT_COLOR.athletic, "#999"], "fill-opacity": 0.88 } }, belowLabels);
     map.addLayer({ id: "buildings-outline", type: "line", source: "buildings", paint: { "line-color": "rgba(76,55,62,0.9)", "line-width": 1.4 } }, belowLabels);
 
     map.addSource("lots", { type: "geojson", data: toFeatureCollection(LOTS, (l) => ({ hasADA: l.hasADA })) });
