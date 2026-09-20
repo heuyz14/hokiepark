@@ -19,6 +19,7 @@
     "test:py": "python3 databricks/tests/test_parity.py && python3 databricks/tests/test_sim.py && python3 databricks/tests/test_ml.py",
     "timetable": "node scripts/fetch-timetable.ts",
     "smoke:live": "node scripts/smoke.mjs 430 900 --live",
+    "check:advisor": "node --env-file-if-exists=.env.local scripts/check-advisor.ts",
     "check:supabase": "node --env-file-if-exists=.env.local scripts/check-supabase.ts"
   },
   "devDependencies": {
