@@ -124,3 +124,9 @@ See [STATE.md](STATE.md) for where the build currently stands.
 > notebooks 05-07 finished, i want to maybe use gemini API to use NLP ... vector database ... embeddings ... would this be easy to implement so i can decide to spec it  /  write the spec and then finish the recommender, the notebooks finished a while ago  /  check again
 
 **Outcome:** Advised against a vector DB (about 200 items fit in a prompt) and for LLM-as-structured-extractor behind a proxy with rule-based fallback; wrote `docs/GEMINI_NLP_SPEC.md` (not built). Found the real `predictions.json` in Downloads, validated it (schema, ids/capacities, 0.15 pt mean diff vs the local run), installed it as `src/data/predictions.json`. Built the Plan tab + Ask plan-ahead answers with permit-safety rules, 21 tests (mutation-checked) and smoke scenarios. Discovered a pre-existing 375x667 smoke failure from the map rewrite (not caused by this work).
+
+## 19. 2026-09-19 - "what would the ask tab even be for now" / build Gemini as a parking agent / disk full / "disk freed up, continue and push fix and changes"
+
+> so what would the ask tab even be for now  /  i want to build gemini so the ask tab has a purpose and would the purpose be strong enough to keep it or can we make this into a parking agent for advice  /  disk freed up, continue and push fix and changes
+
+**Outcome:** Answered that Plan is structured/future and Ask should be the conversational advisor; built the Gemini parking advisor as a grounded tool-using agent (details in STATE.md and `docs/GEMINI_NLP_SPEC.md`), tested without a key. The disk filled mid-work (smoke runs leaked Chrome profiles); after the user freed space I merged the other session's fix (`b74fed0`), re-applied my smoke changes on top (clean), verified everything, wrote `check:advisor`, and pushed. Waiting on the user for the Gemini key and the Supabase function deploy.

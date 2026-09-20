@@ -306,7 +306,7 @@ const sameQuestion = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").r
  * chips change with the conversation instead of sitting there as a fixed bar. Anything already
  * asked is skipped; the starter questions backfill when an answer referenced nothing.
  */
-export function followUpQuestions(a: Answer, asked: Iterable<string> = [], limit = 3): string[] {
+export function followUpQuestions(a: Answer, asked: Iterable<string> = [], limit = 3, fallback: readonly string[] = SUGGESTED_QUESTIONS): string[] {
   const seen = new Set([...asked].map(sameQuestion));
   const out: string[] = [];
   const push = (q: string) => {
@@ -321,6 +321,6 @@ export function followUpQuestions(a: Answer, asked: Iterable<string> = [], limit
     else if (r.kind === "lot") push(`Tell me about ${r.label}`);
     else push(`Where's the closest open parking to ${r.label}?`);
   }
-  for (const q of SUGGESTED_QUESTIONS) push(q);
+  for (const q of fallback) push(q);
   return out;
 }

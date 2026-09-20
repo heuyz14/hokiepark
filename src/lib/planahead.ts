@@ -79,6 +79,8 @@ export interface PlanInput {
   minute: number;
   permits: PermitId[];
   ada: boolean;
+  /** How many recommendations to return (default 3). */
+  limit?: number;
 }
 
 export interface PlanOption {
@@ -195,7 +197,7 @@ export function planAhead(input: PlanInput, data: { garages: Garage[]; lots: Lot
   const byScore = (a: PlanOption, b: PlanOption) => a.score - b.score || a.meters - b.meters || a.id.localeCompare(b.id);
   return {
     ...empty,
-    recommended: yes.sort(byScore).slice(0, MAX_RECOMMENDED),
+    recommended: yes.sort(byScore).slice(0, input.limit ?? MAX_RECOMMENDED),
     // unconfirmed places are ordered by distance only: their forecast is not something to steer a driver by
     checkSign: check.filter((o) => o.meters <= CHECK_RADIUS_M).sort((a, b) => a.meters - b.meters || a.id.localeCompare(b.id)).slice(0, MAX_CHECK),
     notValid,

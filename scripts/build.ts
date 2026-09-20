@@ -9,6 +9,7 @@
  */
 import { build } from "esbuild";
 import { parseLiveConfig, type LiveConfig } from "../src/lib/live-config.ts";
+import { parseAdvisorConfig, type AdvisorConfig } from "../src/lib/advisor-config.ts";
 import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
 
@@ -19,8 +20,10 @@ const outDir = outIdx > 0 ? process.argv[outIdx + 1]! : path("dist");
 
 // Optional Supabase feed. Only the PUBLIC url + anon/publishable key are embedded; a service-role/secret key aborts the build.
 let liveConfig: LiveConfig | null;
+let advisorConfig: AdvisorConfig | null;
 try {
   liveConfig = parseLiveConfig(process.env.HOKIEPARK_SUPABASE_URL, process.env.HOKIEPARK_SUPABASE_ANON_KEY, process.env.HOKIEPARK_POLL_MS);
+  advisorConfig = parseAdvisorConfig(process.env.HOKIEPARK_ADVISOR, process.env.HOKIEPARK_ADVISOR_URL, liveConfig);
 } catch (err) {
   console.error(`Build aborted: ${(err as Error).message}`);
   process.exit(1);
@@ -58,7 +61,7 @@ async function bundle(mapLibreWorkerSrc: string) {
     target: "es2022",
     minify: !process.argv.includes("--watch"),
     legalComments: "none",
-    define: { __LIVE_CONFIG__: JSON.stringify(liveConfig), __MAPLIBRE_WORKER_SRC__: JSON.stringify(mapLibreWorkerSrc) },
+    define: { __LIVE_CONFIG__: JSON.stringify(liveConfig), __ADVISOR_CONFIG__: JSON.stringify(advisorConfig), __MAPLIBRE_WORKER_SRC__: JSON.stringify(mapLibreWorkerSrc) },
     logLevel: "warning",
   });
   const script = js.outputFiles[0]!.text.replace(/<\/script/gi, "<\\/script");
