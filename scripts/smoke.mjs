@@ -247,16 +247,37 @@ check("Escape closes sheet", (await ev(`document.getElementById('sheet').hidden`
 // Ask tab: the three acceptance questions
 await click('.tabbar [data-view="ask"]'); await shot("8-ask");
 const botText = () => ev(`[...document.querySelectorAll('#chat-log .msg.bot')].pop()?.innerText`);
-const chips = await ev(`document.querySelectorAll('.chip').length`);
-check("3 suggestion chips", chips === 3);
-await click('.chip:nth-child(3)'); await sleep(300);
-let t = await botText();
+const chips = await ev(`document.querySelectorAll('#chat-suggest .chip').length`);
+check("3 starter chips before the first question", chips === 3);
+
+// Ask by typing, so these checks don't depend on where the chips happen to sit.
+const say = async (q) => {
+  await ev(`(()=>{const i=document.getElementById('chat-q');i.value=${JSON.stringify(q)};})()`);
+  await ev(`document.getElementById('chat-form').requestSubmit()`);
+  await sleep(350);
+  return botText();
+};
+let t = await say("Which garage has the most open spots right now?");
 check("Q3 most open garage = North End Center 355 of 800", /North End Center Garage has the most open spaces right now: 355 of 800/.test(t), JSON.stringify(t?.slice(0, 90)));
-await click('.chip:nth-child(1)'); await sleep(300);
-t = await botText();
+
+// The starter bar is a cold-start aid: it must get out of the way once the chat has begun.
+check("starter chips hidden after the first question", (await ev(`document.getElementById('chat-suggest').hidden`)) === true);
+
+t = await say("Where's the closest open parking to Squires Student Center?");
 check("Q1 closest parking to Squires names a garage + lot", /Closest parking to Squires Student Center/.test(t) && /North End Center Garage: 355 of 800/.test(t) && /lot/.test(t), JSON.stringify(t?.slice(0, 120)));
-await click('.chip:nth-child(2)'); await sleep(300);
-t = await botText();
+
+// Follow-ups replace them, drawn from what that answer referenced, and only on the newest answer.
+const ups = await ev(`[...document.querySelectorAll('.followups .chip')].map(b=>b.textContent)`);
+check("follow-up chips offered under the latest answer", ups.length > 0 && ups.length <= 3, JSON.stringify(ups));
+check("follow-ups reference what the answer named", ups.some((q) => /North End Center Garage|Squires|Alumni Mall/.test(q)), JSON.stringify(ups));
+check("only one follow-up row exists", (await ev(`document.querySelectorAll('.followups').length`)) === 1);
+const beforeUps = JSON.stringify(ups);
+await click('.followups .chip'); await sleep(350);
+check("tapping a follow-up asks it and refreshes the chips",
+  (await ev(`document.querySelectorAll('.followups').length`)) === 1 &&
+  JSON.stringify(await ev(`[...document.querySelectorAll('.followups .chip')].map(b=>b.textContent)`)) !== beforeUps);
+
+t = await say("Is there accessible parking near Cassell Coliseum?");
 check("Q2 ADA near Cassell mentions Coliseum West 12 spaces", /Coliseum West lot/.test(t) && /12 designated accessible spaces/.test(t), JSON.stringify(t?.slice(0, 120)));
 await shot("8b-ask-answers");
 // typed question via input + form submit

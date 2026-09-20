@@ -298,3 +298,29 @@ export const localAnswerer: Answerer = async (question) => answerQuestion(questi
 
 /** Local answerer that reads the driver's permits at ask time, so changing the chooser applies to the very next question. */
 export const makeLocalAnswerer = (getContext: () => AnswerContext): Answerer => async (question) => answerQuestion(question, getContext());
+
+const sameQuestion = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+
+/**
+ * Up to three "ask this next" questions drawn from what the answer actually referenced, so the
+ * chips change with the conversation instead of sitting there as a fixed bar. Anything already
+ * asked is skipped; the starter questions backfill when an answer referenced nothing.
+ */
+export function followUpQuestions(a: Answer, asked: Iterable<string> = [], limit = 3): string[] {
+  const seen = new Set([...asked].map(sameQuestion));
+  const out: string[] = [];
+  const push = (q: string) => {
+    const key = sameQuestion(q);
+    if (out.length < limit && !seen.has(key)) {
+      seen.add(key);
+      out.push(q);
+    }
+  };
+  for (const r of a.refs) {
+    if (r.kind === "garage") push(`Is ${r.label} full?`);
+    else if (r.kind === "lot") push(`Tell me about ${r.label}`);
+    else push(`Where's the closest open parking to ${r.label}?`);
+  }
+  for (const q of SUGGESTED_QUESTIONS) push(q);
+  return out;
+}

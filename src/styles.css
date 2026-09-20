@@ -223,7 +223,12 @@ h1, h2, h3, p { margin: 0; }
 .ref, .chip { min-height: 44px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--maroon); background: #fff; color: var(--maroon); font-weight: 600; font-size: 13.5px; text-align: left; }
 .ref:active, .chip:active { background: #f6ecef; }
 .chat-suggest { display: grid; gap: 6px; padding: 4px 14px 10px; }
-.chip { width: 100%; }
+.chat-suggest .chip { width: 100%; }
+/* Follow-ups sit inside the newest answer, so they scroll away instead of holding the composer down. */
+.followups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.followups-cap { flex-basis: 100%; margin: 0 0 2px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--muted); }
+/* Lighter than the "show on map" buttons: these are suggestions, not the answer's main actions. */
+.followups .chip { width: auto; min-height: 36px; font-size: 12.5px; font-weight: 600; padding: 6px 11px; border: 0; background: rgb(134 31 65 / 0.09); color: var(--maroon); }
 .chat-form { display: flex; gap: 8px; padding: 8px 14px 12px; border-top: 1px solid var(--line); }
 .chat-form input { flex: 1; min-width: 0; height: 46px; padding: 0 14px; border: 2px solid #cfc7ca; border-radius: 999px; font-size: 16px; background: #fff; }
 .chat-form input:focus { border-color: var(--maroon); outline: none; box-shadow: 0 0 0 3px rgb(229 117 31 / 0.4); }
