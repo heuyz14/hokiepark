@@ -21,17 +21,17 @@ current status and decisions live in [`../STATE.md`](../STATE.md).
         |                                                                    
    src/main.ts + state.ts  -->  scripts/build/build.ts (esbuild)  -->  dist/index.html (+ manifest, sw.js, icons)  -->  GitHub Pages
 
- Ask tab (optional advisor):  browser agent loop --POST {contents, context}--> Supabase Edge Function `advisor` --> OpenRouter (or Gemini)
-                              tools run IN THE BROWSER on the app's own data; the function only relays one model turn
+ Ask tab (optional advisor):  browser --POST {question, history, preferences}--> Supabase Edge Function `advisor` --> OpenRouter (or Gemini)
+                              server loads validated Supabase occupancy + bundled GIS/forecast; server tools execute the agent loop
 ```
 By default there is no backend: the app runs on bundled sample data. Each backend piece (live feed, advisor) is optional and the app degrades
 to the bundled data and the rule-based assistant if it is off or fails.
 
 ## 2. Rules the code is shaped around
-1. **One source of truth.** Every view reads `BUILDINGS`/`LOTS`/`GARAGES`. Counts go through `lib/occupancy.ts`, so map, list, sheet, assistant and advisor cannot disagree.
+1. **One source of truth.** Every view reads `BUILDINGS`/`LOTS`/`GARAGES`. Counts go through `lib/occupancy.ts`, so views share calculation semantics. Backend and browser snapshots can differ in time; the backend reports its source timestamp.
 2. **Pure logic is separate from the DOM.** Formulas, matching, permit rules, planning and the advisor's tools live in `src/lib/` with unit tests; `src/ui/` only renders.
 3. **Permits are never guessed.** `lib/permits.ts` returns `yes | no | check`; everything that recommends a place (Plan, advisor) only recommends `yes`, lists `check` separately, and never shows `no`.
-4. **The AI never supplies facts.** The advisor picks tools and phrases their results; a guard rejects any number that no tool returned and any place a tool did not return; any failure falls back to the rule-based assistant.
+4. **The model is instructed to use tools for facts.** The advisor picks tools and phrases their results; a guard rejects any number that no tool returned and any place a tool did not return; these targeted checks reduce unsupported claims but cannot prove every answer correct. Provider failure uses backend rules; transport failure uses local rules.
 5. **Simulated data is labelled everywhere** (UI text, JSON `kind: "SIMULATED"`, MLflow tags, docs).
 6. **No VT network at runtime.** VT data is pulled once into `data/raw/`; the app and its tests never call VT.
 7. **Secrets stay server-side.** Only the Supabase URL and public keys are baked into the bundle; the build refuses a service-role or secret key.

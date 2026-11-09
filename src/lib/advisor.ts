@@ -5,9 +5,9 @@ import { forecastSource } from "./planahead.ts";
 import { SIGNAGE_NOTE, type PermitId } from "./permits.ts";
 
 /**
- * The parking advisor: a tool-using agent that runs its loop in the BROWSER against deterministic tools (advisor-tools.ts), while a
- * Supabase function relays each model turn (holding the Gemini key). The model picks tools and writes the advice; it is never a source
- * of facts. Three guards keep it honest:
+ * The parking advisor: a reusable tool-using agent. The current app runs this loop in the backend with
+ * request-scoped parking data; the legacy browser transport remains available for compatibility.
+ * The model chooses tools and phrases results. These targeted guards reduce, but do not eliminate, unsupported claims:
  *   1. every number in the answer must appear in a tool result, the driver's own message, or the context line (`checkNumbers`);
  *   2. the PLACES line may only name places a tool actually returned;
  *   3. any failure (network, timeout, quota, malformed turn, guard) returns `ok: false`, and the caller uses the rule-based assistant.
@@ -58,6 +58,8 @@ export const ADVISOR_TOOL_LABELS: Record<string, string> = {
 
 export interface AdvisorOptions {
   transport: Transport;
+  tools?: Pick<ReturnType<typeof import("./advisor-tools.ts").createToolRunner>, "runTool" | "idsIn" | "placeRef">;
+  history?: Content[];
   getContext: () => AdvisorContext;
   timeoutMs?: number;
   maxRounds?: number;
@@ -117,7 +119,8 @@ const textOf = (c: Content) => c.parts.filter((p) => typeof p.text === "string" 
 export function createAdvisor(opts: AdvisorOptions) {
   const timeoutMs = opts.timeoutMs ?? 25_000; // hosted free models can be slow; each answer is 2-4 sequential model calls
   const maxRounds = Math.min(opts.maxRounds ?? LIMITS.maxRounds, 6);
-  let history: Content[] = [];
+  let history: Content[] = opts.history?.slice(-6) ?? [];
+  const tools = opts.tools ?? { runTool, idsIn, placeRef };
   /** Permits the driver named in this chat ("commuter"), remembered for later questions when none is saved. */
   let sessionPermits: PermitId[] = [];
 
@@ -151,7 +154,7 @@ export function createAdvisor(opts: AdvisorOptions) {
           const { name, args } = p.functionCall!;
           const event = { id: `${round}-${toolLog.length}`, name, label: ADVISOR_TOOL_LABELS[name] ?? "Running HokiePark tool" } as const;
           opts.onToolEvent?.({ ...event, status: "running" });
-          const r = runTool(name, args, ctx);
+          const r = tools.runTool(name, args, ctx);
           toolLog.push({ name, ok: r.ok });
           opts.onToolEvent?.({ ...event, status: r.ok ? "success" : "error" });
           results.push(r);
@@ -164,7 +167,7 @@ export function createAdvisor(opts: AdvisorOptions) {
       if (!final) return { ok: false, reason: "empty" };
 
       const split = splitPlaces(final);
-      const body = stripIds(split.body, idsIn(results)).replace(/[ \t]+([.,;:!?])/g, "$1").trim();
+      const body = stripIds(split.body, tools.idsIn(results)).replace(/[ \t]+([.,;:!?])/g, "$1").trim();
       const ids = split.ids;
       if (!body) return { ok: false, reason: "empty" };
 
@@ -174,10 +177,10 @@ export function createAdvisor(opts: AdvisorOptions) {
       if (bad.length) return { ok: false, reason: "guard", detail: `unsupported numbers: ${bad.join(", ")} in: ${body.replace(/\s+/g, " ").slice(0, 200)}` };
 
       // Guard 2: PLACES may only name places a tool returned.
-      const seen = idsIn(results);
+      const seen = tools.idsIn(results);
       const refs: AnswerRef[] = ids
         .filter((id) => seen.has(id))
-        .map((id) => placeRef(id))
+        .map((id) => tools.placeRef(id))
         .filter((p): p is NonNullable<typeof p> => p !== null)
         .slice(0, 3)
         .map((p) => ({ kind: p.kind, id: p.id, label: p.name }));

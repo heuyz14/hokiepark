@@ -1,3 +1,4 @@
+import { answerParking, parseChatInput, type AnswerEnv } from "./answer.ts";
 import { LIMITS, PERMIT_IDS, TOOL_NAMES, type AdvisorContext } from "../../../src/lib/advisor-spec.ts";
 import { callGemini, callOpenRouter } from "./providers.ts";
 
@@ -12,7 +13,7 @@ export { sanitizeModelParts, upstreamDetail } from "./providers.ts";
  * Pure request/response code (Web-standard Request/Response/fetch) so it is unit-tested in Node and runs unchanged on Deno.
  */
 
-export interface Env {
+export interface Env extends AnswerEnv {
   /** OpenRouter (OpenAI-compatible; many models incl. free ones). Takes precedence when set. */
   OPENROUTER_API_KEY?: string;
   /** One OpenRouter model id, or up to 3 comma-separated (tried in order). Default: openrouter/free. */
@@ -139,10 +140,9 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
     // Health/diagnostics: which provider and model ids this deployment sees. Names only, never a key, and it costs no model request.
     const raw = provider === "openrouter" ? env.OPENROUTER_MODEL : env.GEMINI_MODEL;
     const models = (raw ?? "").split(",").map((m) => m.trim()).filter(Boolean).slice(0, 3);
-    return json(200, { service: "hokiepark-advisor", provider, models: models.length ? models : provider === "openrouter" ? ["openrouter/free (default)"] : provider ? ["gemini-2.5-flash (default)"] : [], gemini_key_also_set: Boolean(env.GEMINI_API_KEY && env.OPENROUTER_API_KEY) }, cors);
+    return json(200, { service: "hokiepark-advisor", execution: "server_tools", simulated: true, provider, models: models.length ? models : provider === "openrouter" ? ["openrouter/free (default)"] : provider ? ["gemini-2.5-flash (default)"] : [], gemini_key_also_set: Boolean(env.GEMINI_API_KEY && env.OPENROUTER_API_KEY) }, cors);
   }
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" }, cors);
-  if (!provider) return json(500, { error: "not_configured" }, cors);
 
   const len = Number(req.headers.get("content-length") ?? 0);
   if (len > LIMITS.requestBytes) return json(413, { error: "too_large" }, cors);
@@ -163,6 +163,14 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
   } catch {
     return json(400, { error: "invalid_json" }, cors);
   }
+  if (isObj(parsed) && "question" in parsed) {
+    const input = parseChatInput(parsed);
+    if (!input) return json(400, { error: "invalid_chat_request" }, cors);
+    try { return json(200, await answerParking(input, env, deps), cors); }
+    catch { return json(503, { error: "parking_data_unavailable" }, cors); }
+  }
+  // Legacy one-turn relay remains for older clients; the app now uses the server-owned answer contract.
+  if (!provider) return json(500, { error: "not_configured" }, cors);
   const v = validateBody(parsed);
   if ("error" in v) return json(400, { error: v.error }, cors);
 

@@ -29,7 +29,8 @@
     "walkways": "node scripts/data/fetch-walkways.ts",
     "smoke:live": "node scripts/verify/smoke.mjs 430 900 --live",
     "check:advisor": "node --env-file-if-exists=.env.local scripts/verify/check-advisor.ts",
-    "check:supabase": "node --env-file-if-exists=.env.local scripts/verify/check-supabase.ts"
+    "check:supabase": "node --env-file-if-exists=.env.local scripts/verify/check-supabase.ts",
+    "backend:dev": "node --env-file-if-exists=.env.local scripts/dev/parking-backend.ts"
   },
   "dependencies": {
     "maplibre-gl": "^6.10.0"

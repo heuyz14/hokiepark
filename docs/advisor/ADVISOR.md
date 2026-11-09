@@ -1,6 +1,8 @@
 # Parking advisor (OpenRouter or Gemini): what was built and how to turn it on
 
-Status: **built 2026-09-19; the relay speaks OpenRouter (default) or Gemini; tested without a key; not yet run against a real model through OpenRouter.** Off by default (`HOKIEPARK_ADVISOR=1` turns it on).
+> November 9, 2026 update: the current app uses a server-owned answer loop and DB retrieval. See [DEMO-BACKEND.md](DEMO-BACKEND.md) for the current architecture, startup, verification and deployment steps. The browser-loop relay design below is historical compatibility documentation. Hosted deployment has not been updated.
+
+Historical status: **built 2026-09-19; the relay speaks OpenRouter (default) or Gemini; tested without a key; not yet run against a real model through OpenRouter.** Off by default (`HOKIEPARK_ADVISOR=1` turns it on).
 This replaced the earlier "LLM parses the request" proposal with a tool-using advisor, because that gives the Ask tab a real purpose.
 
 ## 1. What it is for

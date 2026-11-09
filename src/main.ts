@@ -12,7 +12,7 @@ import { createPlanView } from "./ui/plan.ts";
 import { nowOf, withPlanAhead } from "./lib/planask.ts";
 import { makeLocalAnswerer } from "./lib/assistant.ts";
 import { ADVISOR_CONFIG, LIVE_CONFIG } from "./config.ts";
-import { createAdvisor, httpTransport, withAdvisor } from "./lib/advisor.ts";
+import { createBackendAnswerer } from "./lib/backend-advisor.ts";
 import { startLive } from "./live.ts";
 import { createSyncChip } from "./ui/sync.ts";
 
@@ -42,16 +42,15 @@ function boot() {
   const views: Record<View, HTMLElement> = { map: $("view-map"), list: $("view-list"), ask: $("view-ask"), plan: $("view-plan") };
   const tabs = [...document.querySelectorAll<HTMLButtonElement>(".tabbar button")];
 
-  // Swap this for an LLM-backed Answerer here if a backend proxy is ever added (it should receive the same context).
+  // Local rules remain available when the optional backend cannot answer.
   const askContext = () => ({ permits: store.get().permits, ada: store.get().ada });
   // Plan-ahead questions ("2pm class at Hancock") are answered from the Databricks forecast; everything else goes to the normal assistant.
   const rules = withPlanAhead(makeLocalAnswerer(askContext), askContext);
-  // Optional Gemini advisor (docs/advisor/ADVISOR.md): it only picks tools and explains their results; any failure falls back to `rules`.
+  // Optional server-owned parking advisor: backend tools retrieve facts; transport failure falls back to local rules.
   let activityListener: ((event: import("./lib/advisor.ts").AdvisorToolEvent) => void) | undefined;
-  const advisorEngine = ADVISOR_CONFIG
-    ? createAdvisor({ transport: httpTransport(ADVISOR_CONFIG), getContext: () => ({ now: nowOf(), permits: store.get().permits, ada: store.get().ada, currentLocation }), onToolEvent: (event) => activityListener?.(event) })
-    : null;
-  const answer = advisorEngine ? withAdvisor(rules, advisorEngine) : rules;
+  const answer = ADVISOR_CONFIG
+    ? createBackendAnswerer({ config: ADVISOR_CONFIG, fallback: rules, getContext: () => ({ now: nowOf(), permits: store.get().permits, ada: store.get().ada, currentLocation }), onToolEvent: (event) => activityListener?.(event) })
+    : rules;
   createAssistant($("view-ask"), {
     answer,
     onSelect: (sel) => select(sel, "assistant", "map"),

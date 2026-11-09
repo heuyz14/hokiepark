@@ -1,5 +1,5 @@
 import { buildingCodes } from "../data/building-abbreviations.ts";
-import { BUILDINGS, GARAGES, LOTS } from "../data/index.ts";
+import { BUILDINGS as DEFAULT_BUILDINGS, GARAGES as DEFAULT_GARAGES, LOTS as DEFAULT_LOTS } from "../data/index.ts";
 import type { Garage, Lot } from "../types.ts";
 import { findPlace } from "./assistant.ts";
 import { PERMIT_IDS, type AdvisorContext, type ToolName } from "./advisor-spec.ts";
@@ -13,7 +13,7 @@ import { buildArrivalPlan } from "./arrival-plan.ts";
 import { calculateCampusWalkingRoute } from "./walk-network.ts";
 
 /**
- * The advisor's tools. Deterministic, run in the browser on the same data as the map, and the ONLY source of facts the model may use.
+ * The advisor's tools. Deterministic and reusable in the browser or backend with a request-scoped dataset. The model is instructed to use these tool results for parking facts.
  * Every function validates its arguments and returns { ok, ... } as plain JSON (no functions, no dates). Errors are returned, never thrown,
  * so the model can recover (for example by asking the driver for their permit).
  */
@@ -28,6 +28,11 @@ interface PlaceRef extends Located {
   id: string;
   name: string;
 }
+/** A request-scoped dataset keeps server requests isolated from each other. */
+export function createToolRunner(data: { buildings?: typeof DEFAULT_BUILDINGS; garages?: Garage[]; lots?: Lot[] } = {}) {
+  const BUILDINGS = data.buildings ?? DEFAULT_BUILDINGS;
+  const GARAGES = data.garages ?? DEFAULT_GARAGES;
+  const LOTS = data.lots ?? DEFAULT_LOTS;
 const ALL: (PlaceRef & { codes: string[] })[] = [
   ...BUILDINGS.map((b) => ({ kind: "building" as const, id: b.id, name: b.name, lat: b.lat, lon: b.lon, codes: buildingCodes(b.num).map((code) => norm(code)) })),
   ...GARAGES.map((g) => ({ kind: "garage" as const, id: g.id, name: g.name, lat: g.lat, lon: g.lon, codes: [] })),
@@ -36,7 +41,7 @@ const ALL: (PlaceRef & { codes: string[] })[] = [
 const byId = new Map(ALL.map((p) => [p.id, p]));
 const KIND_ORDER = { building: 0, garage: 1, lot: 2 } as const;
 
-export function searchPlaces(query: string, limit = 5): { id: string; kind: string; name: string; matched: string }[] {
+function searchPlaces(query: string, limit = 5): { id: string; kind: string; name: string; matched: string }[] {
   const q = norm(query);
   if (!q) return [];
   const tokens = q.split(" ").filter((t) => t.length >= 2);
@@ -453,7 +458,7 @@ function buildArrivalPlanTool(a: Args, ctx: AdvisorContext): ToolResult {
   };
 }
 
-export function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolResult {
+function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolResult {
   const a = asObj(args);
   try {
     switch (name as ToolName) {
@@ -481,7 +486,7 @@ export function runTool(name: string, args: unknown, ctx: AdvisorContext): ToolR
 }
 
 /** Ids the tools have surfaced, so the answer's PLACES line can be validated against real results. */
-export function idsIn(value: unknown, out = new Set<string>()): Set<string> {
+function idsIn(value: unknown, out = new Set<string>()): Set<string> {
   if (Array.isArray(value)) for (const v of value) idsIn(v, out);
   else if (value && typeof value === "object") {
     for (const [k, v] of Object.entries(value)) {
@@ -491,5 +496,10 @@ export function idsIn(value: unknown, out = new Set<string>()): Set<string> {
   }
   return out;
 }
-export const placeRef = (id: string) => byId.get(id) ?? null;
+const placeRef = (id: string) => byId.get(id) ?? null;
+
+  return { searchPlaces, runTool, idsIn, placeRef };
+}
+const defaultTools = createToolRunner();
+export const { searchPlaces, runTool, idsIn, placeRef } = defaultTools;
 export const forecastFile = FORECAST;

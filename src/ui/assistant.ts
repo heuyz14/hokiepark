@@ -9,7 +9,7 @@ import { esc } from "./format.ts";
 export interface AssistantOptions {
   answer: Answerer;
   onSelect: (sel: Selection) => void;
-  /** True when the Gemini-backed advisor is wired in: changes the greeting, suggestions and answer badges. */
+  /** True when the backend advisor is wired in: changes the greeting, suggestions and answer badges. */
   advisor?: boolean;
   /** Permission is still requested by the normal map/browser flow; no coordinates reach this component. */
   ensureCurrentLocation?: () => Promise<boolean>;
@@ -185,7 +185,7 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
   add(
     "bot",
     advisor
-      ? `<span class="ln">Hi! I'm your parking advisor. Tell me about your class, building and time in your own words and I'll suggest where to park and when to arrive.</span><span class="ln fine">I understand you with a hosted AI model run by a third party, so please don't type personal details. Every place, distance, count and permit rule comes from HokiePark's own data; forecasts are simulated.</span>`
+      ? `<span class="ln">Hi! I'm your parking advisor. Tell me about your class, building and time in your own words and I'll suggest where to park and when to arrive.</span><span class="ln fine">I use HokiePark parking tools, optionally with a hosted AI model run by a third party. Please don't type personal details. If you ask about your location and allow access, your coordinates are sent to the parking backend. Counts and forecasts are simulated; source labels show when a fallback is used.</span>`
       : `<span class="ln">Hi! I answer from the same garage, lot and accessible-parking data shown on the map.</span><span class="ln fine">Demo data &mdash; garage counts are simulated.</span>`,
   );
 

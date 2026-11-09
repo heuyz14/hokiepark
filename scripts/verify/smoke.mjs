@@ -12,6 +12,7 @@
  *
  * Screenshots land in smoke-out/ (git-ignored). Set CHROME=/path/to/chrome to override the macOS default.
  */
+import { answerParking, parseChatInput } from "../../supabase/functions/advisor/answer.ts";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -114,8 +115,7 @@ const mock = {
   rows: Object.entries(SEED_LEVELS).flatMap(([garage_id, ls]) => ls.map((l, i) => ({ garage_id, level_index: i, label: l.label, capacity: l.capacity, occupied: l.occupied, ada_capacity: l.adaCapacity, ada_occupied: l.adaOccupied, updated_at: new Date().toISOString() }))),
 };
 const CORS = [{ name: "access-control-allow-origin", value: "*" }, { name: "access-control-allow-headers", value: "apikey,authorization,accept,content-type" }, { name: "access-control-allow-methods", value: "GET,POST,OPTIONS" }];
-// A scripted stand-in for the advisor Edge Function (+ Gemini): it "chooses" tools from the conversation and writes advice from the
-// tool results it is shown, exactly like a well-behaved model. Only used with --live (the live build turns the advisor on).
+// Exercise the real backend answer loop with a scripted provider and simulated DB rows.
 mock.advisorMode = "empty"; // empty (200, no text: the client falls back quietly) | ok (scripted model) | down (HTTP 503)
 mock.advisorRequests = [];
 function advisorTurn({ contents }) {
@@ -135,7 +135,10 @@ async function onPaused({ requestId, request }) {
     mock.advisorRequests.push(request);
     if (mock.advisorMode === "down") return fulfill(503, CORS, JSON.stringify({ error: "quota" }));
     if (mock.advisorMode === "empty") return fulfill(200, [...CORS, { name: "content-type", value: "application/json" }], JSON.stringify({ content: { role: "model", parts: [{ text: "" }] } }));
-    return fulfill(200, [...CORS, { name: "content-type", value: "application/json" }], JSON.stringify(advisorTurn(JSON.parse(request.postData))));
+    const input = parseChatInput(JSON.parse(request.postData));
+    if (!input) return fulfill(400, CORS, JSON.stringify({error:"invalid_chat_request"}));
+    const answer = await answerParking(input, {GEMINI_API_KEY:"smoke-fake",SUPABASE_URL:"https://smoke.supabase.co",SUPABASE_ANON_KEY:FAKE_ANON}, {now:Date.now,fetch:async(url,init)=>String(url).includes("/rest/v1/")?Response.json(mock.rows):Response.json({candidates:[{content:advisorTurn(JSON.parse(String(init.body))).content}]}),sleep:async()=>{}});
+    return fulfill(200, [...CORS, { name: "content-type", value: "application/json" }], JSON.stringify(answer));
   }
   mock.requests.push(request);
   if (mock.mode === "down") return fulfill(503, CORS, "down");
@@ -436,7 +439,7 @@ if (http) {
   await click('.tabbar [data-view="list"]');
   check("PWA: List tab still works OFFLINE (bundled data, no network needed)", (await ev(`document.querySelectorAll('#list-results .row').length`)) > 80);
   await click('.tabbar [data-view="ask"]');
-  check("PWA: Ask tab still works OFFLINE", (await ev(`document.querySelectorAll('.chip').length`)) === 3);
+  check("PWA: Ask tab still works OFFLINE", (await ev(`document.querySelectorAll('#chat-suggest .chip').length`)) === 1);
   await click('.tabbar [data-view="map"]');
   await send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
 }
@@ -519,24 +522,24 @@ if (!LIVE) {
   await audit("after recovery");
   await shot("11-live-recovered");
 
-  // 5) the Gemini advisor (mocked): AI answers are badged, the browser runs the tools, a failure falls back visibly
+  // 5) the Gemini advisor (mocked): AI answers are badged, the backend runs the tools, a failure falls back visibly
   mock.advisorMode = "ok";
   await click('.tabbar [data-view="ask"]'); await sleep(200);
   const say = async (q) => { await ev(`(()=>{const i=document.getElementById('chat-q');i.value=${JSON.stringify(q)};})()`); await ev(`document.getElementById('chat-form').requestSubmit()`); };
   const lastBot = () => ev(`(()=>{const m=[...document.querySelectorAll('#chat-log .msg.bot')].pop();return m?{text:m.innerText,src:m.querySelector('.src')?.textContent||'',pending:m.classList.contains('pending'),refs:m.querySelectorAll('button.ref').length}:null})()`);
   const settled = async () => { await waitFor(async () => !(await lastBot()).pending, 8000); return lastBot(); };
-  check("advisor: greeting names the advisor and the Google notice; 3 advisor suggestions", /parking advisor/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && /hosted AI model/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && (await ev(`document.querySelectorAll('#chat-suggest .chip').length`)) === 3);
+  check("advisor: greeting names the advisor and the Google notice; one focused advisor suggestion", /parking advisor/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && /hosted AI model/.test(await ev(`document.querySelector('#chat-log .msg.bot')?.innerText||''`)) && (await ev(`document.querySelectorAll('#chat-suggest .chip').length`)) === 1);
   await say("2pm class at Hancock Hall on Wednesday, where do I park?");
   let m = await settled();
   check("advisor: with no permit it asks for one (tool error handled), badged AI advisor", m.src === "AI advisor" && /Which permit do you hold/.test(m.text), JSON.stringify(m).slice(0, 200));
   await click('.tabbar [data-view="plan"]'); await click('#plan-permit-chips [data-permit="cg"]'); await click('.tabbar [data-view="ask"]');
   await say("2pm class at Hancock Hall on Wednesday, where do I park?");
   m = await settled();
-  check("advisor: with a permit the browser ran the tools and the answer is grounded and badged", m.src === "AI advisor" && /Best bet: .* minute walk\. Forecast about \d+ of \d+ open/.test(m.text) && /SIMULATED/.test(m.text) && m.refs >= 1, JSON.stringify(m).slice(0, 260));
+  check("advisor: with a permit the backend ran the tools and the answer is grounded and badged", m.src === "AI advisor" && /Best bet: .* minute walk\. Forecast about \d+ of \d+ open/.test(m.text) && /SIMULATED/.test(m.text) && m.refs >= 1, JSON.stringify(m).slice(0, 260));
   const last = mock.advisorRequests.at(-1);
   const sent = JSON.parse(last.postData);
-  check("advisor: requests carry only the conversation + context (no system prompt, no tools, no key)", !("systemInstruction" in sent) && !("tools" in sent) && Object.keys(sent).sort().join() === "contents,context" && !/AIza|GEMINI/.test(last.postData), Object.keys(sent).join());
-  check("advisor: context carries the saved permit", JSON.stringify(sent.context.permits) === '["cg"]', JSON.stringify(sent.context));
+  check("advisor: requests carry only question, text history and preferences (no system prompt, no tools, no key)", !("systemInstruction" in sent) && !("tools" in sent) && Object.keys(sent).sort().join() === "context,history,question" && !/AIza|GEMINI/.test(last.postData), Object.keys(sent).join());
+  check("advisor: context carries the saved permit but no client clock or tool facts", JSON.stringify(sent.context.permits) === '["cg"]' && !('now' in sent.context), JSON.stringify(sent.context));
   expectFailures = true;
   mock.advisorMode = "down";
   await say("2pm class at Hancock Hall on Wednesday, where do I park?");

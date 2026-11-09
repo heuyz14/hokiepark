@@ -1,5 +1,7 @@
 # HokiePark - current state
 
+**November 9, 2026 interview preparation:** Parker now supports a server-owned tool loop with validated Supabase simulated occupancy and labelled DB/model/transport fallbacks. Local verification and deployment steps: [advisor/DEMO-BACKEND.md](advisor/DEMO-BACKEND.md). Hosted deployment remains pending. Earlier status below is historical.
+
 _Last updated: 2026-09-19 ~19:00 (Class-schedule occupancy Tier A built, awaiting user to run 2 SQL files; Phases 1-5 done; Supabase live feed verified against the REAL project; permit-eligibility filter built; iPhone (Wi-Fi) check passed by user; next: deploy + rehearsal)._
 Prompt log: [PROMPT_HISTORY.md](PROMPT_HISTORY.md). Source doc: `product/SPEC.md` (the single product document; the old 6-hour build plan was deleted, it remains in git history).
 

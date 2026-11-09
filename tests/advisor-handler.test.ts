@@ -191,7 +191,8 @@ test("the committed single-file bundle is in sync with the sources (run `npm run
   assert.equal(readFileSync(OUT, "utf8"), built);
   assert.doesNotMatch(built, /AIza|sb_secret|service_role/);
   assert.match(built, /Deno\.serve/);
-  assert.ok(built.length < 60_000);
+  // Server tools now include the campus graph and forecast dataset. Keep the deployable bundle bounded.
+  assert.ok(built.length < 2_000_000);
 });
 
 test("GET is a free health check: reports provider and model ids (never a key) and makes no model request", async () => {
