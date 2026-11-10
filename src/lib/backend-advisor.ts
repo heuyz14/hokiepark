@@ -1,3 +1,4 @@
+import { requestsCurrentLocation } from "./location-intent.ts";
 import type { Answerer } from "./assistant.ts";
 import type { AdvisorAnswer, AdvisorToolEvent } from "./advisor.ts";
 import type { AdvisorConfig } from "./advisor-config.ts";
@@ -20,7 +21,7 @@ export function createBackendAnswerer(options: {
         method: "POST",
         headers: { "content-type": "application/json", apikey: options.config.anonKey, ...(options.config.anonKey.startsWith("eyJ") ? { authorization: `Bearer ${options.config.anonKey}` } : {}) },
         // Never send client clock, occupancy or tool results. Location is sent only for an explicit location question after browser permission.
-        body: JSON.stringify({ question, history, context: { permits: context.permits, ada: context.ada, ...(/my location|where i am|from here|near me|current location/i.test(question) && context.currentLocation ? {currentLocation:context.currentLocation} : {}) } }),
+        body: JSON.stringify({ question, history, context: { permits: context.permits, ada: context.ada, ...(requestsCurrentLocation(question) && context.currentLocation ? {currentLocation:context.currentLocation} : {}) } }),
         signal: AbortSignal.timeout(35_000),
       });
       if (!response.ok) throw new Error("backend unavailable");

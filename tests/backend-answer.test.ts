@@ -78,3 +78,21 @@ test('arrival suggestion uses arrival tool and labels its forecast',async()=>{
  assert.match(result.answer.lines.join(' '),/Arrival options for Hancock/);
  assert.match(result.answer.lines.join(' '),/simulated/);
 });
+
+test('seeing myself on the map forwards the known position and makes it available to server tools',async()=>{
+ let providerCalls=0;let available=false;let sentPosition:unknown;
+ const ask=createBackendAnswerer({config:{url:'https://example.test/chat',anonKey:'public'},getContext:()=>({now:{dow:2,minute:600},permits:[],ada:false,currentLocation:{lat:37.2285,lon:-80.4225,accuracyMeters:12}}),fallback:async()=>({lines:['Unexpected local fallback'],refs:[]}),fetch:async(_url,init)=>{
+  const body=JSON.parse(String(init?.body));sentPosition=body.context.currentLocation;
+  const response=await answerParking(parseChatInput(body)!,{GEMINI_API_KEY:'fake-test-key'},{now,fetch:async(_providerUrl,providerInit)=>{
+   const input=JSON.parse(String(providerInit?.body));providerCalls++;
+   assert.ok(!JSON.stringify(input).includes('37.2285'),'exact coordinates must not reach the language model');
+   if(providerCalls>1) available=input.contents.some((turn:any)=>turn.parts.some((part:any)=>part.functionResponse?.name==='get_current_location'&&part.functionResponse.response.result.available===true));
+   return Response.json({candidates:[{content:{role:'model',parts:providerCalls===1?[{functionCall:{name:'get_current_location',args:{}}}]:[{text:'Your current location is available.'}]}}]});
+  }});
+  return Response.json(response);
+ }});
+ const answer=await ask('I can see myself on the map');
+ assert.deepEqual(sentPosition,{lat:37.2285,lon:-80.4225,accuracyMeters:12});
+ assert.equal(available,true);
+ assert.match(answer.lines.join(' '),/location is available/);
+});

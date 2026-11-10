@@ -1,3 +1,4 @@
+import { requestsCurrentLocation } from "../lib/location-intent.ts";
 import type { Answer, AnswerRef, Answerer } from "../lib/assistant.ts";
 import { followUpQuestions, SUGGESTED_QUESTIONS } from "../lib/assistant.ts";
 import { ADVISOR_SUGGESTIONS, ADVISOR_TOOL_LABELS, type AdvisorAnswer, type AdvisorMapAction, type AdvisorToolEvent } from "../lib/advisor.ts";
@@ -212,9 +213,9 @@ export function createAssistant(el: HTMLElement, { answer, onSelect, advisor = f
     // under the latest answer instead, where they scroll away rather than eat the composer.
     suggest.hidden = true;
     add("me", esc(q));
-    const requestedLocation = /\b(current location|my location|where i am)\b/i.test(q);
+    const requestedLocation = requestsCurrentLocation(q);
     activity.length = 0;
-    pending = add("bot pending", `<span class="ln">${requestedLocation ? "Requesting your location&hellip;" : advisor ? "Starting HokiePark advisor&hellip;" : "Checking the data&hellip;"}</span>`);
+    pending = add("bot pending", `<span class="ln">${requestedLocation ? "Checking your location&hellip;" : advisor ? "Starting HokiePark advisor&hellip;" : "Checking the data&hellip;"}</span>`);
     try {
       if (requestedLocation && ensureCurrentLocation) await ensureCurrentLocation();
       const a: Answer = await answer(q);

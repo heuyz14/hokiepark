@@ -55,7 +55,7 @@ function boot() {
     answer,
     onSelect: (sel) => select(sel, "assistant", "map"),
     advisor: ADVISOR_CONFIG !== null,
-    ensureCurrentLocation: () => map.locate(),
+    ensureCurrentLocation: async () => currentLocation ? true : map.locate(),
     subscribeActivity: (listener) => { activityListener = listener; return () => { if (activityListener === listener) activityListener = undefined; }; },
     onMapAction: (action) => {
       if (action.type !== "show_route") return;
