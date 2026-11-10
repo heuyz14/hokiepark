@@ -426,3 +426,15 @@ test('calculated plan rendering preserves multiple requested destinations and cl
  assert.match(text,/3:03 PM/);
  assert.equal(new Set(result.refs.map(r=>r.id)).size,result.refs.length);
 });
+
+test('single-class plan stays concise and only links the displayed confirmed choices',async()=>{
+ const {t}=script(call('plan_parking',{building_id:torg,day_of_week:3,class_time:'14:00'}),say('Here is your plan.'));
+ const result=await advisorFor(t,{...ctx,permits:['cg-perry']}).ask('2pm Torgersen Wednesday, commuter plus Perry permit');
+ assert.ok(result.ok);
+ assert.ok(result.lines.join(' ').split(/\s+/).length<=90);
+ assert.match(result.lines.join(' '),/Best:/);
+ assert.match(result.lines.join(' '),/Alternative:/);
+ assert.match(result.lines.join(' '),/1:30 PM/);
+ assert.ok(result.refs.length<=2);
+ assert.doesNotMatch(result.lines.join(' '),/WARE Lab|Center for the Arts/);
+});

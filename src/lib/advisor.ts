@@ -1,7 +1,6 @@
 import { detectPermits, type Answer, type AnswerRef, type Answerer } from "./assistant.ts";
 import { LIMITS, contextLine, type AdvisorContext } from "./advisor-spec.ts";
 import { idsIn, placeRef, runTool, type ToolResult } from "./advisor-tools.ts";
-import { forecastSource } from "./planahead.ts";
 import { SIGNAGE_NOTE, type PermitId } from "./permits.ts";
 
 /**
@@ -178,21 +177,20 @@ export function createAdvisor(opts: AdvisorOptions) {
         body = plans.map((planned) => {
           const options = planned.recommended as {id:string;name:string;walk_minutes:number;forecast_open_spaces:number;parking_arrival_time:string|null;parking_search_minutes:number;buffer_minutes:number}[];
           const unconfirmed = planned.check_sign as {id:string;name:string;walk_minutes:number}[];
-          planIds.push(...[...options.slice(0,2),...unconfirmed.slice(0,2)].map((o) => o.id));
+          planIds.push(...(options.length ? options.slice(0,2) : unconfirmed.slice(0,2)).map((o) => o.id));
           return [`For ${String(planned.building)}, ${String(planned.day)}, class at ${String(planned.class_time)}:`,
-            ...options.slice(0,2).map((o) => `${o.name}: forecast about ${o.forecast_open_spaces} open spaces and about ${o.walk_minutes} minutes to walk. ${o.parking_arrival_time ? `Reach the parking facility by ${o.parking_arrival_time}, allowing ${o.parking_search_minutes} minutes to park and a ${o.buffer_minutes}-minute buffer.` : "There is insufficient time before this class for the calculated parking and walking budget."}`),
-            ...(!options.length ? ["No permit-confirmed parking option was found."] : []),
-            ...unconfirmed.slice(0,2).map((o) => `${o.name}: about ${o.walk_minutes} minutes to walk, but permit eligibility is unconfirmed; check posted signage.`)].join("\n");
-        }).join("\n") + "\nDriving time to campus is not included.";
-        if (!split.ids.length) split.ids = planIds;
+            ...options.slice(0,2).map((o,i) => `${i ? "Alternative" : "Best"}: ${o.name} — ${o.walk_minutes} min walk, forecast about ${o.forecast_open_spaces} open spaces. ${o.parking_arrival_time ? `Reach the parking facility by ${o.parking_arrival_time}.` : "Too little time remains to park and walk before class."}`),
+            ...(!options.length ? ["No permit-confirmed option found.",...unconfirmed.slice(0,2).map((o) => `${o.name}: ${o.walk_minutes} min walk; permit unconfirmed—check signs.`)] : [])].join("\n");
+        }).join("\n") + "\nTimes include parking and buffer; driving time is excluded.";
+        split.ids = planIds;
       }
       // Arrival deadlines are calculated by code; model prose must not override the walk/search/buffer budget.
       const arrival = [...results].reverse().find((r) => r.ok && r.arrival_location === "parking facility" && Array.isArray(r.options));
       if (arrival?.ok) {
         const options = arrival.options as {id:string;name:string;walk_minutes:number;parking_search_minutes:number;buffer_minutes:number;latest_arrival_not_risky:{arrive_time:string}|null}[];
         body = [`For ${String(arrival.building)}, ${String(arrival.day)}, class at ${String(arrival.class_time)}:`, ...options.map((o) => o.latest_arrival_not_risky
-          ? `${o.name}: arrive at the parking facility by ${o.latest_arrival_not_risky.arrive_time}. Allow ${o.parking_search_minutes} minutes to park, ${o.walk_minutes} minutes to walk, and a ${o.buffer_minutes}-minute buffer.`
-          : `${o.name}: no arrival in the evaluated windows met both the forecast and class-time constraints.`), "These are estimates, not guaranteed availability. Driving time to campus is not included."].join("\n");
+          ? `${o.name}: reach the parking facility by ${o.latest_arrival_not_risky.arrive_time} (${o.walk_minutes} min walk, plus parking and buffer).`
+          : `${o.name}: no arrival in the evaluated windows met both the forecast and class-time constraints.`), "Estimated times; driving time is excluded."].join("\n");
         if (!split.ids.length) split.ids = options.map((o) => o.id);
       }
       const ids = [...new Set(split.ids)];
@@ -214,9 +212,9 @@ export function createAdvisor(opts: AdvisorOptions) {
 
       const used = new Set(toolLog.filter((t) => t.ok).map((t) => t.name));
       const lines = body.split(/\n+/).map((l) => l.trim()).filter(Boolean);
-      if (used.has("plan_parking") || used.has("arrival_advice")) lines.push(`Forecasts come from a Databricks-trained model (${forecastSource().model}) on SIMULATED demand shaped by VT's class timetable, not measured occupancy.`);
-      if (used.has("parking_now") || used.has("garages_now") || used.has("accessible_parking")) lines.push("Current counts are the map's demo data, not live sensors.");
-      lines.push(SIGNAGE_NOTE);
+      if (used.has("plan_parking") || used.has("arrival_advice")) lines.push("SIMULATED forecasts, not live availability. Check posted signage.");
+      else if (used.has("parking_now") || used.has("garages_now") || used.has("accessible_parking")) lines.push("Demo data: simulated counts, not live sensors. Check posted signage.");
+      else lines.push("Check posted signage.");
 
       const turn: Content[] = [{ role: "user", parts: [{ text: q }] }, { role: "model", parts: [{ text: body }] }];
       history = [...history, ...turn].slice(-6);

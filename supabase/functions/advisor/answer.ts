@@ -118,4 +118,8 @@ export async function answerParking(input: ChatInput, env: AnswerEnv, deps: { fe
   lines.push(sourceLine(provenance), "Always follow posted parking signage.");
   return { answer: { lines, refs, source: "basic", tools: [{name,ok:result.ok}] } satisfies AdvisorAnswer, provenance };
 }
-function sourceLine(p: Provenance) { return p.source === "supabase_simulation" ? `Backend source: Supabase simulated occupancy; data updated ${p.dataAsOf}. Counts are not live sensor measurements.` : "Backend source: bundled simulated reference data. Current database occupancy was unavailable or not configured; these are not live sensor counts."; }
+function sourceLine(p: Provenance) {
+  if (p.source !== "supabase_simulation") return "Source: bundled simulation; database unavailable, not live sensor counts.";
+  const updated = p.dataAsOf ? new Intl.DateTimeFormat("en-US", {timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(p.dataAsOf)) : "unknown";
+  return `Source: Supabase simulation · updated ${updated}.`;
+}
