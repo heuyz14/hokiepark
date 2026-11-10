@@ -377,3 +377,21 @@ test("permit precedence: named in the message > saved > named earlier in the cha
   await a2.ask("and later");
   assert.deepEqual(permitsSeen, [["visitor"], ["fs"]], "a permit named in the message wins for that message; the saved one applies otherwise");
 });
+
+test('Hancock 10am arrival reserves parking, walking, and buffer time', () => {
+  const result = runTool('arrival_advice', {building_id:bid('hancock'),day_of_week:3,class_time:'10:00'},ctx);
+  assert.ok(result.ok && result.options.length);
+  for(const option of result.options){
+    for(const arrival of option.arrivals) assert.ok(arrival.minutes_before_class >= option.walk_minutes + 4 + 5, `${option.name}: arrival leaves insufficient time to reach class`);
+  }
+  const coliseum=result.options.find((o:any)=>o.id==='lot-coliseum-west');
+  assert.equal(coliseum.latest_arrival_not_risky.arrive_time,'9:33 AM');
+});
+
+test('arrival answer uses the calculated parking deadline instead of unsafe model wording',async()=>{
+  const {t}=script(call('arrival_advice',{building_id:bid('hancock'),day_of_week:3,class_time:'10:00'}),say('Arrive by 9:55 AM. Coliseum West lot is an 18 minute walk.\nPLACES: lot-coliseum-west'));
+  const result=await advisorFor(t).ask('When should I arrive at Hancock for a 10am class?');
+  assert.ok(result.ok);
+  assert.match(result.lines.join(' '),/9:33 AM/);
+  assert.doesNotMatch(result.lines.join(' '),/9:55 AM/);
+});

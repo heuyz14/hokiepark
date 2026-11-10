@@ -95,7 +95,7 @@ export async function answerParking(input: ChatInput, env: AnswerEnv, deps: { fe
       lines.push(`Arrival options for ${String(data.building)} (${String(data.class_time)} class):`);
       for (const option of (data.options as Record<string,unknown>[]).slice(0,2)) {
         const arrival = option.latest_arrival_not_risky as {arrive_time:string}|null;
-        lines.push(`${String(option.name)}: ${arrival ? `forecast suggests arriving by ${arrival.arrive_time}` : "no lower-risk arrival was found in the tested time windows"}; about ${String(option.walk_minutes)} min walk. This is a simulated forecast, not a guarantee.`);
+        lines.push(`${String(option.name)}: ${arrival ? `forecast suggests arriving at the parking facility by ${arrival.arrive_time}` : "no lower-risk arrival was found in the tested time windows"}; about ${String(option.walk_minutes)} min walk. Allow ${String(option.parking_search_minutes)} min to park and a ${String(option.buffer_minutes)} min class buffer. This is a simulated forecast, not a guarantee.`);
         const ref=tools.placeRef(String(option.id));if(ref)refs.push({kind:ref.kind,id:ref.id,label:ref.name});
       }
       if(!(data.options as unknown[]).length) lines.push("No permit-confirmed arrival option was found.");

@@ -231,10 +231,12 @@ function arrivalTool(a: Args, ctx: AdvisorContext): ToolResult {
   const data = { garages: GARAGES, lots: LOTS };
   const top = planAhead({ building: b, dow: day, minute, ...w }, data).recommended.slice(0, 2);
   if (!top.length) return { ok: true, building: b.name, class_time: formatMinute(minute), options: [], hint: "No permit-confirmed place nearby; see plan_parking for unconfirmed ones." };
-  const offsets = [90, 75, 60, 45, 30, 15, 5];
   const options = top.map((base) => {
+    const timeline = buildArrivalPlan({destinationName:b.name,targetMinute:minute,recommendedLot:base});
+    const requiredMinutes = timeline.steps.reduce((sum, step) => sum + (step.durationMinutes ?? 0), 0);
+    const offsets = [...new Set([90, 75, 60, 45, 30, 15, 5, requiredMinutes])].filter((off) => off >= requiredMinutes && off <= minute);
     const arrivals = offsets.map((off) => {
-      const at = Math.max(0, minute - off);
+      const at = minute - off;
       const r = planAhead({ building: b, dow: day, minute: at + ARRIVE_BEFORE_MIN, ...w, limit: 200 }, data);
       const hit = r.recommended.find((o) => o.id === base.id);
       return hit ? { arrive_time: formatMinute(at), minutes_before_class: off, label: hit.label, forecast_open_spaces: hit.predictedOpen, forecast_percent_full: hit.predictedPct, _at: at, _risky: hit.label === "Risky" } : null;
@@ -245,11 +247,14 @@ function arrivalTool(a: Args, ctx: AdvisorContext): ToolResult {
       id: base.id,
       name: base.name,
       walk_minutes: base.walkMin,
+      parking_search_minutes: timeline.steps[0]!.durationMinutes,
+      buffer_minutes: timeline.steps[2]!.durationMinutes,
+      latest_arrival_to_reach_class: minute >= requiredMinutes ? formatMinute(minute - requiredMinutes) : null,
       arrivals: rows.map(({ _at, _risky, ...rest }) => rest),
       latest_arrival_not_risky: ok ? { arrive_time: ok.arrive_time, minutes_before_class: ok.minutes_before_class, label: ok.label } : null,
     };
   });
-  return { ok: true, building: b.name, day: DAY_NAME[day] ?? "", class_time: formatMinute(minute), options, forecast_is_simulated: true, forecast_model: forecastSource().model };
+  return { ok: true, building: b.name, day: DAY_NAME[day] ?? "", class_time: formatMinute(minute), arrival_location: "parking facility", options, forecast_is_simulated: true, forecast_model: forecastSource().model };
 }
 
 const liveOpen = (g: Garage, covered: number[], ada: boolean) => covered.reduce((n, i) => n + (ada ? openAdaSpaces(g.levels[i]!) : openSpaces(g.levels[i]!)), 0);

@@ -279,9 +279,11 @@ await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: m.x + 96, y: 
 const centerB = await mapCenter();
 check("drag pans (center moved)", centerA[0] !== centerB[0] || centerA[1] !== centerB[1], `${centerA} -> ${centerB}`);
 check("drag did not open a sheet", (await ev(`document.getElementById('sheet').hidden`)) === true);
+// A wheel event during drag inertia may be ignored by MapLibre. Test after the drag settles.
+await waitFor(async () => await ev(`!window.__hokiepark_map.isMoving()`), 5000);
 const zBeforeWheel = await mapZoom();
 await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: m.x, y: m.y, deltaX: 0, deltaY: -300 });
-await sleep(300);
+await waitFor(async () => (await mapZoom()) > zBeforeWheel, 3000);
 check("wheel zooms in", (await mapZoom()) > zBeforeWheel, `${zBeforeWheel.toFixed(2)} -> ${(await mapZoom()).toFixed(2)}`);
 await shot("7-zoomed");
 await click('#zoom-reset'); await sleep(700);

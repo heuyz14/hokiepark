@@ -887,7 +887,7 @@ var TOOL_DECLARATIONS = [
   },
   {
     name: "arrival_advice",
-    description: "For a class at a building, show how the forecast changes with arrival time (up to 90 minutes before class) for the best options, and the latest arrival that is not forecast to be risky.",
+    description: "For a class at a building, show how the forecast changes with arrival time (up to 90 minutes before class) for the best options, and the latest arrival AT THE PARKING FACILITY that is not forecast to be risky AND leaves enough time for parking search, walking, and the class buffer. Never treat parking arrival as classroom arrival.",
     parameters: { type: "object", properties: { building_id: { type: "string", description: "id of a BUILDING from find_place" }, day_of_week: dayParam, class_time: timeParam, permits: permitsParam, accessible: accessibleParam }, required: ["building_id", "day_of_week", "class_time"] }
   },
   {
@@ -1417,10 +1417,12 @@ function createToolRunner(data = {}) {
     const data2 = { garages: GARAGES2, lots: LOTS2 };
     const top = planAhead({ building: b, dow: day, minute, ...w }, data2).recommended.slice(0, 2);
     if (!top.length) return { ok: true, building: b.name, class_time: formatMinute(minute), options: [], hint: "No permit-confirmed place nearby; see plan_parking for unconfirmed ones." };
-    const offsets = [90, 75, 60, 45, 30, 15, 5];
     const options = top.map((base) => {
+      const timeline = buildArrivalPlan({ destinationName: b.name, targetMinute: minute, recommendedLot: base });
+      const requiredMinutes = timeline.steps.reduce((sum, step) => sum + (step.durationMinutes ?? 0), 0);
+      const offsets = [.../* @__PURE__ */ new Set([90, 75, 60, 45, 30, 15, 5, requiredMinutes])].filter((off) => off >= requiredMinutes && off <= minute);
       const arrivals = offsets.map((off) => {
-        const at = Math.max(0, minute - off);
+        const at = minute - off;
         const r = planAhead({ building: b, dow: day, minute: at + ARRIVE_BEFORE_MIN, ...w, limit: 200 }, data2);
         const hit = r.recommended.find((o) => o.id === base.id);
         return hit ? { arrive_time: formatMinute(at), minutes_before_class: off, label: hit.label, forecast_open_spaces: hit.predictedOpen, forecast_percent_full: hit.predictedPct, _at: at, _risky: hit.label === "Risky" } : null;
@@ -1431,11 +1433,14 @@ function createToolRunner(data = {}) {
         id: base.id,
         name: base.name,
         walk_minutes: base.walkMin,
+        parking_search_minutes: timeline.steps[0].durationMinutes,
+        buffer_minutes: timeline.steps[2].durationMinutes,
+        latest_arrival_to_reach_class: minute >= requiredMinutes ? formatMinute(minute - requiredMinutes) : null,
         arrivals: rows.map(({ _at, _risky, ...rest }) => rest),
         latest_arrival_not_risky: ok ? { arrive_time: ok.arrive_time, minutes_before_class: ok.minutes_before_class, label: ok.label } : null
       };
     });
-    return { ok: true, building: b.name, day: DAY_NAME[day] ?? "", class_time: formatMinute(minute), options, forecast_is_simulated: true, forecast_model: forecastSource().model };
+    return { ok: true, building: b.name, day: DAY_NAME[day] ?? "", class_time: formatMinute(minute), arrival_location: "parking facility", options, forecast_is_simulated: true, forecast_model: forecastSource().model };
   }
   const liveOpen = (g, covered, ada) => covered.reduce((n, i) => n + (ada ? openAdaSpaces(g.levels[i]) : openSpaces(g.levels[i])), 0);
   function nowTool(a, ctx) {
@@ -1788,7 +1793,13 @@ function createAdvisor(opts) {
       if (final === null) return { ok: false, reason: "rounds" };
       if (!final) return { ok: false, reason: "empty" };
       const split = splitPlaces(final);
-      const body = stripIds(split.body, tools.idsIn(results)).replace(/[ \t]+([.,;:!?])/g, "$1").trim();
+      let body = stripIds(split.body, tools.idsIn(results)).replace(/[ \t]+([.,;:!?])/g, "$1").trim();
+      const arrival = [...results].reverse().find((r) => r.ok && r.arrival_location === "parking facility" && Array.isArray(r.options));
+      if (arrival?.ok) {
+        const options = arrival.options;
+        body = [`For ${String(arrival.building)}, ${String(arrival.day)}, class at ${String(arrival.class_time)}:`, ...options.map((o) => o.latest_arrival_not_risky ? `${o.name}: arrive at the parking facility by ${o.latest_arrival_not_risky.arrive_time}. Allow ${o.parking_search_minutes} minutes to park, ${o.walk_minutes} minutes to walk, and a ${o.buffer_minutes}-minute buffer.` : `${o.name}: no arrival in the evaluated windows met both the forecast and class-time constraints.`), "These are estimates, not guaranteed availability. Driving time to campus is not included."].join("\n");
+        if (!split.ids.length) split.ids = options.map((o) => o.id);
+      }
       const ids = split.ids;
       if (!body) return { ok: false, reason: "empty" };
       const allowed = /* @__PURE__ */ new Set([...numbersIn(JSON.stringify(results)), ...numbersIn(q), ...numbersIn(contextLine(ctx)), ...history.flatMap((h) => numbersIn(textOf(h)))]);
@@ -2178,7 +2189,7 @@ async function answerParking(input, env, deps) {
       lines.push(`Arrival options for ${String(data.building)} (${String(data.class_time)} class):`);
       for (const option of data.options.slice(0, 2)) {
         const arrival = option.latest_arrival_not_risky;
-        lines.push(`${String(option.name)}: ${arrival ? `forecast suggests arriving by ${arrival.arrive_time}` : "no lower-risk arrival was found in the tested time windows"}; about ${String(option.walk_minutes)} min walk. This is a simulated forecast, not a guarantee.`);
+        lines.push(`${String(option.name)}: ${arrival ? `forecast suggests arriving at the parking facility by ${arrival.arrive_time}` : "no lower-risk arrival was found in the tested time windows"}; about ${String(option.walk_minutes)} min walk. Allow ${String(option.parking_search_minutes)} min to park and a ${String(option.buffer_minutes)} min class buffer. This is a simulated forecast, not a guarantee.`);
         const ref = tools.placeRef(String(option.id));
         if (ref) refs.push({ kind: ref.kind, id: ref.id, label: ref.name });
       }

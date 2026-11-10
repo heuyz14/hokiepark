@@ -167,7 +167,16 @@ export function createAdvisor(opts: AdvisorOptions) {
       if (!final) return { ok: false, reason: "empty" };
 
       const split = splitPlaces(final);
-      const body = stripIds(split.body, tools.idsIn(results)).replace(/[ \t]+([.,;:!?])/g, "$1").trim();
+      let body = stripIds(split.body, tools.idsIn(results)).replace(/[ \t]+([.,;:!?])/g, "$1").trim();
+      // Arrival deadlines are calculated by code; model prose must not override the walk/search/buffer budget.
+      const arrival = [...results].reverse().find((r) => r.ok && r.arrival_location === "parking facility" && Array.isArray(r.options));
+      if (arrival?.ok) {
+        const options = arrival.options as {id:string;name:string;walk_minutes:number;parking_search_minutes:number;buffer_minutes:number;latest_arrival_not_risky:{arrive_time:string}|null}[];
+        body = [`For ${String(arrival.building)}, ${String(arrival.day)}, class at ${String(arrival.class_time)}:`, ...options.map((o) => o.latest_arrival_not_risky
+          ? `${o.name}: arrive at the parking facility by ${o.latest_arrival_not_risky.arrive_time}. Allow ${o.parking_search_minutes} minutes to park, ${o.walk_minutes} minutes to walk, and a ${o.buffer_minutes}-minute buffer.`
+          : `${o.name}: no arrival in the evaluated windows met both the forecast and class-time constraints.`), "These are estimates, not guaranteed availability. Driving time to campus is not included."].join("\n");
+        if (!split.ids.length) split.ids = options.map((o) => o.id);
+      }
       const ids = split.ids;
       if (!body) return { ok: false, reason: "empty" };
 

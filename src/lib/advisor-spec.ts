@@ -82,7 +82,7 @@ export const TOOL_DECLARATIONS = [
   },
   {
     name: "arrival_advice",
-    description: "For a class at a building, show how the forecast changes with arrival time (up to 90 minutes before class) for the best options, and the latest arrival that is not forecast to be risky.",
+    description: "For a class at a building, show how the forecast changes with arrival time (up to 90 minutes before class) for the best options, and the latest arrival AT THE PARKING FACILITY that is not forecast to be risky AND leaves enough time for parking search, walking, and the class buffer. Never treat parking arrival as classroom arrival.",
     parameters: { type: "object", properties: { building_id: { type: "string", description: "id of a BUILDING from find_place" }, day_of_week: dayParam, class_time: timeParam, permits: permitsParam, accessible: accessibleParam }, required: ["building_id", "day_of_week", "class_time"] },
   },
   {

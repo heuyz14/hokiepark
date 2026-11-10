@@ -26,3 +26,11 @@ The legacy `{contents, context}` relay remains for older clients. The current ap
 `npm run check` checks types, unit/integration tests, and frontend build. `npm run advisor:build` refreshes the deployable bundle. Tests cover DB-derived counts, no shared-data mutation, DB outage disclosure, rejection of forged tool results, client privacy boundary, transport fallback, and server execution of model tool calls.
 
 The local HTTP endpoint was also exercised against the configured read-only Supabase simulation with garage and class-planning questions. No production data was written. There is no measured user adoption, time saved, or real parking forecast accuracy to claim.
+
+## November 10 follow-up and arrival regression checks
+
+Live browser checks on the existing hosted release confirmed the Torgersen class question, permit-only follow-up, Hancock/time correction, current-garage intent, lot details, Squires permit rejection, accessible-parking query, and the Coliseum West map link. The recorded model tool call for “Actually, Hancock at 10am” used Hancock, Wednesday, 10:00, and C/G. Wednesday's stored simulation has the same 47% fullness at the 09:45 and 13:45 forecast buckets, so both class questions can legitimately return 392 spaces. That is not evidence of a stale time.
+
+The arrival-advice check exposed a separate defect: the tool selected a late parking arrival based only on forecast risk, without reserving walking/search/buffer time. Arrival candidates now use the shared arrival-plan budget; a 10am Hancock class requires arriving at Coliseum West by 09:33 (4 minutes parking + 18 walking + 5 buffer), or Stadium by 09:26 (4 + 25 + 5). These are simulated estimates, not guarantees, and do not include driving to campus. Arrival text is rendered from calculated tool fields so model wording cannot replace the deadline with 09:55.
+
+Regression tests cover both the deadline budget and suppression of unsafe model wording. The local HTTP endpoint and browser return the corrected times. Stopping the local backend was also tested: the browser returned a visibly labelled local fallback; the backend was restarted afterward. Publish the rebuilt frontend and advisor function together to apply this fix to the public demo. Hosted behavior is not changed by a local test or git push.
