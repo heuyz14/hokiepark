@@ -168,6 +168,24 @@ export function createAdvisor(opts: AdvisorOptions) {
 
       const split = splitPlaces(final);
       let body = stripIds(split.body, tools.idsIn(results)).replace(/[ \t]+([.,;:!?])/g, "$1").trim();
+      // Plan wording also uses calculated schedules: the forecast sampling time is not a parking deadline.
+      const plannedResults = results.filter((r): r is Extract<ToolResult,{ok:true}> => r.ok && r.timing_basis === "parking_search_walk_buffer" && Array.isArray(r.recommended));
+      const plans = [...new Map(plannedResults.map((r) => [`${r.building}|${r.day}|${r.class_time}`,r])).values()];
+      if (plans.length) {
+        const originalAllowed = new Set<number>([...numbersIn(JSON.stringify(results)),...numbersIn(q),...numbersIn(contextLine(ctx)),...history.flatMap((h) => numbersIn(textOf(h)))]);
+        if (checkNumbers(body, originalAllowed).length) return {ok:false,reason:"guard",detail:"unsupported numbers in model plan"};
+        const planIds: string[] = [];
+        body = plans.map((planned) => {
+          const options = planned.recommended as {id:string;name:string;walk_minutes:number;forecast_open_spaces:number;parking_arrival_time:string|null;parking_search_minutes:number;buffer_minutes:number}[];
+          const unconfirmed = planned.check_sign as {id:string;name:string;walk_minutes:number}[];
+          planIds.push(...[...options.slice(0,2),...unconfirmed.slice(0,2)].map((o) => o.id));
+          return [`For ${String(planned.building)}, ${String(planned.day)}, class at ${String(planned.class_time)}:`,
+            ...options.slice(0,2).map((o) => `${o.name}: forecast about ${o.forecast_open_spaces} open spaces and about ${o.walk_minutes} minutes to walk. ${o.parking_arrival_time ? `Reach the parking facility by ${o.parking_arrival_time}, allowing ${o.parking_search_minutes} minutes to park and a ${o.buffer_minutes}-minute buffer.` : "There is insufficient time before this class for the calculated parking and walking budget."}`),
+            ...(!options.length ? ["No permit-confirmed parking option was found."] : []),
+            ...unconfirmed.slice(0,2).map((o) => `${o.name}: about ${o.walk_minutes} minutes to walk, but permit eligibility is unconfirmed; check posted signage.`)].join("\n");
+        }).join("\n") + "\nDriving time to campus is not included.";
+        if (!split.ids.length) split.ids = planIds;
+      }
       // Arrival deadlines are calculated by code; model prose must not override the walk/search/buffer budget.
       const arrival = [...results].reverse().find((r) => r.ok && r.arrival_location === "parking facility" && Array.isArray(r.options));
       if (arrival?.ok) {
@@ -177,7 +195,7 @@ export function createAdvisor(opts: AdvisorOptions) {
           : `${o.name}: no arrival in the evaluated windows met both the forecast and class-time constraints.`), "These are estimates, not guaranteed availability. Driving time to campus is not included."].join("\n");
         if (!split.ids.length) split.ids = options.map((o) => o.id);
       }
-      const ids = split.ids;
+      const ids = [...new Set(split.ids)];
       if (!body) return { ok: false, reason: "empty" };
 
       // Guard 1: no number the tools/driver/context did not supply.

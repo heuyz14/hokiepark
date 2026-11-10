@@ -537,7 +537,7 @@ if (!LIVE) {
   await click('.tabbar [data-view="plan"]'); await click('#plan-permit-chips [data-permit="cg"]'); await click('.tabbar [data-view="ask"]');
   await say("2pm class at Hancock Hall on Wednesday, where do I park?");
   m = await settled();
-  check("advisor: with a permit the backend ran the tools and the answer is grounded and badged", m.src === "AI advisor" && /Best bet: .* minute walk\. Forecast about \d+ of \d+ open/.test(m.text) && /SIMULATED/.test(m.text) && m.refs >= 1, JSON.stringify(m).slice(0, 260));
+  check("advisor: with a permit the backend ran the tools and the answer is grounded and badged", m.src === "AI advisor" && /forecast about \d+ open spaces/.test(m.text) && /parking facility by 1:33 PM/.test(m.text) && /SIMULATED/.test(m.text) && m.refs >= 1, JSON.stringify(m).slice(0, 260));
   const last = mock.advisorRequests.at(-1);
   const sent = JSON.parse(last.postData);
   check("advisor: requests carry only question, text history and preferences (no system prompt, no tools, no key)", !("systemInstruction" in sent) && !("tools" in sent) && Object.keys(sent).sort().join() === "context,history,question" && !/AIza|GEMINI/.test(last.postData), Object.keys(sent).join());

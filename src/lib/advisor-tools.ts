@@ -201,16 +201,26 @@ function planTool(a: Args, ctx: AdvisorContext): ToolResult {
   if (!w.permits.length && !w.ada) return fail("no_permit", "The driver has not chosen a permit. Ask which permit they hold.");
   const r = planAhead({ building: b, dow: day, minute, ...w }, { garages: GARAGES, lots: LOTS });
   const src = forecastSource();
+  const recommended = r.recommended.map((option) => {
+    const schedule = buildArrivalPlan({destinationName:b.name,targetMinute:minute,recommendedLot:option});
+    const required = schedule.steps.reduce((sum, step) => sum + (step.durationMinutes ?? 0), 0);
+    return {...optionJson(option), parking_arrival_time:minute >= required ? formatMinute(schedule.lotArrivalMinute) : null,
+      parking_minutes_before_class:required, parking_search_minutes:schedule.steps[0]!.durationMinutes,
+      buffer_minutes:schedule.steps[2]!.durationMinutes};
+  });
   return {
     ok: true,
     building: b.name,
     day: DAY_NAME[r.dow] ?? "",
     class_time: formatMinute(minute),
-    arrive_time: formatMinute(r.arriveMinute),
-    arrive_minutes_before_class: ARRIVE_BEFORE_MIN,
+    forecast_time: formatMinute(r.arriveMinute),
+    forecast_minutes_before_class: ARRIVE_BEFORE_MIN,
+    arrive_time: recommended[0]?.parking_arrival_time ?? null,
+    arrive_minutes_before_class: recommended[0]?.parking_minutes_before_class ?? null,
+    timing_basis: "parking_search_walk_buffer",
     weekend_replayed_as_wednesday: r.replayed,
     permits: w.permits.map((p) => PERMIT_LABEL[p]),
-    recommended: r.recommended.map(optionJson),
+    recommended,
     check_sign: r.checkSign.map(checkJson),
     places_ruled_out_by_permit: r.notValid,
     forecast_is_simulated: true,

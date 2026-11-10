@@ -877,7 +877,7 @@ var TOOL_DECLARATIONS = [
   },
   {
     name: "plan_parking",
-    description: "Recommend where to park for a class at a building on a weekday, using the forecast for the arrival time (15 minutes before class). Returns ranked recommended places, unconfirmed nearby places, walk times and forecast open spaces.",
+    description: "Recommend where to park for a class at a building on a weekday, using a forecast sampled 15 minutes before class. forecast_time is a sampling time, NOT an arrival deadline. Parking arrival times separately include parking search, walking, and buffer. Returns ranked recommended places, unconfirmed nearby places, walk times and forecast open spaces.",
     parameters: { type: "object", properties: { building_id: { type: "string", description: "id of a BUILDING from find_place" }, day_of_week: dayParam, class_time: timeParam, permits: permitsParam, accessible: accessibleParam }, required: ["building_id", "day_of_week", "class_time"] }
   },
   {
@@ -1388,16 +1388,30 @@ function createToolRunner(data = {}) {
     if (!w.permits.length && !w.ada) return fail("no_permit", "The driver has not chosen a permit. Ask which permit they hold.");
     const r = planAhead({ building: b, dow: day, minute, ...w }, { garages: GARAGES2, lots: LOTS2 });
     const src = forecastSource();
+    const recommended = r.recommended.map((option) => {
+      const schedule = buildArrivalPlan({ destinationName: b.name, targetMinute: minute, recommendedLot: option });
+      const required = schedule.steps.reduce((sum, step) => sum + (step.durationMinutes ?? 0), 0);
+      return {
+        ...optionJson(option),
+        parking_arrival_time: minute >= required ? formatMinute(schedule.lotArrivalMinute) : null,
+        parking_minutes_before_class: required,
+        parking_search_minutes: schedule.steps[0].durationMinutes,
+        buffer_minutes: schedule.steps[2].durationMinutes
+      };
+    });
     return {
       ok: true,
       building: b.name,
       day: DAY_NAME[r.dow] ?? "",
       class_time: formatMinute(minute),
-      arrive_time: formatMinute(r.arriveMinute),
-      arrive_minutes_before_class: ARRIVE_BEFORE_MIN,
+      forecast_time: formatMinute(r.arriveMinute),
+      forecast_minutes_before_class: ARRIVE_BEFORE_MIN,
+      arrive_time: recommended[0]?.parking_arrival_time ?? null,
+      arrive_minutes_before_class: recommended[0]?.parking_minutes_before_class ?? null,
+      timing_basis: "parking_search_walk_buffer",
       weekend_replayed_as_wednesday: r.replayed,
       permits: w.permits.map((p) => PERMIT_LABEL[p]),
-      recommended: r.recommended.map(optionJson),
+      recommended,
       check_sign: r.checkSign.map(checkJson),
       places_ruled_out_by_permit: r.notValid,
       forecast_is_simulated: true,
@@ -1795,13 +1809,32 @@ function createAdvisor(opts) {
       if (!final) return { ok: false, reason: "empty" };
       const split = splitPlaces(final);
       let body = stripIds(split.body, tools.idsIn(results)).replace(/[ \t]+([.,;:!?])/g, "$1").trim();
+      const plannedResults = results.filter((r) => r.ok && r.timing_basis === "parking_search_walk_buffer" && Array.isArray(r.recommended));
+      const plans = [...new Map(plannedResults.map((r) => [`${r.building}|${r.day}|${r.class_time}`, r])).values()];
+      if (plans.length) {
+        const originalAllowed = /* @__PURE__ */ new Set([...numbersIn(JSON.stringify(results)), ...numbersIn(q), ...numbersIn(contextLine(ctx)), ...history.flatMap((h) => numbersIn(textOf(h)))]);
+        if (checkNumbers(body, originalAllowed).length) return { ok: false, reason: "guard", detail: "unsupported numbers in model plan" };
+        const planIds = [];
+        body = plans.map((planned) => {
+          const options = planned.recommended;
+          const unconfirmed = planned.check_sign;
+          planIds.push(...[...options.slice(0, 2), ...unconfirmed.slice(0, 2)].map((o) => o.id));
+          return [
+            `For ${String(planned.building)}, ${String(planned.day)}, class at ${String(planned.class_time)}:`,
+            ...options.slice(0, 2).map((o) => `${o.name}: forecast about ${o.forecast_open_spaces} open spaces and about ${o.walk_minutes} minutes to walk. ${o.parking_arrival_time ? `Reach the parking facility by ${o.parking_arrival_time}, allowing ${o.parking_search_minutes} minutes to park and a ${o.buffer_minutes}-minute buffer.` : "There is insufficient time before this class for the calculated parking and walking budget."}`),
+            ...!options.length ? ["No permit-confirmed parking option was found."] : [],
+            ...unconfirmed.slice(0, 2).map((o) => `${o.name}: about ${o.walk_minutes} minutes to walk, but permit eligibility is unconfirmed; check posted signage.`)
+          ].join("\n");
+        }).join("\n") + "\nDriving time to campus is not included.";
+        if (!split.ids.length) split.ids = planIds;
+      }
       const arrival = [...results].reverse().find((r) => r.ok && r.arrival_location === "parking facility" && Array.isArray(r.options));
       if (arrival?.ok) {
         const options = arrival.options;
         body = [`For ${String(arrival.building)}, ${String(arrival.day)}, class at ${String(arrival.class_time)}:`, ...options.map((o) => o.latest_arrival_not_risky ? `${o.name}: arrive at the parking facility by ${o.latest_arrival_not_risky.arrive_time}. Allow ${o.parking_search_minutes} minutes to park, ${o.walk_minutes} minutes to walk, and a ${o.buffer_minutes}-minute buffer.` : `${o.name}: no arrival in the evaluated windows met both the forecast and class-time constraints.`), "These are estimates, not guaranteed availability. Driving time to campus is not included."].join("\n");
         if (!split.ids.length) split.ids = options.map((o) => o.id);
       }
-      const ids = split.ids;
+      const ids = [...new Set(split.ids)];
       if (!body) return { ok: false, reason: "empty" };
       const allowed = /* @__PURE__ */ new Set([...numbersIn(JSON.stringify(results)), ...numbersIn(q), ...numbersIn(contextLine(ctx)), ...history.flatMap((h) => numbersIn(textOf(h)))]);
       const bad = checkNumbers(body, allowed);

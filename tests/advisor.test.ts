@@ -49,15 +49,17 @@ test("new deterministic advisor contracts resolve destinations, expose forecast 
   assert.equal(runTool("get_lot_details", { lot_id: "nope" }, ctx).ok, false);
 });
 
-test("plan_parking returns exactly what the Plan tab computes (one source of truth) and states its arrival assumption", () => {
+test("plan_parking returns exactly what the Plan tab computes (one source of truth) and separates forecast time from the parking deadline", () => {
   const b = BUILDINGS.find((x) => x.id === bid("hancock"))!;
   const direct = planAhead({ building: b, dow: 3, minute: 840, permits: ["cg"], ada: false }, { garages: GARAGES, lots: LOTS });
-  const r = runTool("plan_parking", { building_id: b.id, day_of_week: 3, class_time: "14:00" }, ctx) as { ok: true; recommended: { id: string; forecast_open_spaces: number }[]; arrive_time: string; arrive_minutes_before_class: number; forecast_is_simulated: boolean };
+  const r = runTool("plan_parking", { building_id: b.id, day_of_week: 3, class_time: "14:00" }, ctx) as { ok: true; recommended: { id: string; forecast_open_spaces: number }[]; arrive_time: string; arrive_minutes_before_class: number; forecast_time:string; forecast_minutes_before_class:number; forecast_is_simulated: boolean };
   assert.ok(r.ok);
   assert.deepEqual(r.recommended.map((o) => o.id), direct.recommended.map((o) => o.id));
   assert.deepEqual(r.recommended.map((o) => o.forecast_open_spaces), direct.recommended.map((o) => o.predictedOpen));
-  assert.equal(r.arrive_time, "1:45 PM");
-  assert.equal(r.arrive_minutes_before_class, 15);
+  assert.equal(r.forecast_time, "1:45 PM");
+  assert.equal(r.forecast_minutes_before_class, 15);
+  assert.equal(r.arrive_time, "1:33 PM");
+  assert.equal(r.arrive_minutes_before_class, 27);
   assert.equal(r.forecast_is_simulated, true);
 });
 
@@ -403,4 +405,24 @@ test('parking_now accepts a granted current_location origin without exposing coo
  assert.ok(result.nearest_with_open_spaces.length);
  assert.ok(!JSON.stringify(result).includes('37.2285'));
  assert.equal(runTool('parking_now',{place_id:'current_location'},ctx).error,'location_unavailable');
+});
+
+test('ordinary class planning cannot turn the forecast sample into an impossible parking arrival',async()=>{
+ const {t}=script(call('plan_parking',{building_id:torg,day_of_week:3,class_time:'14:00'}),say('Park at Coliseum West lot. Plan to arrive by 1:45 PM to allow time for parking and walking.\nPLACES: lot-coliseum-west'));
+ const result=await advisorFor(t).ask('2pm class at Torgersen Wednesday with a commuter permit');
+ assert.ok(result.ok);
+ assert.match(result.lines.join(' '),/1:30 PM/);
+ assert.doesNotMatch(result.lines.join(' '),/arrive by 1:45|facility by 1:45/);
+});
+
+test('calculated plan rendering preserves multiple requested destinations and class times',async()=>{
+ const {t}=script(call('plan_parking',{building_id:torg,day_of_week:3,class_time:'14:00'}),call('plan_parking',{building_id:bid('hancock'),day_of_week:3,class_time:'15:30'}),say('Here are both class plans.'));
+ const result=await advisorFor(t).ask('Torgersen at 2pm and Hancock at 3:30pm on Wednesday, commuter permit');
+ assert.ok(result.ok);
+ const text=result.lines.join(' ');
+ assert.match(text,/Torgersen Hall, Wednesday, class at 2:00 PM/);
+ assert.match(text,/Hancock Hall, Wednesday, class at 3:30 PM/);
+ assert.match(text,/1:30 PM/);
+ assert.match(text,/3:03 PM/);
+ assert.equal(new Set(result.refs.map(r=>r.id)).size,result.refs.length);
 });

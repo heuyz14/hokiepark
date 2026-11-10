@@ -72,7 +72,7 @@ export const TOOL_DECLARATIONS = [
   },
   {
     name: "plan_parking",
-    description: "Recommend where to park for a class at a building on a weekday, using the forecast for the arrival time (15 minutes before class). Returns ranked recommended places, unconfirmed nearby places, walk times and forecast open spaces.",
+    description: "Recommend where to park for a class at a building on a weekday, using a forecast sampled 15 minutes before class. forecast_time is a sampling time, NOT an arrival deadline. Parking arrival times separately include parking search, walking, and buffer. Returns ranked recommended places, unconfirmed nearby places, walk times and forecast open spaces.",
     parameters: { type: "object", properties: { building_id: { type: "string", description: "id of a BUILDING from find_place" }, day_of_week: dayParam, class_time: timeParam, permits: permitsParam, accessible: accessibleParam }, required: ["building_id", "day_of_week", "class_time"] },
   },
   {

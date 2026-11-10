@@ -46,7 +46,8 @@ test("E2E: a natural request becomes find_place -> plan_parking -> grounded advi
   const r = await stack().ask("I've got a 2 o'clock class in Torgersen on Wednesday, where do I park?");
   assert.ok(r.ok, JSON.stringify(r));
   assert.deepEqual(r.tools, [{ name: "find_place", ok: true }, { name: "plan_parking", ok: true }]);
-  assert.match(r.lines[0]!, /Best bet: .* minute walk\. Forecast about \d+ of \d+ open \(\d+% full\)/);
+  assert.match(r.lines.join(" "), /forecast about \d+ open spaces/);
+  assert.match(r.lines.join(" "), /parking facility by 1:30 PM/);
   assert.equal(r.refs.length, 1);
   assert.ok(r.lines.some((l) => /SIMULATED/.test(l)));
 });
