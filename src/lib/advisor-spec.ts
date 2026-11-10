@@ -77,8 +77,8 @@ export const TOOL_DECLARATIONS = [
   },
   {
     name: "parking_now",
-    description: "What is open right now near a building, garage or lot, using the live map counts. Returns the nearest places the driver's permit covers, with distance and open spaces.",
-    parameters: { type: "object", properties: { place_id: { type: "string", description: "id from find_place" }, permits: permitsParam, accessible: accessibleParam }, required: ["place_id"] },
+    description: "What is open right now near a building, garage, lot, or the driver’s granted current location, using the current simulated counts. Use place_id current_location for explicit near-me questions, never substitute a previous building. Returns the nearest places the driver's permit covers, with distance and open spaces.",
+    parameters: { type: "object", properties: { place_id: { type: "string", description: "id from find_place, or current_location after permission" }, permits: permitsParam, accessible: accessibleParam }, required: ["place_id"] },
   },
   {
     name: "arrival_advice",

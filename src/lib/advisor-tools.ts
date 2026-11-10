@@ -260,7 +260,10 @@ function arrivalTool(a: Args, ctx: AdvisorContext): ToolResult {
 const liveOpen = (g: Garage, covered: number[], ada: boolean) => covered.reduce((n, i) => n + (ada ? openAdaSpaces(g.levels[i]!) : openSpaces(g.levels[i]!)), 0);
 
 function nowTool(a: Args, ctx: AdvisorContext): ToolResult {
-  const from = byId.get(String(a.place_id));
+  if (a.place_id === "current_location" && !ctx.currentLocation) return fail("location_unavailable", "Use the map location button or allow browser location access.");
+  const from: PlaceRef | undefined = a.place_id === "current_location" && ctx.currentLocation
+    ? {id:"current_location",kind:"building",name:"Your current location",...ctx.currentLocation}
+    : byId.get(String(a.place_id));
   if (!from) return fail("unknown_place", "Use an id from find_place.");
   const w = who(a, ctx);
   if ("err" in w) return w.err;

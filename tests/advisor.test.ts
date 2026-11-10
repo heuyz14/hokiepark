@@ -395,3 +395,12 @@ test('arrival answer uses the calculated parking deadline instead of unsafe mode
   assert.match(result.lines.join(' '),/9:33 AM/);
   assert.doesNotMatch(result.lines.join(' '),/9:55 AM/);
 });
+
+test('parking_now accepts a granted current_location origin without exposing coordinates',()=>{
+ const result=runTool('parking_now',{place_id:'current_location'},{...ctx,currentLocation:{lat:37.2285,lon:-80.4225}});
+ assert.ok(result.ok);
+ assert.equal(result.near,'Your current location');
+ assert.ok(result.nearest_with_open_spaces.length);
+ assert.ok(!JSON.stringify(result).includes('37.2285'));
+ assert.equal(runTool('parking_now',{place_id:'current_location'},ctx).error,'location_unavailable');
+});

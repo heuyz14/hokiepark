@@ -96,3 +96,21 @@ test('seeing myself on the map forwards the known position and makes it availabl
  assert.equal(available,true);
  assert.match(answer.lines.join(' '),/location is available/);
 });
+
+test('near-me parking uses granted GPS and ignores a previously discussed building',async()=>{
+ const input=parseChatInput({question:'Where can I park near me with a commuter permit?',context:{currentLocation:{lat:37.2285,lon:-80.4225}},history:[{role:'user',text:'2pm class at Torgersen'}]})!;
+ let calls=0;
+ const result=await answerParking(input,{GEMINI_API_KEY:'fake-key'},{now,fetch:async()=>{calls++;throw Error('model must not replace the GPS origin');}});
+ assert.equal(calls,0);
+ assert.equal(result.answer.tools?.[0]?.name,'parking_now');
+ assert.match(result.answer.lines.join(' '),/near your current location/);
+ assert.doesNotMatch(result.answer.lines.join(' '),/options for Torgersen/);
+ assert.ok(result.answer.refs.length>0);
+ assert.match(result.answer.lines.join(' '),/straight-line estimate/);
+});
+test('near-me parking without GPS asks for location instead of reusing an old destination',async()=>{
+ const input=parseChatInput({question:'Parking near me',history:[{role:'user',text:'2pm class at Torgersen with a commuter permit'}]})!;
+ const result=await answerParking(input,{}, {now,fetch});
+ assert.match(result.answer.lines.join(' '),/location button|location access/);
+ assert.equal(result.answer.refs.length,0);
+});

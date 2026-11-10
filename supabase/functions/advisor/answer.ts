@@ -56,8 +56,10 @@ export async function answerParking(input: ChatInput, env: AnswerEnv, deps: { fe
   const named = detectPermits(input.question.toLowerCase());
   const remembered = [...previousUsers].reverse().map((q) => detectPermits(q.toLowerCase())).find((p) => p.length);
   const context: AdvisorContext = { now: campusNow(now), permits: named.length ? named : input.permits.length ? input.permits : remembered ?? [], ada: input.ada, ...(input.currentLocation ? {currentLocation:input.currentLocation} : {}) };
+  // This explicit fact lookup has a deterministic origin; do not let conversation history replace it with a building.
+  const nearbyLocation = /\b(park|parking|spaces?|spots?|lots?|garages?)\b/i.test(input.question) && /\b(near me|around me|near my (?:current )?(?:location|position))\b/i.test(input.question);
   const call = env.OPENROUTER_API_KEY ? callOpenRouter : env.GEMINI_API_KEY ? callGemini : null;
-  if (call) {
+  if (call && !nearbyLocation) {
     const advisor = createAdvisor({ tools, history: input.history, getContext: () => context, transport: async (request, signal) => {
       const fetchWithSignal: typeof fetch = (url, init) => deps.fetch(url, { ...init, signal });
       const providerInput = { ...request, contents: request.contents.map((turn) => ({ ...turn, parts: turn.parts.map((part) => ({ ...part })) })) };
@@ -77,11 +79,11 @@ export async function answerParking(input: ChatInput, env: AnswerEnv, deps: { fe
   const latestTime = parseTime(input.question);
   const time = /\b(now|right now|currently)\b/i.test(input.question) ? null : latestTime ?? [...previousUsers].reverse().map(parseTime).find((t) => t !== null) ?? null;
   const day = parseDay(input.question, context.now.dow) ?? [...previousUsers].reverse().map((q) => parseDay(q, context.now.dow)).find((d) => d !== null) ?? context.now.dow;
-  const name = place && place.kind !== "building" && /tell me|details|about/i.test(input.question) ? "get_lot_details" : place && place.kind !== "building" && /can i park|permit|allowed/i.test(input.question) ? "permit_check" : place?.kind === "building" && time !== null && /when.*arriv|what time.*arriv/i.test(input.question) ? "arrival_advice" : /accessible|\bada\b/i.test(input.question) ? "accessible_parking" : /\b(which garage|garages|most (?:open|spaces))\b/i.test(input.question) ? "garages_now" : place?.kind === "building" && time !== null ? "plan_parking" : place ? "parking_now" : "garages_now";
-  const result = tools.runTool(name, { place_id: place?.id, lot_id: place?.id, building_id: place?.id, day_of_week: day, class_time: time === null ? undefined : `${String(Math.floor(time / 60)).padStart(2,"0")}:${String(time % 60).padStart(2,"0")}` }, context);
+  const name = nearbyLocation ? "parking_now" : place && place.kind !== "building" && /tell me|details|about/i.test(input.question) ? "get_lot_details" : place && place.kind !== "building" && /can i park|permit|allowed/i.test(input.question) ? "permit_check" : place?.kind === "building" && time !== null && /when.*arriv|what time.*arriv/i.test(input.question) ? "arrival_advice" : /accessible|\bada\b/i.test(input.question) ? "accessible_parking" : /\b(which garage|garages|most (?:open|spaces))\b/i.test(input.question) ? "garages_now" : place?.kind === "building" && time !== null ? "plan_parking" : place ? "parking_now" : "garages_now";
+  const result = tools.runTool(name, { place_id: nearbyLocation ? "current_location" : place?.id, lot_id: place?.id, building_id: place?.id, day_of_week: day, class_time: time === null ? undefined : `${String(Math.floor(time / 60)).padStart(2,"0")}:${String(time % 60).padStart(2,"0")}` }, context);
   const refs: AdvisorAnswer["refs"] = [];
   const lines: string[] = [];
-  if (!result.ok) lines.push(result.error === "no_permit" ? "Which parking permit do you hold?" : "Please name a campus destination, your permit, and a class time for a parking plan.");
+  if (!result.ok) lines.push(result.error === "location_unavailable" ? "Use the map’s location button or allow browser location access, then ask for parking near me again." : result.error === "no_permit" ? "Which parking permit do you hold?" : "Please name a campus destination, your permit, and a class time for a parking plan.");
   else {
     const data = result as Record<string, unknown>;
     if (name === "get_lot_details") {
@@ -101,11 +103,11 @@ export async function answerParking(input: ChatInput, env: AnswerEnv, deps: { fe
       if(!(data.options as unknown[]).length) lines.push("No permit-confirmed arrival option was found.");
     } else {
       const rows = (data.recommended ?? data.nearest_with_open_spaces ?? data.ranked_most_open_first ?? data.lots ?? []) as Record<string,unknown>[];
-      lines.push(name === "plan_parking" ? `Parking options for ${String(data.building)}:` : "Parking information from the backend dataset:");
+      lines.push(name === "plan_parking" ? `Parking options for ${String(data.building)}:` : nearbyLocation ? "Parking near your current location:" : "Parking information from the backend dataset:");
       for (const row of rows.slice(0,3)) {
         const ref = tools.placeRef(String(row.id));
         if (ref) refs.push({kind:ref.kind,id:ref.id,label:ref.name});
-        lines.push(`- ${String(row.name)}: ${String(row.forecast_open_spaces ?? row.open_spaces_on_levels_your_permit_covers ?? row.current_open_spaces ?? row.designated_accessible_spaces ?? "unknown")} ${name === "accessible_parking" ? "designated accessible spaces (illustrative)" : name === "plan_parking" ? "forecast open spaces" : "simulated open spaces"}${row.walk_minutes !== undefined ? `, about ${row.walk_minutes} min walk` : ""}.`);
+        lines.push(`- ${String(row.name)}: ${String(row.forecast_open_spaces ?? row.open_spaces_on_levels_your_permit_covers ?? row.current_open_spaces ?? row.designated_accessible_spaces ?? "unknown")} ${name === "accessible_parking" ? "designated accessible spaces (illustrative)" : name === "plan_parking" ? "forecast open spaces" : "simulated open spaces"}${row.walk_minutes !== undefined ? `, about ${row.walk_minutes} min walk${nearbyLocation ? " (straight-line estimate)" : ""}` : ""}.`);
       }
       if (!rows.length) lines.push("No confirmed matching option was returned; check posted signage.");
     }
